@@ -15,6 +15,7 @@ import { LocaleProvider } from '@/components/LocaleProvider';
 import { FiatPreferenceProvider } from '@/components/FiatPreferenceProvider';
 import { NumberFormatProvider } from '@/components/NumberFormatProvider';
 import { RememberWalletReturn } from '@/components/RememberWalletReturn';
+import { ViewHistoryRoot } from '@/components/ViewHistoryRoot';
 import { ThemeProvider } from '@/components/ThemeProvider';
 import { APP_HEIGHT_BOOTSTRAP_SCRIPT } from '@/lib/app-height';
 import { SUNDAY_BOOTSTRAP_SCRIPT } from '@/lib/sunday-rest';
@@ -243,6 +244,8 @@ describe('RootLayout', () => {
     expect(suspense.type).toBe(Suspense);
     expect(suspense.props.fallback).toBe(null);
     expect(suspense.props.children.type).toBe(RememberWalletReturn);
-    expect(themeChildren[2]).toBe('content');
+    const viewHistory = themeChildren[2] as ReactElement<{ children: ReactNode }>;
+    expect(viewHistory.type).toBe(ViewHistoryRoot);
+    expect(viewHistory.props.children).toBe('content');
   });
 });
