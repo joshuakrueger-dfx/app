@@ -3306,7 +3306,7 @@ describe('ForumLoader', () => {
     });
     await waitFor(() => {
       expect(screen.getByText('Hi')).toBeTruthy();
-      expect(screen.getByText('1 reactions')).toBeTruthy();
+      expect(screen.getByText('1 reaction')).toBeTruthy();
     });
     expect(screen.getByRole('combobox', { name: 'Forum view' }).textContent).toContain('Active');
   });
@@ -5537,7 +5537,7 @@ describe('ForumLoader', () => {
       });
     });
     expect(screen.queryByText('Ada reply')).toBeNull();
-    expect(screen.getByText('1 reactions')).toBeTruthy();
+    expect(screen.getByText('1 reaction')).toBeTruthy();
   });
 
   it('does not apply a reply error after expanding a different note', async () => {
@@ -5615,7 +5615,7 @@ describe('ForumLoader', () => {
     await waitFor(() => {
       expect(screen.getByText('Hello from Ada')).toBeTruthy();
     });
-    expect(screen.getByText('1 reactions')).toBeTruthy();
+    expect(screen.getByText('1 reaction')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Show reactions' }));
     await waitFor(() => {
       expect(screen.getByText('A reply')).toBeTruthy();
@@ -5625,7 +5625,7 @@ describe('ForumLoader', () => {
     await waitFor(() => {
       expect(postMock).toHaveBeenCalledWith('sess', { text: 'A reply', inReplyTo: 'm1' });
     });
-    expect(screen.getByText('1 reactions')).toBeTruthy();
+    expect(screen.getByText('1 reaction')).toBeTruthy();
     expect(screen.getAllByText('A reply')).toHaveLength(1);
   });
 
@@ -5679,7 +5679,7 @@ describe('ForumLoader', () => {
     await waitFor(() => {
       expect(postMock).toHaveBeenCalledWith('sess', { text: 'Fresh reply', inReplyTo: 'm1' });
       expect(screen.getByText('Fresh reply')).toBeTruthy();
-      expect(screen.getByText('1 reactions')).toBeTruthy();
+      expect(screen.getByText('1 reaction')).toBeTruthy();
       expect(screen.getByText('0 reactions')).toBeTruthy();
     });
     expect(useAuthStore.getState().account?.hasPosted).toBe(true);
@@ -6468,7 +6468,7 @@ describe('ForumLoader', () => {
     expect(invoiceMock).not.toHaveBeenCalled();
     await waitFor(() => {
       expect(
-        within(screen.getByText('Hello from Bob').closest('li')!).getByText('1 reactions'),
+        within(screen.getByText('Hello from Bob').closest('li')!).getByText('1 reaction'),
       ).toBeTruthy();
     });
 
@@ -6482,7 +6482,7 @@ describe('ForumLoader', () => {
     await waitFor(() => expect(fetchMock.mock.calls.length).toBeGreaterThan(before));
     expect(screen.getByText('Hello from Bob')).toBeTruthy();
     expect(
-      within(screen.getByText('Hello from Bob').closest('li')!).getByText('1 reactions'),
+      within(screen.getByText('Hello from Bob').closest('li')!).getByText('1 reaction'),
     ).toBeTruthy();
   });
 
@@ -6521,7 +6521,7 @@ describe('ForumLoader', () => {
     });
     await waitFor(() => {
       expect(
-        within(screen.getByText('Hello from Bob').closest('li')!).getByText('1 reactions'),
+        within(screen.getByText('Hello from Bob').closest('li')!).getByText('1 reaction'),
       ).toBeTruthy();
     });
 
@@ -6554,7 +6554,7 @@ describe('ForumLoader', () => {
     fireEvent(window, event);
     await waitFor(() => expect(fetchMock.mock.calls.length).toBeGreaterThan(beforeLater));
     expect(
-      within(screen.getByText('Hello from Bob').closest('li')!).getByText('1 reactions'),
+      within(screen.getByText('Hello from Bob').closest('li')!).getByText('1 reaction'),
     ).toBeTruthy();
   });
 
@@ -6593,7 +6593,7 @@ describe('ForumLoader', () => {
     });
     await waitFor(() => {
       expect(
-        within(screen.getByText('Hello from Bob').closest('li')!).getByText('1 reactions'),
+        within(screen.getByText('Hello from Bob').closest('li')!).getByText('1 reaction'),
       ).toBeTruthy();
     });
 
@@ -6607,7 +6607,7 @@ describe('ForumLoader', () => {
     await waitFor(() => expect(fetchMock.mock.calls.length).toBeGreaterThan(before));
     expect(screen.getByText('Hello from Bob')).toBeTruthy();
     expect(
-      within(screen.getByText('Hello from Bob').closest('li')!).getByText('1 reactions'),
+      within(screen.getByText('Hello from Bob').closest('li')!).getByText('1 reaction'),
     ).toBeTruthy();
 
     const replyCard = document.querySelector('[data-reply-id="r-mod"]') as HTMLElement;
@@ -6637,7 +6637,7 @@ describe('ForumLoader', () => {
     fireEvent(window, event);
     await waitFor(() => expect(fetchMock.mock.calls.length).toBeGreaterThan(beforeLater));
     expect(
-      within(screen.getByText('Hello from Bob').closest('li')!).getByText('1 reactions'),
+      within(screen.getByText('Hello from Bob').closest('li')!).getByText('1 reaction'),
     ).toBeTruthy();
   });
 
@@ -8545,7 +8545,7 @@ it('removes a moderated reply, keeps the parent, and ignores restored replies', 
   const postCard = screen.getByText('Hello from Ada').closest('li')!;
   fireEvent.click(within(postCard).getByRole('button', { name: 'Show reactions' }));
   await screen.findByText('A reply');
-  expect(within(postCard).getByText('1 reactions')).toBeTruthy();
+  expect(within(postCard).getByText('1 reaction')).toBeTruthy();
   const replyCard = document.querySelector('[data-reply-id="r1"]') as HTMLElement;
   fireEvent.click(within(replyCard).getByRole('button', { name: 'Delete reaction' }));
   fireEvent.click(within(replyCard).getByRole('button', { name: 'Confirm deletion' }));
@@ -8606,7 +8606,7 @@ it('lets a later server reply raise the count after a session delete', async () 
   fireEvent(window, event);
   await waitFor(() => expect(fetchMock.mock.calls.length).toBeGreaterThan(before));
   expect(
-    within(screen.getByText('Hello from Ada').closest('li')!).getByText('1 reactions'),
+    within(screen.getByText('Hello from Ada').closest('li')!).getByText('1 reaction'),
   ).toBeTruthy();
 
   fetchMock
@@ -8616,14 +8616,14 @@ it('lets a later server reply raise the count after a session delete', async () 
   fireEvent(window, event);
   await waitFor(() => expect(fetchMock.mock.calls.length).toBeGreaterThan(beforeCatchUp));
   expect(
-    within(screen.getByText('Hello from Ada').closest('li')!).getByText('1 reactions'),
+    within(screen.getByText('Hello from Ada').closest('li')!).getByText('1 reaction'),
   ).toBeTruthy();
   const card = screen.getByText('Hello from Ada').closest('li')!;
   fireEvent.click(within(card).getByRole('button', { name: 'Hide reactions' }));
   fireEvent.click(within(card).getByRole('button', { name: 'Show reactions' }));
   await waitFor(() => expect(repliesMock.mock.calls.length).toBeGreaterThan(1));
   expect(
-    within(screen.getByText('Hello from Ada').closest('li')!).getByText('1 reactions'),
+    within(screen.getByText('Hello from Ada').closest('li')!).getByText('1 reaction'),
   ).toBeTruthy();
 });
 
@@ -8705,7 +8705,7 @@ it('decrements the reply count twice when two nested replies are deleted in sequ
   await waitFor(() => expect(screen.queryByText('A reply')).toBeNull());
   expect(screen.getByText('Hello from Ada')).toBeTruthy();
   expect(
-    within(screen.getByText('Hello from Ada').closest('li')!).getByText('1 reactions'),
+    within(screen.getByText('Hello from Ada').closest('li')!).getByText('1 reaction'),
   ).toBeTruthy();
   fireEvent.click(
     within(document.querySelector('[data-reply-id="r2"]') as HTMLElement).getByRole('button', {
