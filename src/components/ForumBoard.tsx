@@ -57,7 +57,10 @@ import {
   type ForumPlacePin,
 } from '@/lib/api-types';
 import { DeletePostControl } from '@/components/DeletePostControl';
+import { ExternalAuthorSheet } from '@/components/ExternalAuthorSheet';
 import { ShopAccountControl } from '@/components/ShopAccountControl';
+import { ShopAddWizard } from '@/components/ShopAddWizard';
+import { ShopNoteEditControl } from '@/components/ShopNoteEditControl';
 import { ShopPlaceControl } from '@/components/ShopPlaceControl';
 import {
   FORUM_COMPOSE_EVENT,
@@ -104,6 +107,22 @@ export type ForumReplyFormError = ForumFormError | 'amount' | 'deleted';
 
 /** Pay-sheet validation or request failure. */
 export type ForumPayError = 'amount' | 'request' | 'rateLimit' | 'authorWallet' | 'deleted' | null;
+
+/** Loaded still URLs for one note, in gallery order. Missing slots are skipped. */
+function editStillUrls(
+  messageId: string,
+  photoCount: number,
+  photoUrls: Readonly<Record<string, string>>,
+): string[] {
+  const found: string[] = [];
+  for (let index = 0; index < photoCount; index += 1) {
+    const url = photoUrls[`${messageId}:${index}`];
+    if (typeof url === 'string') {
+      found.push(url);
+    }
+  }
+  return found;
+}
 
 /** Roles that show a clickable tag beside the author name. */
 type ForumTaggedRole = 'founder' | 'moderator' | 'initiator' | 'verified';
@@ -211,6 +230,17 @@ export interface ForumBoardProps {
   formError: ForumFormError;
   /** New-post composer `maxLength`. Default {@link FORUM_MESSAGE_MAX_LENGTH}. */
   composerMaxLength?: number;
+  /**
+   * When true, the shops feed shows Add a shop instead of the message composer.
+   * Default false.
+   */
+  shopComposer?: boolean;
+  /** Optional username for the shop being composed. */
+  shopUsername?: string;
+  /** Replace the optional shop username. */
+  onShopUsernameChange?: (username: string) => void;
+  /** Bumps after a shop is sent so the wizard closes. */
+  shopResetToken?: number;
   /** Message id whose pay sheet is open, or `null`. */
   payMessageId: string | null;
   /**
@@ -354,6 +384,13 @@ export interface ForumBoardProps {
     messageId: string,
     shopAccount: { id: string; username: string; name: string } | null,
   ) => void;
+  /**
+   * When true, show the shop-note pencil on top-level notes.
+   * Default false. The control itself hides non-shop text.
+   */
+  shopNoteEdit?: boolean;
+  /** Apply a saved shop-note body to the listed row. */
+  onShopNoteUpdated?: (message: ForumMessage) => void;
 }
 
 /**
@@ -637,7 +674,9 @@ function paySheetElement(root: HTMLElement | null): HTMLElement | null {
  * with `goalSats`, React control on posts (`forum.react`, lucide Reply;
  * expands the reply composer; omitted when `deletedAt` is set), payable-reply
  * pay sheet (Gift on nested replies and on top-level cards with `parentId`;
- * never on posts; omitted when `deletedAt` is set), optional shops staff
+ * never on posts; omitted when `deletedAt` is set), optional shop-note
+ * pencil when `shopNoteEdit` and `onShopNoteUpdated` are set (top-level
+ * notes; the control hides non-shop text), optional shops staff
  * place editor after copy and before staff Delete when `shopPlaceEdit` and
  * `onShopPlaceUpdated` are set, then the shops account editor when
  * `shopAccountEdit` and `onShopAccountUpdated` are set (top-level notes only),
@@ -691,6 +730,10 @@ export function ForumBoard({
   onRetry,
   formError,
   composerMaxLength = FORUM_MESSAGE_MAX_LENGTH,
+  shopComposer = false,
+  shopUsername = '',
+  onShopUsernameChange,
+  shopResetToken = 0,
   payMessageId,
   payHost = null,
   payDraft,
@@ -747,6 +790,8 @@ export function ForumBoard({
   onShopPlaceUpdated,
   shopAccountEdit = false,
   onShopAccountUpdated,
+  shopNoteEdit = false,
+  onShopNoteUpdated,
 }: ForumBoardProps): ReactElement {
   const hideCompose = composerHidden || readOnly;
   const { t, locale } = useTranslations();
@@ -815,6 +860,10 @@ export function ForumBoard({
   }, [expandedId, repliesLoading, scroller, shownReplies, payMessageId, payInvoice]);
   const [showPaymentQr, setShowPaymentQr] = useState(false);
   const [openRoleMessageId, setOpenRoleMessageId] = useState<string | null>(null);
+  const [externalAuthor, setExternalAuthor] = useState<{
+    messageId: string;
+    fallbackName: string;
+  } | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [deadVideoIds, setDeadVideoIds] = useState<ReadonlySet<string>>(() => new Set());
   const [pullArmed, setPullArmed] = useState(false);
@@ -1141,6 +1190,21 @@ export function ForumBoard({
                       >
                         {message.name}
                       </button>
+                    ) : message.via === 'nostr' ? (
+                      <button
+                        type="button"
+                        aria-label={t('forum.authorProfile')}
+                        className="text-sm font-medium text-app-fg underline underline-offset-2"
+                        onClick={(event) => {
+                          stopCardToggle(event);
+                          setExternalAuthor({
+                            messageId: message.id,
+                            fallbackName: message.name,
+                          });
+                        }}
+                      >
+                        {message.name}
+                      </button>
                     ) : (
                       <span className="text-sm font-medium text-app-fg">{message.name}</span>
                     )}
@@ -1421,6 +1485,16 @@ export function ForumBoard({
                       <Link2 aria-hidden="true" className="h-3.5 w-3.5" />
                     )}
                   </IconButton>
+                  {shopNoteEdit &&
+                  onShopNoteUpdated !== undefined &&
+                  message.parentId === undefined ? (
+                    <ShopNoteEditControl
+                      message={message}
+                      onUpdated={onShopNoteUpdated}
+                      existingPhotos={editStillUrls(message.id, photoCount, photoUrls)}
+                      {...(videoSrc !== undefined ? { existingVideoUrl: videoSrc } : {})}
+                    />
+                  ) : null}
                   {shopPlaceEdit &&
                   onShopPlaceUpdated !== undefined &&
                   message.parentId === undefined ? (
@@ -1509,6 +1583,21 @@ export function ForumBoard({
                                     onClick={(event) => {
                                       stopCardToggle(event);
                                       router.push(`/members/${reply.accountId}`);
+                                    }}
+                                  >
+                                    {reply.name}
+                                  </button>
+                                ) : reply.via === 'nostr' ? (
+                                  <button
+                                    type="button"
+                                    aria-label={t('forum.authorProfile')}
+                                    className="text-sm font-medium text-app-fg underline underline-offset-2"
+                                    onClick={(event) => {
+                                      stopCardToggle(event);
+                                      setExternalAuthor({
+                                        messageId: reply.id,
+                                        fallbackName: reply.name,
+                                      });
                                     }}
                                   >
                                     {reply.name}
@@ -1958,7 +2047,28 @@ export function ForumBoard({
         </SundayWritingGate>
       ) : null}
 
-      {!hideCompose && (!allowAsk || composeIntent === 'post') ? (
+      {!hideCompose && (!allowAsk || composeIntent === 'post') && shopComposer ? (
+        <SundayWritingGate>
+          <ShopAddWizard
+            posting={posting}
+            draft={draft}
+            onDraftChange={onDraftChange}
+            photoDrafts={photoDrafts}
+            videoDraft={videoDraft}
+            onPickFiles={onPickFiles}
+            onRemovePhoto={onRemovePhoto}
+            onClearPhoto={onClearPhoto}
+            place={placeDraft}
+            onPlaceChange={onPlaceDraftChange!}
+            username={shopUsername}
+            onUsernameChange={onShopUsernameChange!}
+            onSubmit={onPost}
+            resetToken={shopResetToken}
+            maxLength={composerMaxLength}
+          />
+        </SundayWritingGate>
+      ) : null}
+      {!hideCompose && (!allowAsk || composeIntent === 'post') && !shopComposer ? (
         <SundayWritingGate>
           <form onSubmit={handleSubmit} className="flex flex-col gap-2">
             <div className="flex items-center gap-2">
@@ -2156,6 +2266,16 @@ export function ForumBoard({
 
       {middle}
       {error && messages !== null ? errorBlock : null}
+      {externalAuthor !== null ? (
+        <ExternalAuthorSheet
+          key={externalAuthor.messageId}
+          messageId={externalAuthor.messageId}
+          fallbackName={externalAuthor.fallbackName}
+          onClose={() => {
+            setExternalAuthor(null);
+          }}
+        />
+      ) : null}
     </div>
   );
 }

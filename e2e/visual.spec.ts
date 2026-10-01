@@ -1005,7 +1005,7 @@ async function fulfillConversationTranslatePost(
 test.describe('screen baselines', () => {
   test('screen /', async ({ page }) => {
     await page.goto('/');
-    await expect(page.getByRole('heading', { name: /Direct human-to-human gifts/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Help people with Bitcoin/i })).toBeVisible();
     await shotScreen(page, 'screen-root');
   });
 
@@ -1017,9 +1017,7 @@ test.describe('screen baselines', () => {
         page.getByLabel('Primary').getByRole('link', { name: 'Handbook' }),
       ).toBeVisible();
     } else {
-      await expect(
-        page.getByRole('heading', { name: /Direct human-to-human gifts/i }),
-      ).toBeVisible();
+      await expect(page.getByRole('heading', { name: /Help people with Bitcoin/i })).toBeVisible();
     }
     await shotScreen(page, 'state-root-mobile-nav');
   });
@@ -1039,7 +1037,7 @@ test.describe('screen baselines', () => {
 
   test('screen /about', async ({ page }) => {
     await page.goto('/about');
-    await expect(page.getByRole('heading', { name: 'Three convictions' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'What 21.gifts stands for' })).toBeVisible();
     await shotScreen(page, 'screen-about');
   });
 
@@ -1051,7 +1049,7 @@ test.describe('screen baselines', () => {
 
   test('screen /donate', async ({ page }) => {
     await page.goto('/donate');
-    await expect(page.getByRole('heading', { name: 'Send help' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Help someone' })).toBeVisible();
     await shotScreen(page, 'screen-donate');
   });
 
@@ -1779,6 +1777,61 @@ test.describe('login variant baselines', () => {
     await shotScreen(page, 'state-login-choice');
   });
 
+  test('login name', async ({ page }) => {
+    await page.addInitScript(() => {
+      const pk = globalThis.PublicKeyCredential as unknown as {
+        parseCreationOptionsFromJSON?: unknown;
+        parseRequestOptionsFromJSON?: unknown;
+      };
+      if (typeof pk === 'function' || (typeof pk === 'object' && pk !== null)) {
+        Object.defineProperty(pk, 'parseCreationOptionsFromJSON', {
+          value: undefined,
+          configurable: true,
+        });
+        Object.defineProperty(pk, 'parseRequestOptionsFromJSON', {
+          value: undefined,
+          configurable: true,
+        });
+      }
+      Object.defineProperty(navigator, 'credentials', {
+        configurable: true,
+        value: {
+          create: async () => {
+            throw new Error('create must not run on the login name path');
+          },
+          get: async (options?: CredentialRequestOptions) => {
+            const publicKey = options?.publicKey;
+            const challenge = publicKey?.challenge;
+            const isBytes = challenge instanceof ArrayBuffer || ArrayBuffer.isView(challenge);
+            if (!publicKey || !isBytes) {
+              throw new Error('invalid request options');
+            }
+            throw new DOMException('No credentials', 'NotAllowedError');
+          },
+        },
+      });
+    });
+    await page.route(/\/auth\/passkey\/authenticate\/begin$/, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          challengeId: 'ch',
+          options: {
+            challenge: 'aa',
+            rpId: 'localhost',
+            userVerification: 'required',
+          },
+        }),
+      });
+    });
+    await page.goto('/login');
+    await page.getByRole('button', { name: 'Log in' }).click();
+    await page.getByRole('button', { name: 'Open a new account' }).click();
+    await expect(page.getByRole('heading', { name: 'Choose your name' })).toBeVisible();
+    await shotScreen(page, 'state-login-name');
+  });
+
   test('login ios version', async ({ page }) => {
     await page.addInitScript(() => {
       Object.defineProperty(Navigator.prototype, 'userAgent', {
@@ -1855,6 +1908,9 @@ test.describe('login variant baselines', () => {
       page.getByRole('heading', { name: 'Do you already have an account?' }),
     ).toBeVisible();
     await page.getByRole('button', { name: 'Open a new account' }).click();
+    await expect(page.getByRole('heading', { name: 'Choose your name' })).toBeVisible();
+    await page.getByRole('textbox', { name: 'Name' }).fill('Ada');
+    await page.getByRole('button', { name: 'Continue' }).click();
     await expect(
       page.getByRole('alert').filter({
         hasText: 'iOS 17.5.1 is installed. Sign-in needs at least iOS 18.',
@@ -1862,6 +1918,224 @@ test.describe('login variant baselines', () => {
     ).toBeVisible();
     await expect(page.locator('p[role="status"]')).toHaveCount(0);
     await shotScreen(page, 'state-login-ios-version');
+  });
+
+  test('login android version', async ({ page }) => {
+    await page.addInitScript(() => {
+      Object.defineProperty(Navigator.prototype, 'userAgent', {
+        configurable: true,
+        get: () =>
+          'Mozilla/5.0 (Linux; Android 8.1.0; Pixel) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
+      });
+    });
+    await page.addInitScript(() => {
+      const pk = globalThis.PublicKeyCredential as unknown as {
+        parseCreationOptionsFromJSON?: unknown;
+        parseRequestOptionsFromJSON?: unknown;
+      };
+      if (typeof pk === 'function' || (typeof pk === 'object' && pk !== null)) {
+        Object.defineProperty(pk, 'parseCreationOptionsFromJSON', {
+          value: undefined,
+          configurable: true,
+        });
+        Object.defineProperty(pk, 'parseRequestOptionsFromJSON', {
+          value: undefined,
+          configurable: true,
+        });
+      }
+      Object.defineProperty(navigator, 'credentials', {
+        configurable: true,
+        value: {
+          create: async () => {
+            throw new DOMException('No credentials', 'NotAllowedError');
+          },
+          get: async (options?: CredentialRequestOptions) => {
+            const publicKey = options?.publicKey;
+            const challenge = publicKey?.challenge;
+            const isBytes = challenge instanceof ArrayBuffer || ArrayBuffer.isView(challenge);
+            if (!publicKey || !isBytes) {
+              throw new Error('invalid request options');
+            }
+            throw new DOMException('No credentials', 'NotAllowedError');
+          },
+        },
+      });
+    });
+    await page.route(/\/auth\/passkey\/authenticate\/begin$/, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          challengeId: 'ch',
+          options: {
+            challenge: 'aa',
+            rpId: 'localhost',
+            userVerification: 'required',
+          },
+        }),
+      });
+    });
+    await page.route(/\/auth\/passkey\/register\/begin$/, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          challengeId: 'ch-reg',
+          options: {
+            challenge: 'aa',
+            rp: { name: '21.gifts', id: 'localhost' },
+            user: { id: 'aa', name: 'acc', displayName: 'acc' },
+            pubKeyCredParams: [{ type: 'public-key', alg: -7 }],
+          },
+        }),
+      });
+    });
+    await page.goto('/login');
+    await page.getByRole('button', { name: 'Log in' }).click();
+    await expect(
+      page.getByRole('heading', { name: 'Do you already have an account?' }),
+    ).toBeVisible();
+    await page.getByRole('button', { name: 'Open a new account' }).click();
+    await expect(page.getByRole('heading', { name: 'Choose your name' })).toBeVisible();
+    await page.getByRole('textbox', { name: 'Name' }).fill('Ada');
+    await page.getByRole('button', { name: 'Continue' }).click();
+    await expect(
+      page.getByRole('alert').filter({
+        hasText: 'Android 8.1.0 is installed. Sign-in needs at least Android 9.',
+      }),
+    ).toBeVisible();
+    await expect(page.locator('p[role="status"]')).toHaveCount(0);
+    await shotScreen(page, 'state-login-android-version');
+  });
+
+  test('login name invalid', async ({ page }) => {
+    await page.addInitScript(() => {
+      const pk = globalThis.PublicKeyCredential as unknown as {
+        parseCreationOptionsFromJSON?: unknown;
+        parseRequestOptionsFromJSON?: unknown;
+      };
+      if (typeof pk === 'function' || (typeof pk === 'object' && pk !== null)) {
+        Object.defineProperty(pk, 'parseCreationOptionsFromJSON', {
+          value: undefined,
+          configurable: true,
+        });
+        Object.defineProperty(pk, 'parseRequestOptionsFromJSON', {
+          value: undefined,
+          configurable: true,
+        });
+      }
+      Object.defineProperty(navigator, 'credentials', {
+        configurable: true,
+        value: {
+          create: async () => {
+            throw new Error('create must not run on the login name path');
+          },
+          get: async (options?: CredentialRequestOptions) => {
+            const publicKey = options?.publicKey;
+            const challenge = publicKey?.challenge;
+            const isBytes = challenge instanceof ArrayBuffer || ArrayBuffer.isView(challenge);
+            if (!publicKey || !isBytes) {
+              throw new Error('invalid request options');
+            }
+            throw new DOMException('No credentials', 'NotAllowedError');
+          },
+        },
+      });
+    });
+    await page.route(/\/auth\/passkey\/authenticate\/begin$/, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          challengeId: 'ch',
+          options: {
+            challenge: 'aa',
+            rpId: 'localhost',
+            userVerification: 'required',
+          },
+        }),
+      });
+    });
+    await page.goto('/login');
+    await page.getByRole('button', { name: 'Log in' }).click();
+    await page.getByRole('button', { name: 'Open a new account' }).click();
+    await expect(page.getByRole('heading', { name: 'Choose your name' })).toBeVisible();
+    await page.getByRole('button', { name: 'Continue' }).click();
+    await expect(
+      page.getByRole('alert').filter({
+        hasText: 'Use 1–32 characters: a-z, 0-9, hyphen, underscore, or dot.',
+      }),
+    ).toHaveText('Use 1–32 characters: a-z, 0-9, hyphen, underscore, or dot.');
+    await shotScreen(page, 'state-login-name-invalid');
+  });
+
+  test('login name taken', async ({ page }) => {
+    await page.addInitScript(() => {
+      const pk = globalThis.PublicKeyCredential as unknown as {
+        parseCreationOptionsFromJSON?: unknown;
+        parseRequestOptionsFromJSON?: unknown;
+      };
+      if (typeof pk === 'function' || (typeof pk === 'object' && pk !== null)) {
+        Object.defineProperty(pk, 'parseCreationOptionsFromJSON', {
+          value: undefined,
+          configurable: true,
+        });
+        Object.defineProperty(pk, 'parseRequestOptionsFromJSON', {
+          value: undefined,
+          configurable: true,
+        });
+      }
+      Object.defineProperty(navigator, 'credentials', {
+        configurable: true,
+        value: {
+          create: async () => {
+            throw new Error('create must not run on the login name path');
+          },
+          get: async (options?: CredentialRequestOptions) => {
+            const publicKey = options?.publicKey;
+            const challenge = publicKey?.challenge;
+            const isBytes = challenge instanceof ArrayBuffer || ArrayBuffer.isView(challenge);
+            if (!publicKey || !isBytes) {
+              throw new Error('invalid request options');
+            }
+            throw new DOMException('No credentials', 'NotAllowedError');
+          },
+        },
+      });
+    });
+    await page.route(/\/auth\/passkey\/authenticate\/begin$/, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          challengeId: 'ch',
+          options: {
+            challenge: 'aa',
+            rpId: 'localhost',
+            userVerification: 'required',
+          },
+        }),
+      });
+    });
+    await page.goto('/login');
+    await page.getByRole('button', { name: 'Log in' }).click();
+    await page.getByRole('button', { name: 'Open a new account' }).click();
+    await expect(page.getByRole('heading', { name: 'Choose your name' })).toBeVisible();
+    await page.getByRole('textbox', { name: 'Name' }).fill('takenname');
+    await page.route(/\/auth\/passkey\/register\/begin$/, async (route) => {
+      await route.fulfill({
+        status: 409,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: 'Username is already in use' }),
+      });
+    });
+    await page.getByRole('button', { name: 'Continue' }).click();
+    await expect(
+      page.getByRole('alert').filter({
+        hasText: 'That username is already in use.',
+      }),
+    ).toHaveText('That username is already in use.');
+    await shotScreen(page, 'state-login-name-taken');
   });
 
   test('login in-app', async ({ page }) => {
@@ -2068,6 +2342,46 @@ test.describe('onboarding screens', () => {
     await expect(page.getByRole('combobox', { name: 'Forum view' })).toContainText('Active');
     await expect(page.getByRole('listbox')).toHaveCount(0);
     await shotScreen(page, 'screen-welcome');
+  });
+
+  test('state /welcome daily-payout-stopped', async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('21gifts.session', 'sess-e2e');
+    });
+    await page.route(/\/me$/, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ...E2E_ACCOUNT,
+          name: 'Ada',
+          location: null,
+          username: 'alice',
+          lightningAddress: 'alice@walletofsatoshi.com',
+          rulesAgreedAt: 1_700_000_001,
+          viewKey: 'a'.repeat(64),
+          aboutMe: null,
+          setup: null,
+          missing: [],
+          funding: {
+            status: 'none',
+            trialUtcDate: null,
+            admittedAt: null,
+            reviewedByName: null,
+            dailyPayoutStoppedNotice: true,
+          },
+        }),
+      });
+    });
+    await fulfillMixedSatsMessages(page);
+    await page.goto('/welcome');
+    await expect(page.getByRole('heading', { name: 'Welcome, Ada' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Daily payout stopped' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Apply for the 21 gifts grant' })).toBeVisible();
+    await expect(page.getByText('Thank you both — that helps.')).toBeVisible();
+    await expect(page.getByText('I can send a small gift tomorrow.')).toBeVisible();
+    await expect(page.getByRole('combobox', { name: 'Forum view' })).toContainText('Active');
+    await shotScreen(page, 'state-welcome-daily-payout-stopped');
   });
 
   test('state /welcome renew', async ({ page }) => {
@@ -2584,6 +2898,134 @@ test.describe('onboarding screens', () => {
     await shotScreen(page, 'state-welcome-shop-tag');
   });
 
+  test('welcome shop-edit', async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('21gifts.session', 'sess-e2e');
+    });
+    await page.route(/\/me$/, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ...E2E_ACCOUNT,
+          role: 'moderator',
+          name: 'Ada',
+          location: null,
+          username: 'alice',
+          lightningAddress: 'alice@walletofsatoshi.com',
+          rulesAgreedAt: 1_700_000_001,
+          viewKey: 'a'.repeat(64),
+          aboutMe: null,
+          setup: null,
+          missing: [],
+        }),
+      });
+    });
+    await page.route(/\/messages(?:\?|$)/, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          messages: [
+            {
+              id: 'm-shop',
+              name: 'Ada',
+              text: 'Cafe Luna\n\n#21GiftsShop',
+              createdAt: '2026-08-28T12:00:00.000Z',
+              sats: 5,
+              payable: true,
+              hasPhoto: false,
+              role: 'basis',
+            },
+          ],
+        }),
+      });
+    });
+    await page.goto('/welcome');
+    const pencil = page.getByRole('button', { name: 'Edit shop note' });
+    await expect(pencil).toBeVisible();
+    await pencil.scrollIntoViewIfNeeded();
+    await shotScreen(page, 'state-welcome-shop-edit');
+  });
+
+  test('welcome shop-edit-open', async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('21gifts.session', 'sess-e2e');
+    });
+    await page.route(/\/me$/, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ...E2E_ACCOUNT,
+          role: 'moderator',
+          name: 'Ada',
+          location: null,
+          username: 'alice',
+          lightningAddress: 'alice@walletofsatoshi.com',
+          rulesAgreedAt: 1_700_000_001,
+          viewKey: 'a'.repeat(64),
+          aboutMe: null,
+          setup: null,
+          missing: [],
+        }),
+      });
+    });
+    await page.route(/\/messages(?:\?|$)/, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          messages: [
+            {
+              id: 'm-shop',
+              name: 'Ada',
+              text: 'Cafe Luna\n\n#21GiftsShop',
+              createdAt: '2026-08-28T12:00:00.000Z',
+              sats: 5,
+              payable: true,
+              hasPhoto: false,
+              role: 'basis',
+            },
+          ],
+        }),
+      });
+    });
+    await page.route('**/forum/messages/m-shop/edits', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ edits: [] }),
+      });
+    });
+    await page.goto('/welcome');
+    await page.getByRole('button', { name: 'Edit shop note' }).click();
+    await expect(page.getByText('1 / 5 · Photos')).toBeVisible();
+    await expect(page.getByText('Cancel', { exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Cancel' })).toBeVisible();
+    const history = page.getByText('No edits yet');
+    await expect(history).toBeVisible();
+    await history.scrollIntoViewIfNeeded();
+    await shotScreen(page, 'state-welcome-shop-edit-open');
+    await page.getByRole('button', { name: 'Next' }).click();
+    await expect(page.getByText('2 / 5 · Place')).toBeVisible();
+    await page.getByText('2 / 5 · Place').scrollIntoViewIfNeeded();
+    await shotScreen(page, 'state-welcome-shop-edit-place');
+    await page.getByRole('button', { name: 'Next' }).click();
+    await expect(page.getByText('3 / 5 · Text')).toBeVisible();
+    await page.getByText('3 / 5 · Text').scrollIntoViewIfNeeded();
+    await shotScreen(page, 'state-welcome-shop-edit-text');
+    await page.getByRole('button', { name: 'Next' }).click();
+    await expect(page.getByText('4 / 5 · 21.gifts user')).toBeVisible();
+    await page.getByText('4 / 5 · 21.gifts user').scrollIntoViewIfNeeded();
+    await shotScreen(page, 'state-welcome-shop-edit-user');
+    await page.getByRole('button', { name: 'Next' }).click();
+    await expect(page.getByText('5 / 5 · Summary')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Save changes' })).toBeVisible();
+    await page.getByText('5 / 5 · Summary').scrollIntoViewIfNeeded();
+    await shotScreen(page, 'state-welcome-shop-edit-summary');
+  });
+
   test('state /welcome laws', async ({ page }) => {
     await page.addInitScript(() => {
       localStorage.setItem('21gifts.session', 'sess-e2e');
@@ -2780,6 +3222,80 @@ test.describe('onboarding screens', () => {
     ).toBeVisible();
     await expect(page.getByRole('link', { name: /example\.com/ })).toHaveCount(0);
     await shotScreen(page, 'state-welcome-expanded-external');
+  });
+
+  test('state /welcome overlay-external-author', async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('21gifts.session', 'sess-e2e');
+    });
+    await page.route(/\/me$/, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ...E2E_ACCOUNT,
+          name: 'Ada',
+          location: null,
+          lightningAddress: 'alice@walletofsatoshi.com',
+          rulesAgreedAt: 1_700_000_001,
+          viewKey: 'a'.repeat(64),
+          setup: null,
+          missing: [],
+        }),
+      });
+    });
+    await fulfillMixedSatsMessages(page);
+    await page.route('**/forum/messages/**/replies', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          messages: [
+            {
+              id: 'r-nostr-gift',
+              name: 'Robin',
+              via: 'nostr',
+              text: '',
+              createdAt: '2026-08-28T12:03:00.000Z',
+              sats: 69,
+              payable: false,
+              hasPhoto: false,
+            },
+            {
+              id: 'r-nostr-text',
+              name: 'Robin',
+              via: 'nostr',
+              text: 'Greetings! https://example.com/hello',
+              createdAt: '2026-08-28T12:04:00.000Z',
+              sats: 0,
+              payable: false,
+              hasPhoto: false,
+            },
+          ],
+        }),
+      });
+    });
+    await page.route('**/external-profile', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          name: 'Robin',
+          npub: 'npub1example',
+          nip05: 'robin@nostr.example',
+          lud16: 'pay@ln.example',
+        }),
+      });
+    });
+    await page.goto('/welcome');
+    await page.getByText('Thank you both — that helps.').click();
+    await page.getByRole('button', { name: 'View profile' }).first().click();
+    const dialog = page.getByRole('dialog', { name: 'Robin' });
+    await expect(dialog.getByText('robin@nostr.example', { exact: true })).toBeVisible();
+    await expect(dialog.getByText('pay@ln.example', { exact: true })).toBeVisible();
+    await expect(dialog.getByText('npub1example', { exact: true })).toBeVisible();
+    await expect(dialog.getByRole('link')).toHaveCount(0);
+    await shotScreen(page, 'state-welcome-overlay-external-author');
   });
 
   const REACTION_ANSWER = 'This is my answer';
@@ -3934,6 +4450,35 @@ test.describe('onboarding screens', () => {
     await shotScreen(page, 'state-profile-sticker-open', false);
   });
 
+  test('state /profile sticker-kikamba', async ({ page }) => {
+    await seedProfilePage(page);
+    await page.goto('/profile?lang=Kikamba');
+    await expect(page.getByText('alice@21.gifts', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: '14 posts' })).toBeVisible();
+    const dialog = page.getByRole('dialog', { name: 'Shop sticker' });
+    const preview = dialog.getByRole('img', { name: 'Shop sticker preview for alice@21.gifts' });
+    await expect(preview).toBeVisible();
+    await expect
+      .poll(() => preview.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0))
+      .toBe(true);
+    await shotScreen(page, 'state-profile-sticker-kikamba', false);
+  });
+
+  test('state /profile sticker-lang', async ({ page }) => {
+    await seedProfilePage(page);
+    await openProfile(page);
+    await page.getByRole('button', { name: 'Shop sticker' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Shop sticker' });
+    const preview = dialog.getByRole('img', { name: 'Shop sticker preview for alice@21.gifts' });
+    await expect(preview).toBeVisible();
+    await expect
+      .poll(() => preview.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0))
+      .toBe(true);
+    await dialog.getByRole('combobox', { name: 'Second language' }).click();
+    await expect(dialog.getByRole('option', { name: 'Kikamba' })).toBeVisible();
+    await shotScreen(page, 'state-profile-sticker-lang', false);
+  });
+
   test('state /profile funding-program-press', async ({ page }) => {
     await page.unroute(/\/forum\/members\/acc_e2e$/);
     await page.route(/\/forum\/members\/acc_e2e$/, async (route) => {
@@ -4929,6 +5474,194 @@ test.describe('onboarding screens', () => {
     await expect(page.getByText('Hello from my profile note.')).toHaveCount(0);
     await page.getByText('Second post from Carol.').scrollIntoViewIfNeeded();
     await shotScreen(page, 'state-members-posts-open');
+  });
+
+  test('state /members shop-edit', async ({ page }) => {
+    const memberId = '22222222-2222-4222-8222-222222222222';
+    const noteId = '55555555-5555-4555-8555-555555555555';
+    await page.addInitScript(() => {
+      localStorage.setItem('21gifts.session', 'sess-e2e');
+    });
+    await page.route(/\/me$/, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ...E2E_ACCOUNT,
+          role: 'moderator',
+          name: 'Ada',
+          username: 'alice',
+          lightningAddress: 'alice@walletofsatoshi.com',
+          rulesAgreedAt: 1_700_000_001,
+          setup: null,
+          missing: [],
+        }),
+      });
+    });
+    await page.route(`**/forum/members/${memberId}`, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          id: memberId,
+          name: 'Carol',
+          location: null,
+          role: 'verified',
+          username: 'carol',
+          lightningAddress: 'carol@walletofsatoshi.com',
+          createdAt: '2026-01-15T12:00:00.000Z',
+          aboutMe: null,
+          profileMessage: null,
+          postCount: 1,
+          replyCount: 0,
+        }),
+      });
+    });
+    await page.route(`**/forum/members/${memberId}/posts`, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          messages: [
+            {
+              id: noteId,
+              accountId: memberId,
+              name: 'Carol',
+              text: 'Cafe Luna\n\n#21GiftsShop',
+              createdAt: '2026-08-02T10:00:00.000Z',
+              sats: 0,
+              payable: false,
+              hasPhoto: false,
+              hasVideo: false,
+              videoContentType: null,
+              role: 'verified',
+              replyCount: 0,
+            },
+          ],
+        }),
+      });
+    });
+    await page.route(`**/forum/members/${memberId}/activity`, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(EMPTY_ACTIVITY),
+      });
+    });
+    await page.goto(`/members/${memberId}`);
+    await page.getByRole('button', { name: '1 post' }).click();
+    const pencil = page.getByRole('button', { name: 'Edit shop note' });
+    await expect(pencil).toBeVisible();
+    await pencil.scrollIntoViewIfNeeded();
+    await shotScreen(page, 'state-members-shop-edit');
+  });
+
+  test('state /members shop-edit-open', async ({ page }) => {
+    const memberId = '22222222-2222-4222-8222-222222222222';
+    const noteId = '55555555-5555-4555-8555-555555555555';
+    await page.addInitScript(() => {
+      localStorage.setItem('21gifts.session', 'sess-e2e');
+    });
+    await page.route(/\/me$/, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ...E2E_ACCOUNT,
+          role: 'moderator',
+          name: 'Ada',
+          username: 'alice',
+          lightningAddress: 'alice@walletofsatoshi.com',
+          rulesAgreedAt: 1_700_000_001,
+          setup: null,
+          missing: [],
+        }),
+      });
+    });
+    await page.route(`**/forum/members/${memberId}`, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          id: memberId,
+          name: 'Carol',
+          location: null,
+          role: 'verified',
+          username: 'carol',
+          lightningAddress: 'carol@walletofsatoshi.com',
+          createdAt: '2026-01-15T12:00:00.000Z',
+          aboutMe: null,
+          profileMessage: null,
+          postCount: 1,
+          replyCount: 0,
+        }),
+      });
+    });
+    await page.route(`**/forum/members/${memberId}/posts`, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          messages: [
+            {
+              id: noteId,
+              accountId: memberId,
+              name: 'Carol',
+              text: 'Cafe Luna\n\n#21GiftsShop',
+              createdAt: '2026-08-02T10:00:00.000Z',
+              sats: 0,
+              payable: false,
+              hasPhoto: false,
+              hasVideo: false,
+              videoContentType: null,
+              role: 'verified',
+              replyCount: 0,
+            },
+          ],
+        }),
+      });
+    });
+    await page.route(`**/forum/members/${memberId}/activity`, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(EMPTY_ACTIVITY),
+      });
+    });
+    await page.route(`**/forum/messages/${noteId}/edits`, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ edits: [] }),
+      });
+    });
+    await page.goto(`/members/${memberId}`);
+    await page.getByRole('button', { name: '1 post' }).click();
+    await page.getByRole('button', { name: 'Edit shop note' }).click();
+    await expect(page.getByText('1 / 5 · Photos')).toBeVisible();
+    await expect(page.getByText('Cancel', { exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Cancel' })).toBeVisible();
+    const history = page.getByText('No edits yet');
+    await expect(history).toBeVisible();
+    await history.scrollIntoViewIfNeeded();
+    await shotScreen(page, 'state-members-shop-edit-open');
+    await page.getByRole('button', { name: 'Next' }).click();
+    await expect(page.getByText('2 / 5 · Place')).toBeVisible();
+    await page.getByText('2 / 5 · Place').scrollIntoViewIfNeeded();
+    await shotScreen(page, 'state-members-shop-edit-place');
+    await page.getByRole('button', { name: 'Next' }).click();
+    await expect(page.getByText('3 / 5 · Text')).toBeVisible();
+    await page.getByText('3 / 5 · Text').scrollIntoViewIfNeeded();
+    await shotScreen(page, 'state-members-shop-edit-text');
+    await page.getByRole('button', { name: 'Next' }).click();
+    await expect(page.getByText('4 / 5 · 21.gifts user')).toBeVisible();
+    await page.getByText('4 / 5 · 21.gifts user').scrollIntoViewIfNeeded();
+    await shotScreen(page, 'state-members-shop-edit-user');
+    await page.getByRole('button', { name: 'Next' }).click();
+    await expect(page.getByText('5 / 5 · Summary')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Save changes' })).toBeVisible();
+    await page.getByText('5 / 5 · Summary').scrollIntoViewIfNeeded();
+    await shotScreen(page, 'state-members-shop-edit-summary');
   });
 
   /** Posts open on Carol's profile, her note expanded, reaction field ready. */
@@ -7050,6 +7783,32 @@ test.describe('onboarding screens', () => {
     await shotScreen(page, 'state-members-sticker-open', false);
   });
 
+  test('state /members sticker-kikamba', async ({ page }) => {
+    await seedShopStickerMember(page);
+    await page.goto('/members/22222222-2222-4222-8222-222222222222?lang=Kikamba');
+    await expect(page.getByRole('heading', { name: 'Profile' })).toBeVisible();
+    await expect(page.getByText('carol@21.gifts', { exact: true })).toBeVisible();
+    const dialog = page.getByRole('dialog', { name: 'Shop sticker' });
+    const preview = dialog.getByRole('img', { name: 'Shop sticker preview for carol@21.gifts' });
+    await expect(preview).toBeVisible();
+    await expect
+      .poll(() => preview.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0))
+      .toBe(true);
+    await expect(dialog.getByRole('button', { name: 'PDF' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await shotScreen(page, 'state-members-sticker-kikamba', false);
+  });
+
+  test('state /members sticker-lang', async ({ page }) => {
+    await seedShopStickerMember(page);
+    const dialog = await openShopStickerOverlay(page);
+    await dialog.getByRole('combobox', { name: 'Second language' }).click();
+    await expect(dialog.getByRole('option', { name: 'Kikamba' })).toBeVisible();
+    await shotScreen(page, 'state-members-sticker-lang', false);
+  });
+
   test('state /members sticker-busy', async ({ page }) => {
     await page.addInitScript(() => {
       // the PNG encode never finishes, so Download stays disabled
@@ -8440,6 +9199,166 @@ test.describe('onboarding screens', () => {
     await shotScreen(page, 'state-messages-id-signed-in');
   });
 
+  test('state /messages/[id] shop-edit', async ({ page }) => {
+    const id = '12121212-1212-4121-8121-121212121212';
+    await page.addInitScript(() => {
+      localStorage.setItem('21gifts.session', 'sess-e2e');
+    });
+    await page.route(/\/me$/, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ...E2E_ACCOUNT,
+          role: 'moderator',
+          name: 'Ada',
+          location: null,
+          username: 'alice',
+          lightningAddress: 'alice@walletofsatoshi.com',
+          rulesAgreedAt: 1_700_000_001,
+          viewKey: 'a'.repeat(64),
+          setup: null,
+          missing: [],
+        }),
+      });
+    });
+    await fulfillPublicThreadReplies(page, id);
+    await page.route(`**/forum/messages/${id}/replies`, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ messages: [] }),
+      });
+    });
+    const shopNote = {
+      id,
+      name: 'Ada',
+      text: 'Cafe Luna\n\n#21GiftsShop',
+      createdAt: '2026-08-28T12:00:00.000Z',
+      sats: 0,
+      payable: false,
+      hasPhoto: false,
+      role: 'basis',
+      replyCount: 0,
+    };
+    await page.route(`**/public-messages/${id}`, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(shopNote),
+      });
+    });
+    await page.route(
+      (url) => new URL(url).pathname === `/forum/messages/${id}`,
+      async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify(shopNote),
+        });
+      },
+    );
+    await page.goto(`/messages/${id}`);
+    const pencil = page.getByRole('button', { name: 'Edit shop note' });
+    await expect(pencil).toBeVisible();
+    await pencil.scrollIntoViewIfNeeded();
+    await shotScreen(page, 'state-messages-id-shop-edit');
+  });
+
+  test('state /messages/[id] shop-edit-open', async ({ page }) => {
+    const id = '12121212-1212-4121-8121-121212121212';
+    await page.addInitScript(() => {
+      localStorage.setItem('21gifts.session', 'sess-e2e');
+    });
+    await page.route(/\/me$/, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ...E2E_ACCOUNT,
+          role: 'moderator',
+          name: 'Ada',
+          location: null,
+          username: 'alice',
+          lightningAddress: 'alice@walletofsatoshi.com',
+          rulesAgreedAt: 1_700_000_001,
+          viewKey: 'a'.repeat(64),
+          setup: null,
+          missing: [],
+        }),
+      });
+    });
+    await fulfillPublicThreadReplies(page, id);
+    await page.route(`**/forum/messages/${id}/replies`, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ messages: [] }),
+      });
+    });
+    await page.route(`**/forum/messages/${id}/edits`, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ edits: [] }),
+      });
+    });
+    const shopNote = {
+      id,
+      name: 'Ada',
+      text: 'Cafe Luna\n\n#21GiftsShop',
+      createdAt: '2026-08-28T12:00:00.000Z',
+      sats: 0,
+      payable: false,
+      hasPhoto: false,
+      role: 'basis',
+      replyCount: 0,
+    };
+    await page.route(`**/public-messages/${id}`, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(shopNote),
+      });
+    });
+    await page.route(
+      (url) => new URL(url).pathname === `/forum/messages/${id}`,
+      async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify(shopNote),
+        });
+      },
+    );
+    await page.goto(`/messages/${id}`);
+    await page.getByRole('button', { name: 'Edit shop note' }).click();
+    await expect(page.getByText('1 / 5 · Photos')).toBeVisible();
+    await expect(page.getByText('Cancel', { exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Cancel' })).toBeVisible();
+    const history = page.getByText('No edits yet');
+    await expect(history).toBeVisible();
+    await history.scrollIntoViewIfNeeded();
+    await shotScreen(page, 'state-messages-id-shop-edit-open');
+    await page.getByRole('button', { name: 'Next' }).click();
+    await expect(page.getByText('2 / 5 · Place')).toBeVisible();
+    await page.getByText('2 / 5 · Place').scrollIntoViewIfNeeded();
+    await shotScreen(page, 'state-messages-id-shop-edit-place');
+    await page.getByRole('button', { name: 'Next' }).click();
+    await expect(page.getByText('3 / 5 · Text')).toBeVisible();
+    await page.getByText('3 / 5 · Text').scrollIntoViewIfNeeded();
+    await shotScreen(page, 'state-messages-id-shop-edit-text');
+    await page.getByRole('button', { name: 'Next' }).click();
+    await expect(page.getByText('4 / 5 · 21.gifts user')).toBeVisible();
+    await page.getByText('4 / 5 · 21.gifts user').scrollIntoViewIfNeeded();
+    await shotScreen(page, 'state-messages-id-shop-edit-user');
+    await page.getByRole('button', { name: 'Next' }).click();
+    await expect(page.getByText('5 / 5 · Summary')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Save changes' })).toBeVisible();
+    await page.getByText('5 / 5 · Summary').scrollIntoViewIfNeeded();
+    await shotScreen(page, 'state-messages-id-shop-edit-summary');
+  });
+
   test('state /messages sunday', async ({ page }) => {
     const id = '11111111-1111-4111-8111-111111111111';
     await page.addInitScript(() => {
@@ -8823,6 +9742,73 @@ test.describe('onboarding screens', () => {
       page.getByText('Greetings! https://example.com/hello', { exact: true }),
     ).toBeVisible();
     await shotScreen(page, 'state-messages-id-external-reply');
+  });
+
+  test('state /messages/[id] external-author', async ({ page }) => {
+    const parentId = '11111111-1111-4111-8111-111111111111';
+    const parent = {
+      id: parentId,
+      name: 'Ada',
+      text: 'Hello from Ada',
+      createdAt: '2026-08-28T12:00:00.000Z',
+      sats: 0,
+      payable: false,
+      hasPhoto: false,
+      role: 'basis',
+      replyCount: 2,
+    };
+    await fulfillPublicThreadReplies(page, parentId, [
+      {
+        id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1',
+        parentId,
+        name: 'Robin',
+        via: 'nostr',
+        text: '',
+        createdAt: '2026-08-28T12:03:00.000Z',
+        sats: 69,
+        payable: false,
+        hasPhoto: false,
+      },
+      {
+        id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2',
+        parentId,
+        name: 'Robin',
+        via: 'nostr',
+        text: 'Greetings! https://example.com/hello',
+        createdAt: '2026-08-28T12:04:00.000Z',
+        sats: 0,
+        payable: false,
+        hasPhoto: false,
+      },
+    ]);
+    await page.route(`**/public-messages/${parentId}`, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(parent),
+      });
+    });
+    await page.route('**/external-profile', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          name: 'Robin',
+          npub: 'npub1example',
+          nip05: 'robin@nostr.example',
+          lud16: 'pay@ln.example',
+        }),
+      });
+    });
+    await page.goto(`/messages/${parentId}`);
+    await expect(page.getByText('Hello from Ada')).toBeVisible();
+    await page.getByRole('button', { name: 'View profile' }).first().click();
+    const dialog = page.getByRole('dialog', { name: 'Robin' });
+    await expect(dialog.getByText('robin@nostr.example', { exact: true })).toBeVisible();
+    await expect(dialog.getByText('pay@ln.example', { exact: true })).toBeVisible();
+    await expect(dialog.getByText('npub1example', { exact: true })).toBeVisible();
+    await expect(dialog.getByRole('link')).toHaveCount(0);
+    await shotScreen(page, 'state-messages-id-external-author');
   });
 
   test('state /messages/[id] quoted-note', async ({ page }) => {
@@ -14350,7 +15336,11 @@ test.describe('shops screens', () => {
     });
     await fulfillMentionPeople(page);
     await page.goto('/shops');
-    const box = page.getByRole('textbox', { name: 'Your message' });
+    await page.getByRole('button', { name: 'Add a shop' }).click();
+    await page.getByRole('button', { name: 'Next' }).click();
+    await page.getByRole('button', { name: 'Next' }).click();
+    const box = page.getByRole('textbox', { name: 'Shop text' });
+    await expect(box).toBeVisible();
     await box.fill('@');
     await expect(page.getByRole('listbox', { name: 'People' })).toBeVisible();
     await shotScreen(page, 'state-shops-mention-suggest');
@@ -14380,7 +15370,11 @@ test.describe('shops screens', () => {
     });
     await fulfillMentionPeople(page);
     await page.goto('/shops');
-    const box = page.getByRole('textbox', { name: 'Your message' });
+    await page.getByRole('button', { name: 'Add a shop' }).click();
+    await page.getByRole('button', { name: 'Next' }).click();
+    await page.getByRole('button', { name: 'Next' }).click();
+    const box = page.getByRole('textbox', { name: 'Shop text' });
+    await expect(box).toBeVisible();
     await chooseMentionAda(page, box);
     await shotScreen(page, 'state-shops-mention-inserted');
   });
@@ -14511,6 +15505,155 @@ test.describe('shops screens', () => {
     await expect(page.getByRole('heading', { name: 'Map' })).toHaveCount(0);
     await expect(page.locator('[data-e2e-map="surface"]')).toHaveCount(0);
     await shotScreen(page, 'state-shops-map');
+  });
+
+  test('shops map staff', async ({ page }) => {
+    await seedAda(page, 'moderator');
+    await page.route(/\/messages(?:\?|$)/, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ messages: [] }),
+      });
+    });
+    await page.route('**/forum/messages/places', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          places: [
+            {
+              id: 'm-shop',
+              name: 'Ada',
+              createdAt: '2026-08-28T12:00:00.000Z',
+              lat: 14.6,
+              lng: 120.98,
+              label: 'Happyland',
+              shop: true,
+            },
+          ],
+        }),
+      });
+    });
+    await page.route('**/maps/key', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ key: null }),
+      });
+    });
+    await page.route(
+      (url) => {
+        const path = new URL(url).pathname;
+        return path === '/forum/messages/m-shop' || path === '/forum/messages/m-shop/edits';
+      },
+      async (route) => {
+        const path = new URL(route.request().url()).pathname;
+        if (path.endsWith('/edits')) {
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({ edits: [] }),
+          });
+          return;
+        }
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            id: 'm-shop',
+            name: 'Ada',
+            text: 'Cafe Luna\n\n#21GiftsShop',
+            createdAt: '2026-08-28T12:00:00.000Z',
+            sats: 0,
+            payable: false,
+            hasPhoto: false,
+          }),
+        });
+      },
+    );
+    await page.goto('/shops');
+    await page.getByRole('button', { name: 'Map' }).click();
+    await expect(page.getByRole('button', { name: 'Edit shop note' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Map' })).toHaveCount(0);
+    await shotScreen(page, 'state-shops-map-staff');
+    await page.getByRole('button', { name: 'Edit shop note' }).click();
+    await expect(page.getByText('1 / 5 · Photos')).toBeVisible();
+    await expect(page.getByText('Cancel', { exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Cancel' })).toBeVisible();
+    const history = page.getByText('No edits yet');
+    await expect(history).toBeVisible();
+    // The map frame fills the window. Scroll the opened editor into that window.
+    await history.scrollIntoViewIfNeeded();
+    await shotScreen(page, 'state-shops-map-edit-open');
+    await page.getByRole('button', { name: 'Next' }).click();
+    await expect(page.getByText('2 / 5 · Place')).toBeVisible();
+    await page.getByText('2 / 5 · Place').scrollIntoViewIfNeeded();
+    await shotScreen(page, 'state-shops-map-edit-place');
+    await page.getByRole('button', { name: 'Next' }).click();
+    await expect(page.getByText('3 / 5 · Text')).toBeVisible();
+    await page.getByText('3 / 5 · Text').scrollIntoViewIfNeeded();
+    await shotScreen(page, 'state-shops-map-edit-text');
+    await page.getByRole('button', { name: 'Next' }).click();
+    await expect(page.getByText('4 / 5 · 21.gifts user')).toBeVisible();
+    await page.getByText('4 / 5 · 21.gifts user').scrollIntoViewIfNeeded();
+    await shotScreen(page, 'state-shops-map-edit-user');
+    await page.getByRole('button', { name: 'Next' }).click();
+    await expect(page.getByText('5 / 5 · Summary')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Save changes' })).toBeVisible();
+    await page.getByText('5 / 5 · Summary').scrollIntoViewIfNeeded();
+    await shotScreen(page, 'state-shops-map-edit-summary');
+  });
+
+  test('shops map-edit-load-failed', async ({ page }) => {
+    await seedAda(page, 'moderator');
+    await page.route(/\/messages(?:\?|$)/, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ messages: [] }),
+      });
+    });
+    await page.route('**/forum/messages/places', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          places: [
+            {
+              id: 'm-shop',
+              name: 'Ada',
+              createdAt: '2026-08-28T12:00:00.000Z',
+              lat: 14.6,
+              lng: 120.98,
+              label: 'Happyland',
+              shop: true,
+            },
+          ],
+        }),
+      });
+    });
+    await page.route('**/maps/key', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ key: null }),
+      });
+    });
+    await page.route('**/forum/messages/m-shop', async (route) => {
+      await route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: 'Unavailable' }),
+      });
+    });
+    await page.goto('/shops');
+    await page.getByRole('button', { name: 'Map' }).click();
+    await page.getByRole('button', { name: 'Edit shop note' }).click();
+    const alert = page.getByText('Could not load this shop note');
+    await expect(alert).toBeVisible();
+    await alert.scrollIntoViewIfNeeded();
+    await shotScreen(page, 'state-shops-map-edit-load-failed');
   });
 
   test('shops map with key', async ({ page }) => {
@@ -14707,6 +15850,66 @@ test.describe('shops screens', () => {
     await expect(page.getByRole('columnheader', { name: 'Name' })).toBeVisible();
     await expect(page.getByRole('link', { name: '@luna' })).toBeVisible();
     await shotScreen(page, 'state-shops-table');
+  });
+
+  test('shops table staff', async ({ page }) => {
+    await seedAda(page, 'moderator');
+    await page.route(/\/messages(?:\?|$)/, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          messages: [
+            {
+              id: 'm-shop',
+              name: 'Ada',
+              text: 'Cafe Luna\n\n#21GiftsShop',
+              createdAt: '2026-08-28T12:00:00.000Z',
+              sats: 5,
+              payable: true,
+              hasPhoto: false,
+              role: 'basis',
+              place: { lat: 14.6, lng: 120.98, label: 'Happyland' },
+              shopAccount: { id: 'acc-luna', username: 'luna', name: 'Luna' },
+            },
+          ],
+        }),
+      });
+    });
+    await page.route('**/forum/messages/m-shop/edits', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ edits: [] }),
+      });
+    });
+    await page.goto('/shops');
+    await page.getByRole('button', { name: 'Table' }).click();
+    await expect(page.getByRole('button', { name: 'Edit shop note' })).toBeVisible();
+    await shotScreen(page, 'state-shops-table-staff');
+    await page.getByRole('button', { name: 'Edit shop note' }).click();
+    await expect(page.getByText('1 / 5 · Photos')).toBeVisible();
+    await expect(page.getByText('Cancel', { exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Cancel' })).toBeVisible();
+    await expect(page.getByText('No edits yet')).toBeVisible();
+    await shotScreen(page, 'state-shops-table-edit-open');
+    await page.getByRole('button', { name: 'Next' }).click();
+    await expect(page.getByText('2 / 5 · Place')).toBeVisible();
+    await page.getByText('2 / 5 · Place').scrollIntoViewIfNeeded();
+    await shotScreen(page, 'state-shops-table-edit-place');
+    await page.getByRole('button', { name: 'Next' }).click();
+    await expect(page.getByText('3 / 5 · Text')).toBeVisible();
+    await page.getByText('3 / 5 · Text').scrollIntoViewIfNeeded();
+    await shotScreen(page, 'state-shops-table-edit-text');
+    await page.getByRole('button', { name: 'Next' }).click();
+    await expect(page.getByText('4 / 5 · 21.gifts user')).toBeVisible();
+    await page.getByText('4 / 5 · 21.gifts user').scrollIntoViewIfNeeded();
+    await shotScreen(page, 'state-shops-table-edit-user');
+    await page.getByRole('button', { name: 'Next' }).click();
+    await expect(page.getByText('5 / 5 · Summary')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Save changes' })).toBeVisible();
+    await page.getByText('5 / 5 · Summary').scrollIntoViewIfNeeded();
+    await shotScreen(page, 'state-shops-table-edit-summary');
   });
 
   const shopTableRow = {
@@ -15033,6 +16236,8 @@ test.describe('shops screens', () => {
     await fulfillMixedSatsMessages(page);
     await page.goto('/shops');
     await expect(page.getByText('No shops yet — add the first one.')).toBeVisible();
+    await page.getByRole('button', { name: 'Add a shop' }).click();
+    await page.getByRole('button', { name: 'Next' }).click();
     await page.getByRole('button', { name: 'Add a place' }).click();
     await expect(page.getByText('The map is not available.')).toBeVisible();
     await shotScreen(page, 'state-shops-composer-place');
@@ -15044,6 +16249,8 @@ test.describe('shops screens', () => {
     await fulfillMixedSatsMessages(page);
     await page.goto('/shops');
     await expect(page.getByText('No shops yet — add the first one.')).toBeVisible();
+    await page.getByRole('button', { name: 'Add a shop' }).click();
+    await page.getByRole('button', { name: 'Next' }).click();
     await page.getByRole('button', { name: 'Add a place' }).click();
     const frame = page.locator('.h-64');
     await expect(frame).toBeVisible();
@@ -15061,6 +16268,8 @@ test.describe('shops screens', () => {
     await fulfillMixedSatsMessages(page);
     await page.goto('/shops');
     await expect(page.getByText('No shops yet — add the first one.')).toBeVisible();
+    await page.getByRole('button', { name: 'Add a shop' }).click();
+    await page.getByRole('button', { name: 'Next' }).click();
     await page.getByRole('button', { name: 'Add a place' }).click();
     await page.locator('.h-64').click();
     await page.getByLabel('Place name').fill('Stall');
@@ -15077,11 +16286,16 @@ test.describe('shops screens', () => {
     await fulfillMixedSatsMessages(page);
     await page.goto('/shops');
     await expect(page.getByText('No shops yet — add the first one.')).toBeVisible();
+    await page.getByRole('button', { name: 'Add a shop' }).click();
+    await page.getByRole('button', { name: 'Next' }).click();
     await page.getByRole('button', { name: 'Add a place' }).click();
     await page.locator('.h-64').click();
     await page.getByLabel('Place name').fill('Stall');
     await page.getByRole('button', { name: 'Use this place' }).click();
-    await expect(page.getByText('Stall', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Use this place' })).toHaveCount(0);
+    await expect(page.getByText('Stall', { exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Remove place' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Next' })).toBeEnabled();
     await shotScreen(page, 'state-shops-composer-place-set');
   });
 
@@ -15091,6 +16305,8 @@ test.describe('shops screens', () => {
     await fulfillMixedSatsMessages(page);
     await page.goto('/shops');
     await expect(page.getByText('No shops yet — add the first one.')).toBeVisible();
+    await page.getByRole('button', { name: 'Add a shop' }).click();
+    await page.getByRole('button', { name: 'Next' }).click();
     await page.getByRole('button', { name: 'Add a place' }).click();
     const name = page.getByLabel('Place name');
     await expect(name).toBeVisible();
@@ -15108,6 +16324,8 @@ test.describe('shops screens', () => {
     await fulfillMixedSatsMessages(page);
     await page.goto('/shops');
     await expect(page.getByText('No shops yet — add the first one.')).toBeVisible();
+    await page.getByRole('button', { name: 'Add a shop' }).click();
+    await page.getByRole('button', { name: 'Next' }).click();
     await page.getByRole('button', { name: 'Add a place' }).click();
     await page.locator('.h-64').click();
     const confirm = page.getByRole('button', { name: 'Use this place' });
@@ -15124,10 +16342,15 @@ test.describe('shops screens', () => {
     await fulfillMixedSatsMessages(page);
     await page.goto('/shops');
     await expect(page.getByText('No shops yet — add the first one.')).toBeVisible();
+    await page.getByRole('button', { name: 'Add a shop' }).click();
+    await page.getByRole('button', { name: 'Next' }).click();
     await page.getByRole('button', { name: 'Add a place' }).click();
     await page.locator('.h-64').click();
     await page.getByRole('button', { name: 'Use this place' }).click();
-    await expect(page.getByText('14.50000, 120.90000', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Use this place' })).toHaveCount(0);
+    await expect(page.getByText('14.50000, 120.90000', { exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Remove place' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Next' })).toBeEnabled();
     await shotScreen(page, 'state-shops-composer-place-set-coords');
   });
 
@@ -15159,6 +16382,158 @@ test.describe('shops screens', () => {
     await expect(note.getByRole('button', { name: 'Add a place' })).toBeVisible();
     await expect(note.getByRole('button', { name: 'Use this place' })).toHaveCount(0);
     await shotScreen(page, 'state-shops-staff-place');
+  });
+
+  test('shops edit open', async ({ page }) => {
+    await seedAda(page, 'moderator');
+    await page.route(/\/messages(?:\?|$)/, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          messages: [
+            {
+              id: 'm-staff',
+              name: 'Ada',
+              text: 'Cafe Luna\n\n#21GiftsShop',
+              createdAt: '2026-08-28T12:00:00.000Z',
+              sats: 0,
+              payable: false,
+              hasPhoto: false,
+              role: 'basis',
+            },
+          ],
+        }),
+      });
+    });
+    await page.route('**/forum/messages/m-staff/edits', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ edits: [] }),
+      });
+    });
+    await page.goto('/shops');
+    const note = page.locator('[data-message-id="m-staff"]');
+    await note.getByRole('button', { name: 'Edit shop note' }).click();
+    await expect(page.getByText('1 / 5 · Photos')).toBeVisible();
+    await expect(page.getByText('Cancel', { exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Cancel' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'History' })).toBeVisible();
+    await expect(page.getByText('No edits yet')).toBeVisible();
+    await shotScreen(page, 'state-shops-edit-open');
+    await page.getByRole('button', { name: 'Next' }).click();
+    await expect(page.getByText('2 / 5 · Place')).toBeVisible();
+    await page.getByText('2 / 5 · Place').scrollIntoViewIfNeeded();
+    await shotScreen(page, 'state-shops-edit-place');
+    await page.getByRole('button', { name: 'Next' }).click();
+    await expect(page.getByText('3 / 5 · Text')).toBeVisible();
+    await page.getByText('3 / 5 · Text').scrollIntoViewIfNeeded();
+    await shotScreen(page, 'state-shops-edit-text');
+    await page.getByRole('button', { name: 'Next' }).click();
+    await expect(page.getByText('4 / 5 · 21.gifts user')).toBeVisible();
+    await page.getByText('4 / 5 · 21.gifts user').scrollIntoViewIfNeeded();
+    await shotScreen(page, 'state-shops-edit-user');
+    await page.getByRole('button', { name: 'Next' }).click();
+    await expect(page.getByText('5 / 5 · Summary')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Save changes' })).toBeVisible();
+    await page.getByText('5 / 5 · Summary').scrollIntoViewIfNeeded();
+    await shotScreen(page, 'state-shops-edit-summary');
+  });
+
+  test('shops edit-save-error', async ({ page }) => {
+    await seedAda(page, 'moderator');
+    await page.route(/\/messages(?:\?|$)/, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          messages: [
+            {
+              id: 'm-staff',
+              name: 'Ada',
+              text: 'Cafe Luna\n\n#21GiftsShop',
+              createdAt: '2026-08-28T12:00:00.000Z',
+              sats: 0,
+              payable: false,
+              hasPhoto: false,
+              role: 'basis',
+            },
+          ],
+        }),
+      });
+    });
+    await page.route('**/forum/messages/m-staff/edits', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ edits: [] }),
+      });
+    });
+    await page.route('**/forum/messages/m-staff/text', async (route) => {
+      await route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: 'Unavailable' }),
+      });
+    });
+    await page.goto('/shops');
+    const note = page.locator('[data-message-id="m-staff"]');
+    await note.getByRole('button', { name: 'Edit shop note' }).click();
+    await expect(page.getByText('1 / 5 · Photos')).toBeVisible();
+    await page.getByRole('button', { name: 'Next' }).click();
+    await page.getByRole('button', { name: 'Next' }).click();
+    await page.getByLabel('Shop text').fill('Cafe Luna updated');
+    await page.getByRole('button', { name: 'Next' }).click();
+    await page.getByRole('button', { name: 'Next' }).click();
+    await expect(page.getByText('5 / 5 · Summary')).toBeVisible();
+    await page.getByRole('button', { name: 'Save changes' }).click();
+    const alert = page.getByText('Could not save this shop note');
+    await expect(alert).toBeVisible();
+    await alert.scrollIntoViewIfNeeded();
+    await shotScreen(page, 'state-shops-edit-save-error');
+  });
+
+  test('shops edit-history-error', async ({ page }) => {
+    await seedAda(page, 'moderator');
+    await page.route(/\/messages(?:\?|$)/, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          messages: [
+            {
+              id: 'm-staff',
+              name: 'Ada',
+              text: 'Cafe Luna\n\n#21GiftsShop',
+              createdAt: '2026-08-28T12:00:00.000Z',
+              sats: 0,
+              payable: false,
+              hasPhoto: false,
+              role: 'basis',
+            },
+          ],
+        }),
+      });
+    });
+    await page.route('**/forum/messages/m-staff/edits', async (route) => {
+      await route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: 'Unavailable' }),
+      });
+    });
+    await page.goto('/shops');
+    await page
+      .locator('[data-message-id="m-staff"]')
+      .getByRole('button', { name: 'Edit shop note' })
+      .click();
+    const alert = page.getByText('Could not load the history');
+    await expect(alert).toBeVisible();
+    await expect(page.getByText('Cancel', { exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Cancel' })).toBeVisible();
+    await alert.scrollIntoViewIfNeeded();
+    await shotScreen(page, 'state-shops-edit-history-error');
   });
 
   test('shops staff-place-unavailable', async ({ page }) => {
@@ -15598,6 +16973,7 @@ test.describe('shops screens', () => {
 
   test('shops staff-account', async ({ page }) => {
     await seedAda(page, 'moderator');
+    await fulfillMentionPeople(page);
     await page.route(/\/messages(?:\?|$)/, async (route) => {
       await route.fulfill({
         status: 200,
@@ -15622,12 +16998,54 @@ test.describe('shops screens', () => {
     const note = page.locator('[data-message-id="m-staff"]');
     await expect(note.getByText('Cafe Luna')).toBeVisible();
     await note.getByRole('button', { name: 'Add an account' }).click();
-    await expect(note.getByLabel('Username')).toHaveValue('');
+    await expect(note.getByLabel('Username')).toHaveValue('@');
+    await expect(page.getByRole('option', { name: '@ada', exact: true })).toBeVisible();
+    await expect(page.getByRole('option', { name: '@adam', exact: true })).toBeVisible();
+    await expect(page.getByText('Ada Lovelace')).toBeVisible();
     const save = note.getByRole('button', { name: 'Save account' });
     await expect(save).toBeVisible();
     await expect(note.getByRole('alert')).toHaveCount(0);
     await save.scrollIntoViewIfNeeded();
     await shotScreen(page, 'state-shops-staff-account');
+  });
+
+  test('shops staff-account-chosen', async ({ page }) => {
+    await seedAda(page, 'moderator');
+    await fulfillMentionPeople(page);
+    await page.route(/\/messages(?:\?|$)/, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          messages: [
+            {
+              id: 'm-staff',
+              name: 'Ada',
+              text: 'Cafe Luna\n\n#21GiftsShop',
+              createdAt: '2026-08-28T12:00:00.000Z',
+              sats: 0,
+              payable: false,
+              hasPhoto: false,
+              role: 'basis',
+            },
+          ],
+        }),
+      });
+    });
+    await page.goto('/shops');
+    const note = page.locator('[data-message-id="m-staff"]');
+    await expect(note.getByText('Cafe Luna')).toBeVisible();
+    await note.getByRole('button', { name: 'Add an account' }).click();
+    await expect(note.getByLabel('Username')).toHaveValue('@');
+    await page.getByRole('option', { name: '@ada', exact: true }).click();
+    await expect(note.getByLabel('Username')).toHaveValue('@ada');
+    await expect(page.getByRole('option', { name: '@ada', exact: true })).toBeVisible();
+    await expect(page.getByRole('option', { name: '@adam', exact: true })).toBeVisible();
+    const save = note.getByRole('button', { name: 'Save account' });
+    await expect(save).toBeVisible();
+    await expect(note.getByRole('alert')).toHaveCount(0);
+    await save.scrollIntoViewIfNeeded();
+    await shotScreen(page, 'state-shops-staff-account-chosen');
   });
 
   test('shops staff-account-set', async ({ page }) => {
@@ -15663,6 +17081,7 @@ test.describe('shops screens', () => {
 
   test('shops staff-account-error', async ({ page }) => {
     await seedAda(page, 'moderator');
+    await fulfillMentionPeople(page);
     await page.route(/\/messages(?:\?|$)/, async (route) => {
       await route.fulfill({
         status: 200,
@@ -15701,12 +17120,42 @@ test.describe('shops screens', () => {
     const note = page.locator('[data-message-id="m-staff"]');
     await note.getByRole('button', { name: 'Add an account' }).click();
     await note.getByLabel('Username').fill('missing');
+    await expect(page.getByRole('listbox', { name: 'People' })).toHaveCount(0);
     await note.getByRole('button', { name: 'Save account' }).click();
     await expect(note.getByRole('alert')).toHaveText('No account with that username.');
     const save = note.getByRole('button', { name: 'Save account' });
     await expect(save).toBeVisible();
     await save.scrollIntoViewIfNeeded();
     await shotScreen(page, 'state-shops-staff-account-error');
+  });
+
+  test('shops add steps', async ({ page }) => {
+    await seedAda(page);
+    await fulfillMixedSatsMessages(page);
+    await page.goto('/shops');
+    await expect(page.getByText('No shops yet — add the first one.')).toBeVisible();
+    await page.getByRole('button', { name: 'Add a shop' }).click();
+    await expect(page.getByText('1 / 5 · Photos')).toBeVisible();
+    await shotScreen(page, 'state-shops-add-photos');
+    await page.getByRole('button', { name: 'Next' }).click();
+    await expect(page.getByText('2 / 5 · Place')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Add a place' })).toBeVisible();
+    await expect(page.getByText('The map is not available.')).toHaveCount(0);
+    await shotScreen(page, 'state-shops-add-place');
+    await page.getByRole('button', { name: 'Next' }).click();
+    await expect(page.getByText('3 / 5 · Text')).toBeVisible();
+    await shotScreen(page, 'state-shops-add-text');
+    await page.getByRole('button', { name: 'Next' }).click();
+    await expect(page.getByText('4 / 5 · 21.gifts user')).toBeVisible();
+    await shotScreen(page, 'state-shops-add-user');
+    await page.getByRole('button', { name: 'Next' }).click();
+    await expect(page.getByText('5 / 5 · Summary')).toBeVisible();
+    const post = page.locator('form').getByRole('button', { name: 'Post', exact: true });
+    await expect(post).toBeEnabled();
+    await expect
+      .poll(async () => post.evaluate((element) => getComputedStyle(element).opacity))
+      .toBe('1');
+    await shotScreen(page, 'state-shops-add-summary');
   });
 });
 
@@ -16097,6 +17546,149 @@ test.describe('inbox screens', () => {
     await expect(page.getByText('Hello team')).toBeVisible();
     await expect(page.getByText('You')).toBeVisible();
     await shotScreen(page, 'state-messages-thread');
+  });
+
+  test('state /messages thread-mention-suggest', async ({ page }) => {
+    await seedAda(page);
+    await page.route(/\/conversations$/, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          conversations: [
+            {
+              id: 'conv-21',
+              kind: 'member_platform',
+              name: '21.gifts',
+              lastText: 'Hello team',
+              lastAt: '2026-08-28T12:00:00.000Z',
+              lastFromMe: false,
+              lastSats: 0,
+            },
+          ],
+        }),
+      });
+    });
+    await page.route(/\/conversations\/conv-21(?:\?|$)/, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          messages: [
+            {
+              id: 'm1',
+              name: '21.gifts',
+              text: 'Hello team',
+              createdAt: '2026-08-28T12:00:00.000Z',
+              fromMe: false,
+              sats: 0,
+            },
+          ],
+        }),
+      });
+    });
+    await fulfillMentionPeople(page);
+    await page.goto('/messages?c=conv-21');
+    const field = page.getByRole('textbox', { name: 'Your message' });
+    await expect(field).toBeVisible();
+    await field.fill('@');
+    await expect(page.getByRole('listbox', { name: 'People' })).toBeVisible();
+    await expect(page.getByRole('option', { name: '@ada', exact: true })).toBeVisible();
+    await shotScreen(page, 'state-messages-thread-mention-suggest');
+  });
+
+  test('state /messages thread-mention-inserted', async ({ page }) => {
+    await seedAda(page);
+    await page.route(/\/conversations$/, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          conversations: [
+            {
+              id: 'conv-21',
+              kind: 'member_platform',
+              name: '21.gifts',
+              lastText: 'Hello team',
+              lastAt: '2026-08-28T12:00:00.000Z',
+              lastFromMe: false,
+              lastSats: 0,
+            },
+          ],
+        }),
+      });
+    });
+    await page.route(/\/conversations\/conv-21(?:\?|$)/, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          messages: [
+            {
+              id: 'm1',
+              name: '21.gifts',
+              text: 'Hello team',
+              createdAt: '2026-08-28T12:00:00.000Z',
+              fromMe: false,
+              sats: 0,
+            },
+          ],
+        }),
+      });
+    });
+    await fulfillMentionPeople(page);
+    await page.goto('/messages?c=conv-21');
+    const field = page.getByRole('textbox', { name: 'Your message' });
+    await expect(field).toBeVisible();
+    await chooseMentionAda(page, field);
+    await shotScreen(page, 'state-messages-thread-mention-inserted');
+  });
+
+  test('state /messages thread-mention', async ({ page }) => {
+    await seedAda(page);
+    await page.route(/\/conversations$/, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          conversations: [
+            {
+              id: 'conv-21',
+              kind: 'member_platform',
+              name: '21.gifts',
+              lastText: 'Hello team',
+              lastAt: '2026-08-28T12:00:00.000Z',
+              lastFromMe: false,
+              lastSats: 0,
+            },
+          ],
+        }),
+      });
+    });
+    await page.route(/\/conversations\/conv-21(?:\?|$)/, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          messages: [
+            {
+              id: 'm1',
+              name: '21.gifts',
+              text: 'Hello @ada',
+              createdAt: '2026-08-28T12:00:00.000Z',
+              fromMe: false,
+              sats: 0,
+              mentions: [{ username: 'ada', accountId: 'acc-ada' }],
+            },
+          ],
+        }),
+      });
+    });
+    await page.goto('/messages?c=conv-21');
+    const profile = page.getByRole('button', { name: 'View profile' });
+    await expect(profile).toBeVisible();
+    await profile.scrollIntoViewIfNeeded();
+    await shotScreen(page, 'state-messages-thread-mention');
   });
 
   test('state /messages thread-translate', async ({ page }) => {
@@ -18237,6 +19829,7 @@ test.describe('moderate group screens', () => {
       amountChf?: string;
       amountEur?: string;
       amountPhp?: string;
+      mentions?: Array<{ username: string; accountId: string }>;
     }>,
   ): Promise<void> {
     await page.route(/\/conversations\/conv-mod(?:\?|$)/, async (route) => {
@@ -18291,6 +19884,71 @@ test.describe('moderate group screens', () => {
     await page.goto('/moderate/group');
     await expect(page.getByText('Hello mods')).toBeVisible();
     await shotScreen(page, 'screen-moderate-group');
+  });
+
+  test('state /moderate/group mention-suggest', async ({ page }) => {
+    await seedAda(page, 'moderator');
+    await mockGroup(page);
+    await mockThread(page, [
+      {
+        id: 'm1',
+        name: 'Ada',
+        text: 'Hello mods',
+        createdAt: '2026-08-28T15:00:00.000Z',
+        fromMe: false,
+        sats: 0,
+      },
+    ]);
+    await fulfillMentionPeople(page);
+    await page.goto('/moderate/group');
+    const field = page.getByRole('textbox', { name: 'Your message' });
+    await expect(field).toBeVisible();
+    await field.fill('@');
+    await expect(page.getByRole('listbox', { name: 'People' })).toBeVisible();
+    await expect(page.getByRole('option', { name: '@ada', exact: true })).toBeVisible();
+    await shotScreen(page, 'state-moderate-group-mention-suggest');
+  });
+
+  test('state /moderate/group mention-inserted', async ({ page }) => {
+    await seedAda(page, 'moderator');
+    await mockGroup(page);
+    await mockThread(page, [
+      {
+        id: 'm1',
+        name: 'Ada',
+        text: 'Hello mods',
+        createdAt: '2026-08-28T15:00:00.000Z',
+        fromMe: false,
+        sats: 0,
+      },
+    ]);
+    await fulfillMentionPeople(page);
+    await page.goto('/moderate/group');
+    const field = page.getByRole('textbox', { name: 'Your message' });
+    await expect(field).toBeVisible();
+    await chooseMentionAda(page, field);
+    await shotScreen(page, 'state-moderate-group-mention-inserted');
+  });
+
+  test('state /moderate/group mention', async ({ page }) => {
+    await seedAda(page, 'moderator');
+    await mockGroup(page);
+    await mockThread(page, [
+      {
+        id: 'm1',
+        name: 'Ada',
+        text: 'Hello @ada',
+        createdAt: '2026-08-28T15:00:00.000Z',
+        fromMe: false,
+        sats: 0,
+        mentions: [{ username: 'ada', accountId: 'acc-ada' }],
+      },
+    ]);
+    await page.goto('/moderate/group');
+    const profile = page.getByRole('button', { name: 'View profile' });
+    await expect(profile).toBeVisible();
+    await profile.scrollIntoViewIfNeeded();
+    await shotScreen(page, 'state-moderate-group-mention');
   });
 
   test('state /moderate/group sunday', async ({ page }) => {

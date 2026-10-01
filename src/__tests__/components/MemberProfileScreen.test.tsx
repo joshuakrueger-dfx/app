@@ -6,7 +6,11 @@ import {
   fetchComposeTarget,
   NoteDeletedError,
   fetchGiftStats,
+  fetchMember,
   fetchMemberPosts,
+  fetchShopNoteEdits,
+  postTrustVerify,
+  setMessageShopText,
   fetchMemberReplies,
   fetchMessagePhoto,
   fetchPublicMessage,
@@ -31,11 +35,13 @@ import { renderWithLocale } from '@/__tests__/render-with-locale';
 import { walletOfSatoshiHref } from '@/lib/wos-deep-link';
 
 const push = vi.fn();
+const refresh = vi.fn();
 
 vi.mock('next/navigation', () => ({
-  useRouter: (): { push: typeof push; replace: typeof push } => ({
+  useRouter: (): { push: typeof push; replace: typeof push; refresh: typeof refresh } => ({
     push,
     replace: push,
+    refresh,
   }),
   usePathname: (): string => '/',
   useSearchParams: (): URLSearchParams => new URLSearchParams(),
@@ -72,6 +78,8 @@ vi.mock('@/lib/api', () => ({
   postTrustConfirm: vi.fn(),
   postTrustAppoint: vi.fn(),
   fetchGiftStats: vi.fn().mockResolvedValue({ spendOverTime: [] }),
+  fetchShopNoteEdits: vi.fn(),
+  setMessageShopText: vi.fn(),
 }));
 
 let hydrateReady = true;
@@ -201,6 +209,30 @@ async function openPostsShowingNote(feedNote: ForumMessage = note): Promise<void
   await screen.findByText(feedNote.text);
 }
 
+/** Shop text is split from the shop chip, so the raw stored line is not one node. */
+async function openShopPosts(feedNote: ForumMessage): Promise<void> {
+  vi.mocked(fetchMemberPosts).mockResolvedValue([feedNote]);
+  const postsButton = screen.getByRole('button', { name: /posts?/ });
+  if (postsButton.getAttribute('aria-pressed') !== 'true') {
+    fireEvent.click(postsButton);
+  }
+  await screen.findByText('Cafe Luna');
+}
+
+function stubShopPhotoFetch(): void {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => ({
+      ok: true,
+      blob: () =>
+        Promise.resolve({
+          type: 'image/jpeg',
+          arrayBuffer: () => Promise.resolve(Uint8Array.of(1).buffer),
+        }),
+    })),
+  );
+}
+
 async function openPostsShowingPhotoNote(): Promise<void> {
   vi.mocked(fetchMemberPosts).mockResolvedValue([{ ...note, hasPhoto: true, photoCount: 1 }]);
   const postsButton = screen.getByRole('button', { name: /posts?/ });
@@ -316,11 +348,13 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
+  vi.unstubAllGlobals();
   vi.useRealTimers();
   await act(async () => {
     await Promise.resolve();
   });
   cleanup();
+  window.history.pushState(null, '', '/');
   Object.defineProperty(navigator, 'userAgent', {
     configurable: true,
     value: originalUserAgent,
@@ -462,6 +496,70 @@ describe('MemberProfileScreen', () => {
       screen.getByRole('img', { name: 'Shop sticker preview for carol@21.gifts' }),
     ).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    expect(screen.queryByRole('dialog', { name: 'Shop sticker' })).toBeNull();
+  });
+
+  it('opens the Kikamba shop sticker from the page language without a click and leaves it closed', () => {
+    window.history.pushState(null, '', '/?lang=Kikamba');
+    const view = renderWithLocale(
+      <MemberProfileScreen profile={profile} received={[]} donated={[]} />,
+    );
+    expect(screen.getByText('carol@21.gifts')).toBeTruthy();
+    expect(screen.getByRole('dialog', { name: 'Shop sticker' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    expect(screen.queryByRole('dialog', { name: 'Shop sticker' })).toBeNull();
+    view.rerender(<MemberProfileScreen profile={{ ...profile }} received={[]} donated={[]} />);
+    expect(screen.queryByRole('dialog', { name: 'Shop sticker' })).toBeNull();
+  });
+
+  it('keeps the Kikamba shop sticker open when the pay QR changes', () => {
+    window.history.pushState(null, '', '/?lang=Kikamba');
+    const view = renderWithLocale(
+      <MemberProfileScreen profile={profile} received={[]} donated={[]} />,
+    );
+    expect(screen.getByRole('dialog', { name: 'Shop sticker' })).toBeTruthy();
+    view.rerender(
+      <MemberProfileScreen profile={{ ...profile, username: 'ada' }} received={[]} donated={[]} />,
+    );
+    expect(screen.getByRole('dialog', { name: 'Shop sticker' })).toBeTruthy();
+  });
+
+  it('does not reopen the Kikamba sticker after the pay QR changes', async () => {
+    window.history.pushState(null, '', '/?lang=Kikamba');
+    useAuthStore.setState({
+      session: 'sess',
+      account: { ...account, role: 'moderator' },
+    });
+    vi.mocked(postTrustVerify).mockResolvedValueOnce({
+      id: profile.id,
+      name: 'Carol',
+      role: 'verified',
+    });
+    vi.mocked(fetchMember).mockResolvedValueOnce({
+      ...profile,
+      role: 'verified',
+      username: 'ada',
+    });
+    renderWithLocale(
+      <MemberProfileScreen profile={{ ...profile, role: 'basis' }} received={[]} donated={[]} />,
+    );
+    expect(screen.getByRole('dialog', { name: 'Shop sticker' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    expect(screen.queryByRole('dialog', { name: 'Shop sticker' })).toBeNull();
+    fireEvent.click(screen.getByText('Moderator functions'));
+    fireEvent.click(screen.getByRole('button', { name: 'Verify' }));
+    await waitFor(() => {
+      expect(screen.getByText('ada@21.gifts')).toBeTruthy();
+    });
+    expect(screen.queryByRole('dialog', { name: 'Shop sticker' })).toBeNull();
+  });
+
+  it('offers no Kikamba shop sticker without a username', () => {
+    window.history.pushState(null, '', '/?lang=Kikamba');
+    renderWithLocale(
+      <MemberProfileScreen profile={{ ...profile, username: null }} received={[]} donated={[]} />,
+    );
+    expect(screen.queryByRole('button', { name: 'Shop sticker' })).toBeNull();
     expect(screen.queryByRole('dialog', { name: 'Shop sticker' })).toBeNull();
   });
 
@@ -3831,5 +3929,143 @@ describe('MemberProfileScreen', () => {
       expect(within(replyCard).queryByLabelText('Amount')).toBeNull();
     });
     expect(screen.getByLabelText('Your reaction')).toBeTruthy();
+  });
+
+  it('shows the shop pencil on a moderator’s post list and applies a saved note', async () => {
+    const shopPost: ForumMessage = {
+      ...note,
+      text: 'Cafe Luna\n\n#21GiftsShop',
+      sats: 0,
+      payable: false,
+    };
+    useAuthStore.setState({ session: 'sess', account: null });
+    renderWithLocale(
+      <MemberProfileScreen profile={{ ...profile, postCount: 1 }} received={[]} donated={[]} />,
+    );
+    await openShopPosts(shopPost);
+    expect(screen.queryByRole('button', { name: 'Edit shop note' })).toBeNull();
+    cleanup();
+
+    useAuthStore.setState({ session: 'sess', account });
+    renderWithLocale(
+      <MemberProfileScreen profile={{ ...profile, postCount: 1 }} received={[]} donated={[]} />,
+    );
+    await openShopPosts(shopPost);
+    expect(screen.queryByRole('button', { name: 'Edit shop note' })).toBeNull();
+    cleanup();
+
+    useAuthStore.setState({ session: 'sess', account: { ...account, role: 'moderator' } });
+    vi.mocked(fetchShopNoteEdits).mockResolvedValue([]);
+    vi.mocked(setMessageShopText).mockResolvedValue({
+      ...shopPost,
+      text: 'Cafe Sol\n\n#21GiftsShop',
+      place: { lat: 1, lng: 2, label: 'Stall' },
+      shopAccount: { id: 'shop-acc', username: 'luna', name: 'Luna' },
+    });
+    vi.mocked(fetchMemberPosts).mockResolvedValue([
+      shopPost,
+      {
+        ...note,
+        id: '44444444-4444-4444-8444-444444444444',
+        text: 'Other note',
+        sats: 0,
+        payable: false,
+      },
+    ]);
+    renderWithLocale(
+      <MemberProfileScreen profile={{ ...profile, postCount: 2 }} received={[]} donated={[]} />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /posts?/ }));
+    await screen.findByText('Cafe Luna');
+    await screen.findByText('Other note');
+    const card = document.querySelector(`[data-message-id="${note.id}"]`) as HTMLElement;
+    fireEvent.click(within(card).getByRole('button', { name: 'Edit shop note' }));
+    expect(await within(card).findByText('1 / 5 · Photos')).toBeTruthy();
+    fireEvent.click(within(card).getByRole('button', { name: 'Next' }));
+    fireEvent.click(within(card).getByRole('button', { name: 'Next' }));
+    fireEvent.change(within(card).getByRole('textbox', { name: 'Shop text' }), {
+      target: { value: 'Cafe Sol' },
+    });
+    fireEvent.click(within(card).getByRole('button', { name: 'Next' }));
+    fireEvent.click(within(card).getByRole('button', { name: 'Next' }));
+    fireEvent.click(within(card).getByRole('button', { name: 'Save changes' }));
+    await waitFor(() => {
+      expect(within(card).getByText('Cafe Sol')).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: '0 reactions', pressed: false }));
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: 'Edit shop note' })).toBeNull();
+    });
+  });
+
+  it('drops stored photo addresses when a shop post’s pictures change', async () => {
+    const shopPost: ForumMessage = {
+      ...note,
+      text: 'Cafe Luna\n\n#21GiftsShop',
+      sats: 0,
+      payable: false,
+      hasPhoto: true,
+      photoCount: 1,
+    };
+    useAuthStore.setState({ session: 'sess', account: { ...account, role: 'moderator' } });
+    vi.mocked(fetchShopNoteEdits).mockResolvedValue([]);
+    vi.mocked(setMessageShopText).mockResolvedValue({
+      ...shopPost,
+      text: 'Cafe Sol\n\n#21GiftsShop',
+    });
+    stubShopPhotoFetch();
+    let photoUrl = 0;
+    vi.mocked(URL.createObjectURL).mockImplementation(() => `blob:profile-${photoUrl++}`);
+    vi.mocked(fetchMemberPosts).mockResolvedValue([
+      shopPost,
+      {
+        ...note,
+        id: '44444444-4444-4444-8444-444444444444',
+        text: 'Other note',
+        sats: 0,
+        payable: false,
+        hasPhoto: true,
+        photoCount: 1,
+      },
+    ]);
+    renderWithLocale(
+      <MemberProfileScreen profile={{ ...profile, postCount: 2 }} received={[]} donated={[]} />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /posts?/ }));
+    await screen.findByText('Cafe Luna');
+    const shopCard = document.querySelector(`[data-message-id="${note.id}"]`) as HTMLElement;
+    const otherCard = document.querySelector(
+      '[data-message-id="44444444-4444-4444-8444-444444444444"]',
+    ) as HTMLElement;
+    await waitFor(() => {
+      expect(within(shopCard).getByAltText('Photo from Carol').getAttribute('src')).toMatch(
+        /^blob:profile-/,
+      );
+      expect(within(otherCard).getByAltText('Photo from Carol').getAttribute('src')).toMatch(
+        /^blob:profile-/,
+      );
+    });
+    const shopSrc = within(shopCard).getByAltText('Photo from Carol').getAttribute('src');
+    const otherSrc = within(otherCard).getByAltText('Photo from Carol').getAttribute('src');
+    expect(shopSrc).not.toBe(otherSrc);
+    vi.mocked(URL.revokeObjectURL).mockClear();
+    fireEvent.click(within(shopCard).getByRole('button', { name: 'Edit shop note' }));
+    expect(await within(shopCard).findByText('1 / 5 · Photos')).toBeTruthy();
+    fireEvent.click(within(shopCard).getByRole('button', { name: 'Next' }));
+    fireEvent.click(within(shopCard).getByRole('button', { name: 'Next' }));
+    fireEvent.change(within(shopCard).getByRole('textbox', { name: 'Shop text' }), {
+      target: { value: 'Cafe Sol' },
+    });
+    fireEvent.click(within(shopCard).getByRole('button', { name: 'Next' }));
+    fireEvent.click(within(shopCard).getByRole('button', { name: 'Next' }));
+    fireEvent.click(within(shopCard).getByRole('button', { name: 'Save changes' }));
+    await waitFor(() => {
+      expect(URL.revokeObjectURL).toHaveBeenCalledWith(shopSrc);
+    });
+    expect(URL.revokeObjectURL).not.toHaveBeenCalledWith(otherSrc);
+    expect(
+      vi.mocked(URL.revokeObjectURL).mock.calls.filter((call) => call[0] === shopSrc),
+    ).toHaveLength(1);
   });
 });

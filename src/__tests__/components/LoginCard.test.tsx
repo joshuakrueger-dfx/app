@@ -1,4 +1,5 @@
 import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import { useState, type ReactElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { LoginCard } from '@/components/LoginCard';
 import { usePasskeyLogin, type PasskeyStatus } from '@/hooks/usePasskeyLogin';
@@ -16,6 +17,7 @@ vi.mock('@/lib/in-app-browser', () => ({
 
 const loginSpy = vi.fn();
 const registerSpy = vi.fn();
+const submitNameSpy = vi.fn();
 const authenticateSpy = vi.fn();
 const retrySpy = vi.fn();
 const cancelPasskeySpy = vi.fn();
@@ -35,15 +37,21 @@ function stubExecCommand(impl: (commandId: string) => boolean): ReturnType<typeo
 }
 
 /** Points the mocked passkey hook at a fixed state for the next render. */
-function mockPasskey(status: PasskeyStatus = 'idle', error: string | null = null): void {
+function mockPasskey(
+  status: PasskeyStatus = 'idle',
+  error: string | null = null,
+  nameError: 'invalid' | 'taken' | null = null,
+): void {
   vi.mocked(usePasskeyLogin).mockReturnValue({
     status,
     login: loginSpy,
     register: registerSpy,
+    submitName: submitNameSpy,
     authenticate: authenticateSpy,
     retry: retrySpy,
     cancel: cancelPasskeySpy,
     error: status === 'error' ? error : null,
+    nameError: status === 'name' ? nameError : null,
   });
 }
 
@@ -106,6 +114,36 @@ describe('LoginCard', () => {
     expect(await screen.findByRole('alert')).toHaveProperty(
       'textContent',
       'iOS 17.5.1 is installed. Sign-in needs at least iOS 18.',
+    );
+    expect(screen.queryByRole('status')).toBeNull();
+  });
+
+  it('shows the Android version as the error when registration could not finish', async () => {
+    Object.defineProperty(navigator, 'userAgent', {
+      configurable: true,
+      value:
+        'Mozilla/5.0 (Linux; Android 8.1.0; Pixel) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
+    });
+    mockPasskey('error', 'login.androidVersion');
+    renderWithLocale(<LoginCard />);
+    expect(await screen.findByRole('alert')).toHaveProperty(
+      'textContent',
+      'Android 8.1.0 is installed. Sign-in needs at least Android 9.',
+    );
+    expect(screen.queryByRole('status')).toBeNull();
+  });
+
+  it('shows the generic error when the iOS version key does not match the mounted Android', async () => {
+    Object.defineProperty(navigator, 'userAgent', {
+      configurable: true,
+      value:
+        'Mozilla/5.0 (Linux; Android 8.1.0; Pixel) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
+    });
+    mockPasskey('error', 'login.iosVersion');
+    renderWithLocale(<LoginCard />);
+    expect(await screen.findByRole('alert')).toHaveProperty(
+      'textContent',
+      'Something went wrong. Please try again.',
     );
     expect(screen.queryByRole('status')).toBeNull();
   });
@@ -466,5 +504,87 @@ describe('LoginCard', () => {
     expect(
       screen.getByRole('button', { name: 'Copy link' }).getAttribute('data-copied'),
     ).toBeNull();
+  });
+
+  it('opens the name form from choice without submitting', () => {
+    function Harness(): ReactElement {
+      const [status, setStatus] = useState<PasskeyStatus>('choice');
+      vi.mocked(usePasskeyLogin).mockReturnValue({
+        status,
+        login: loginSpy,
+        register: () => {
+          setStatus('name');
+        },
+        submitName: submitNameSpy,
+        authenticate: authenticateSpy,
+        retry: retrySpy,
+        cancel: cancelPasskeySpy,
+        error: null,
+        nameError: null,
+      });
+      return <LoginCard />;
+    }
+    renderWithLocale(<Harness />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open a new account' }));
+    expect(screen.getByRole('heading', { name: 'Choose your name' })).toBeTruthy();
+    expect(submitNameSpy).not.toHaveBeenCalled();
+  });
+
+  it('opens the name form from unknown without submitting', () => {
+    function Harness(): ReactElement {
+      const [status, setStatus] = useState<PasskeyStatus>('unknown');
+      vi.mocked(usePasskeyLogin).mockReturnValue({
+        status,
+        login: loginSpy,
+        register: () => {
+          setStatus('name');
+        },
+        submitName: submitNameSpy,
+        authenticate: authenticateSpy,
+        retry: retrySpy,
+        cancel: cancelPasskeySpy,
+        error: null,
+        nameError: null,
+      });
+      return <LoginCard />;
+    }
+    renderWithLocale(<Harness />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open a new account' }));
+    expect(screen.getByRole('heading', { name: 'Choose your name' })).toBeTruthy();
+    expect(submitNameSpy).not.toHaveBeenCalled();
+  });
+
+  it('shows invalid copy on empty name submit and does not call submitName', () => {
+    mockPasskey('name');
+    renderWithLocale(<LoginCard />);
+    fireEvent.submit(screen.getByLabelText('Name').closest('form')!);
+    expect(screen.getByRole('alert').textContent).toBe(
+      'Use 1–32 characters: a-z, 0-9, hyphen, underscore, or dot.',
+    );
+    expect(submitNameSpy).not.toHaveBeenCalled();
+  });
+
+  it('shows taken copy when nameError is taken', () => {
+    mockPasskey('name', null, 'taken');
+    renderWithLocale(<LoginCard />);
+    expect(screen.getByRole('alert').textContent).toBe('That username is already in use.');
+  });
+
+  it('submits a non-empty name draft', () => {
+    mockPasskey('name');
+    renderWithLocale(<LoginCard />);
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Ada' } });
+    fireEvent.submit(screen.getByLabelText('Name').closest('form')!);
+    expect(submitNameSpy).toHaveBeenCalledWith('Ada');
+  });
+
+  it('clears the empty-name alert when the field is typed', () => {
+    mockPasskey('name');
+    renderWithLocale(<LoginCard />);
+    fireEvent.submit(screen.getByLabelText('Name').closest('form')!);
+    expect(screen.getByRole('alert')).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'A' } });
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(submitNameSpy).not.toHaveBeenCalled();
   });
 });

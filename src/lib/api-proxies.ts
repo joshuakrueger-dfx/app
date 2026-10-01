@@ -775,6 +775,22 @@ export async function proxyPublicMessageGet(
 }
 
 /**
+ * Proxies GET /messages/:id/external-profile to the 21.gifts api (public; no auth).
+ *
+ * App path is `/public-messages/:id/external-profile`.
+ *
+ * @param request - Incoming App Router request.
+ * @param messageId - Forum message UUID.
+ * @returns The upstream response.
+ */
+export async function proxyExternalAuthorProfileGet(
+  request: Request,
+  messageId: string,
+): Promise<Response> {
+  return proxyApiRequest(request, `/messages/${encodeURIComponent(messageId)}/external-profile`);
+}
+
+/**
  * Proxies GET /links/:code to the 21.gifts api (public; no auth).
  *
  * App path is `/links/:code`. The visitor redirect lives at `/l/:code`.
@@ -1144,4 +1160,46 @@ export async function proxyMessagesShopAccountPatch(
   messageId: string,
 ): Promise<Response> {
   return proxyApiRequest(request, `/messages/${encodeURIComponent(messageId)}/shop-account`);
+}
+
+/**
+ * Proxies a moderator's PATCH /messages/:id/text request.
+ *
+ * @param request - Incoming Bearer request with JSON `{ text }`.
+ * @param messageId - Forum message UUID.
+ * @returns The upstream response.
+ */
+export async function proxyMessagesTextPatch(
+  request: Request,
+  messageId: string,
+): Promise<Response> {
+  return proxyApiRequest(request, `/messages/${encodeURIComponent(messageId)}/text`);
+}
+
+/**
+ * Proxies a moderator's PATCH /messages/:id/photos request.
+ *
+ * @param request - Incoming Bearer request with JSON `{ photos }`.
+ * @param messageId - Forum message UUID.
+ * @returns The upstream response.
+ */
+export async function proxyMessagesPhotosPatch(
+  request: Request,
+  messageId: string,
+): Promise<Response> {
+  return proxyApiRequest(request, `/messages/${encodeURIComponent(messageId)}/photos`);
+}
+
+/**
+ * Proxies a moderator's GET /messages/:id/edits request.
+ *
+ * @param request - Incoming Bearer request.
+ * @param messageId - Forum message UUID.
+ * @returns The upstream response.
+ */
+export async function proxyMessagesEditsGet(
+  request: Request,
+  messageId: string,
+): Promise<Response> {
+  return proxyApiRequest(request, `/messages/${encodeURIComponent(messageId)}/edits`);
 }

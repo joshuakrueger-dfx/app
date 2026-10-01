@@ -23,6 +23,8 @@ export const ownerFundingSchema = z.object({
   trialUtcDate: z.string().nullable(),
   admittedAt: z.number().nullable(),
   reviewedByName: z.string().nullable(),
+  /** True when the owner should see the stopped-daily-payout notice. Optional so older payloads still parse. */
+  dailyPayoutStoppedNotice: z.boolean().optional(),
 });
 
 /**
@@ -165,8 +167,8 @@ export const accountSchema = z.object({
  * and omitted on older api builds (the introduce overlay fails open when the
  * field is missing).
  * `notificationLevel` is `all` (every living-room post, reply, and gift),
- * `active` (posts with gifts), or `mentions` (admin/staff posts and events
- * that involve the owner). Omitted on older api builds; treat as `all`.
+ * `active` (posts with gifts), or `mentions` (replies to the owner, gifts
+ * they receive, and @username marks). Omitted on older api builds; treat as `all`.
  * `amountUnit` is `btc` or `fiat` for amount fields. Omitted on older api
  * builds; treat as `btc`.
  * `locale` is the stored UI language and `fiat` is the stored preferred
@@ -512,6 +514,7 @@ export const forumPlacesResponseSchema = z.object({
       name: z.string().min(1),
       createdAt: z.string().min(1),
       accountId: z.string().min(1).optional(),
+      shop: z.boolean().optional(),
     }),
   ),
 });
@@ -524,6 +527,8 @@ export type ForumPlaceRow = ForumPlacePin & {
   name: string;
   createdAt: string;
   accountId?: string | undefined;
+  /** True when the note is a shop. Omitted by an older api. */
+  shop?: boolean | undefined;
 };
 
 /**
@@ -700,6 +705,21 @@ export const forumRepliesSchema = z.object({
 export type ForumMessage = z.infer<typeof forumMessageSchema>;
 
 /**
+ * Runtime schema for `GET /messages/:id/external-profile`.
+ */
+export const externalAuthorProfileSchema = z.object({
+  name: z.string(),
+  npub: z.string(),
+  nip05: z.string().optional(),
+  lud16: z.string().optional(),
+});
+
+/**
+ * Public Nostr profile for a forum author with no 21.gifts account.
+ */
+export type ExternalAuthorProfile = z.infer<typeof externalAuthorProfileSchema>;
+
+/**
  * Runtime schema for `POST /messages/:id/invoice` success body.
  */
 export const messageInvoiceSchema = z.object({
@@ -828,6 +848,18 @@ export const conversationMessageSchema = z.object({
   accountId: z.string().min(1).optional(),
   /** Optional id of the thread message this row is a paid gift for (moderator-group stipend rows). */
   giftFor: z.string().min(1).optional(),
+  /**
+   * Profile links in the body. Present when the text marks a username.
+   * These marks do not notify the person.
+   */
+  mentions: z
+    .array(
+      z.object({
+        username: z.string().min(1),
+        accountId: z.string().min(1),
+      }),
+    )
+    .optional(),
 });
 
 /**
