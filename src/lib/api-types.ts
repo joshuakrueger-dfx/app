@@ -23,6 +23,8 @@ export const ownerFundingSchema = z.object({
   trialUtcDate: z.string().nullable(),
   admittedAt: z.number().nullable(),
   reviewedByName: z.string().nullable(),
+  /** True when the owner should see the stopped-daily-payout notice. Optional so older payloads still parse. */
+  dailyPayoutStoppedNotice: z.boolean().optional(),
 });
 
 /**
@@ -121,6 +123,8 @@ export const accountSchema = z.object({
    * Missing or `undefined` is the same as `null` (no funding object).
    */
   funding: ownerFundingSchema.nullable().optional(),
+  /** Optional staff label; only `software_developer` is accepted. */
+  staffTag: z.literal('software_developer').optional(),
 });
 
 /**
@@ -165,8 +169,8 @@ export const accountSchema = z.object({
  * and omitted on older api builds (the introduce overlay fails open when the
  * field is missing).
  * `notificationLevel` is `all` (every living-room post, reply, and gift),
- * `active` (posts with gifts), or `mentions` (admin/staff posts and events
- * that involve the owner). Omitted on older api builds; treat as `all`.
+ * `active` (posts with gifts), or `mentions` (replies to the owner, gifts
+ * they receive, and @username marks). Omitted on older api builds; treat as `all`.
  * `amountUnit` is `btc` or `fiat` for amount fields. Omitted on older api
  * builds; treat as `btc`.
  * `locale` is the stored UI language and `fiat` is the stored preferred
@@ -174,6 +178,7 @@ export const accountSchema = z.object({
  * not be synchronized, while `null` means the account preference is unset.
  * `funding` is the owner grant object, `null` for `basis`, and omitted on
  * older api builds (treat missing like `null`).
+ * `staffTag` is an optional staff label; only `software_developer` is accepted.
  */
 export type Account = z.infer<typeof accountSchema>;
 
@@ -340,6 +345,86 @@ export const giftStatsSchema = z.object({
  * Aggregated outbound gift statistics from the api.
  */
 export type GiftStats = z.infer<typeof giftStatsSchema>;
+
+/**
+ * One UTC day of shop activity from `GET /shops/activity`.
+ */
+export const shopActivityDaySchema = z.object({
+  day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  shopCount: z.number().int().nonnegative(),
+});
+
+/**
+ * Runtime schema for the payload of `GET /shops/activity`.
+ *
+ * Exactly 30 unique contiguous UTC days, oldest first.
+ */
+export const shopActivitySchema = z.object({
+  days: z
+    .array(shopActivityDaySchema)
+    .length(30)
+    .refine((days) => {
+      const seen = new Set<string>();
+      for (let i = 0; i < days.length; i += 1) {
+        const day = days[i]!.day;
+        if (seen.has(day)) {
+          return false;
+        }
+        seen.add(day);
+        if (i === 0) {
+          continue;
+        }
+        const prevMs = Date.parse(`${days[i - 1]!.day}T00:00:00.000Z`);
+        const dayMs = Date.parse(`${day}T00:00:00.000Z`);
+        if (dayMs - prevMs !== 86_400_000) {
+          return false;
+        }
+      }
+      return true;
+    }),
+});
+
+/**
+ * Shop count for one UTC day.
+ */
+export type ShopActivityDay = z.infer<typeof shopActivityDaySchema>;
+
+/**
+ * Runtime schema for the payload of `GET /funding/goal`.
+ *
+ * Exactly 7 unique contiguous UTC days, oldest first, plus how many shops
+ * had a charge on at least 5 of those days. Not {@link shopActivitySchema}.
+ */
+export const grantContinuationSchema = z.object({
+  days: z
+    .array(shopActivityDaySchema)
+    .length(7)
+    .refine((days) => {
+      const seen = new Set<string>();
+      for (let i = 0; i < days.length; i += 1) {
+        const day = days[i]!.day;
+        if (seen.has(day)) {
+          return false;
+        }
+        seen.add(day);
+        if (i === 0) {
+          continue;
+        }
+        const prevMs = Date.parse(`${days[i - 1]!.day}T00:00:00.000Z`);
+        const dayMs = Date.parse(`${day}T00:00:00.000Z`);
+        if (dayMs - prevMs !== 86_400_000) {
+          return false;
+        }
+      }
+      return true;
+    }),
+  qualifyingShops: z.number().int().nonnegative(),
+});
+
+/**
+ * Grant-goal measurement from `GET /funding/goal`.
+ */
+export type GrantContinuation = z.infer<typeof grantContinuationSchema>;
 
 /**
  * Runtime schema for `GET /messages/stats`.
@@ -512,6 +597,7 @@ export const forumPlacesResponseSchema = z.object({
       name: z.string().min(1),
       createdAt: z.string().min(1),
       accountId: z.string().min(1).optional(),
+      shop: z.boolean().optional(),
     }),
   ),
 });
@@ -524,6 +610,8 @@ export type ForumPlaceRow = ForumPlacePin & {
   name: string;
   createdAt: string;
   accountId?: string | undefined;
+  /** True when the note is a shop. Omitted by an older api. */
+  shop?: boolean | undefined;
 };
 
 /**
@@ -550,11 +638,16 @@ export type ForumPlaceRow = ForumPlacePin & {
  * frozen two-decimal snapshots of that goal, optional, each a string or null.
  * `amountUsd` / `amountChf` / `amountEur` / `amountPhp` are the fiat stored for
  * that row's `sats`, optional so an older payload still parses.
+ * On a reply `sats` is the amount sent with the reply, and `receivedSats` is
+ * later payments onto that reply. Absent means none yet. Top-level notes omit
+ * the keys. The `receivedAmount*` fields are the fiat stored for `receivedSats`,
+ * same shape as `amountUsd` / `amountChf` / `amountEur` / `amountPhp`.
  * Gift-only replies may have empty `text` when `sats > 0`.
  * `deletedAt` / `deletedBy` are set on staff GET of a soft-hidden row; live
  * payloads omit them.
  * `place` is optional and is not a body.
  * `shopAccount` is optional on a shop note (`id`, `username`, `name`); omitted when cleared.
+ * `staffTag` is an optional staff label; only `software_developer` is accepted.
  */
 export const forumMessageSchema = z
   .object({
@@ -569,6 +662,11 @@ export const forumMessageSchema = z
     amountChf: fiatAmountSchema.optional(),
     amountEur: fiatAmountSchema.optional(),
     amountPhp: fiatAmountSchema.optional(),
+    receivedSats: z.number().int().nonnegative().optional(),
+    receivedAmountUsd: fiatAmountSchema.optional(),
+    receivedAmountChf: fiatAmountSchema.optional(),
+    receivedAmountEur: fiatAmountSchema.optional(),
+    receivedAmountPhp: fiatAmountSchema.optional(),
     goalSats: z.number().int().positive().optional(),
     goalCurrency: z.enum(FORUM_GOAL_CURRENCIES).optional(),
     goalAmount: z.string().regex(FORUM_GOAL_AMOUNT_RE).optional(),
@@ -617,6 +715,8 @@ export const forumMessageSchema = z
         }),
       )
       .optional(),
+    /** Optional staff label; only `software_developer` is accepted. */
+    staffTag: z.literal('software_developer').optional(),
   })
   .refine(
     (message) => message.text !== '' || message.hasPhoto || message.hasVideo || message.sats > 0,
@@ -698,6 +798,25 @@ export const forumRepliesSchema = z.object({
  * One public forum message from the api.
  */
 export type ForumMessage = z.infer<typeof forumMessageSchema>;
+
+/**
+ * Runtime schema for `GET /messages/:id/external-profile`.
+ * `postCount` and `replyCount` are optional nonnegative integers so today's
+ * API still parses.
+ */
+export const externalAuthorProfileSchema = z.object({
+  name: z.string(),
+  npub: z.string(),
+  nip05: z.string().optional(),
+  lud16: z.string().optional(),
+  postCount: z.number().int().nonnegative().optional(),
+  replyCount: z.number().int().nonnegative().optional(),
+});
+
+/**
+ * Public Nostr profile for a forum author with no 21.gifts account.
+ */
+export type ExternalAuthorProfile = z.infer<typeof externalAuthorProfileSchema>;
 
 /**
  * Runtime schema for `POST /messages/:id/invoice` success body.
@@ -828,6 +947,18 @@ export const conversationMessageSchema = z.object({
   accountId: z.string().min(1).optional(),
   /** Optional id of the thread message this row is a paid gift for (moderator-group stipend rows). */
   giftFor: z.string().min(1).optional(),
+  /**
+   * Profile links in the body. Present when the text marks a username.
+   * These marks do not notify the person.
+   */
+  mentions: z
+    .array(
+      z.object({
+        username: z.string().min(1),
+        accountId: z.string().min(1),
+      }),
+    )
+    .optional(),
 });
 
 /**
@@ -973,6 +1104,7 @@ export type AccountTrust = z.infer<typeof accountTrustSchema>;
  * and posts-feed source, not a pinned ForumBoard card).
  * `postCount` / `replyCount` are uncapped totals; activity feeds are capped at 200.
  * `trust` defaults to all-null when an older api omits the field.
+ * `staffTag` is an optional staff label; only `software_developer` is accepted.
  */
 export const memberProfileSchema = z.object({
   id: z.string(),
@@ -1001,6 +1133,8 @@ export const memberProfileSchema = z.object({
    * payload still parses; `null` when unnamed.
    */
   fundingReviewedByName: z.string().nullable().optional(),
+  /** Optional staff label; only `software_developer` is accepted. */
+  staffTag: z.literal('software_developer').optional(),
 });
 
 /**
@@ -1204,3 +1338,27 @@ export const fundingDecisionResultSchema = z.object({
  * Updated account snapshot after a staff funding decision.
  */
 export type FundingDecisionResult = z.infer<typeof fundingDecisionResultSchema>;
+
+/**
+ * Runtime schema for the daily payout roster (`GET /funding/daily-roster`
+ * and the matching POST success bodies).
+ */
+export const dailyRosterSchema = z.object({
+  comment: z.string(),
+  paymentsEnabled: z.boolean(),
+  /** USD spend pays an unlisted admitted or trial grant. Not a listed row. */
+  defaultAmountUsd: z.number().finite(),
+  recipients: z.array(
+    z.object({
+      address: z.string(),
+      amountUsd: z.number(),
+      accountId: z.string().min(1).nullable(),
+      name: z.string().nullable(),
+    }),
+  ),
+});
+
+/**
+ * Daily payout comment, payments switch, unlisted grant default, and recipient list.
+ */
+export type DailyRoster = z.infer<typeof dailyRosterSchema>;

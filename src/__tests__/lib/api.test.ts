@@ -4,6 +4,9 @@ import {
   deleteMessage,
   setMessagePlace,
   setMessageShopAccount,
+  setMessageShopText,
+  setMessageShopPhotos,
+  fetchShopNoteEdits,
   deletePushSubscription,
   dismissForumLaws,
   fetchConversation,
@@ -14,6 +17,8 @@ import {
   fetchAccountActivity,
   fetchGiftDay,
   fetchGiftStats,
+  fetchShopActivity,
+  fetchGrantContinuation,
   fetchPostStats,
   fetchAboutMePhoto,
   fetchProfilePhoto,
@@ -39,6 +44,9 @@ import {
   PublicForumUnauthorizedError,
   fetchForumMessage,
   fetchPublicMessage,
+  fetchExternalAuthorProfile,
+  fetchExternalAuthorPosts,
+  fetchExternalAuthorReplies,
   fetchPublicMessagePhoto,
   fetchPublicReplies,
   fetchReplies,
@@ -58,6 +66,8 @@ import {
   WrongAccountError,
   listHiddenMessages,
   markAllNotificationsRead,
+  markNotificationsReadForMessage,
+  markVisibleForumNoteRead,
   markConversationRead,
   markNotificationRead,
   openConversation,
@@ -134,6 +144,19 @@ function stubFetch(response: FakeResponse): Mock {
   } as unknown as Response);
   vi.stubGlobal('fetch', fetchMock);
   return fetchMock;
+}
+
+/** Installs a test navigator and returns an exact descriptor restore. */
+function installNavigator(value: unknown): () => void {
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
+  Object.defineProperty(globalThis, 'navigator', { configurable: true, value });
+  return () => {
+    if (descriptor === undefined) {
+      delete (globalThis as { navigator?: unknown }).navigator;
+      return;
+    }
+    Object.defineProperty(globalThis, 'navigator', descriptor);
+  };
 }
 
 afterEach(() => {
@@ -1072,7 +1095,7 @@ describe('fetchGiftDay', () => {
   it('throws visitor copy on a non-ok response', async () => {
     stubFetch({ ok: false, status: 503, body: { error: 'Gift stats are unavailable' } });
     await expect(fetchGiftDay('2026-06-01')).rejects.toThrow(
-      'Could not load gift stats. Please try again.',
+      'Could not load donation stats. Please try again.',
     );
   });
 });
@@ -1176,17 +1199,126 @@ describe('fetchGiftStats', () => {
 
   it('throws visitor copy on a non-ok response', async () => {
     stubFetch({ ok: false, status: 503, body: { error: 'Gift stats are unavailable' } });
-    await expect(fetchGiftStats()).rejects.toThrow('Could not load gift stats. Please try again.');
+    await expect(fetchGiftStats()).rejects.toThrow(
+      'Could not load donation stats. Please try again.',
+    );
   });
 
   it('throws visitor copy when fetch itself fails', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')));
-    await expect(fetchGiftStats()).rejects.toThrow('Could not load gift stats. Please try again.');
+    await expect(fetchGiftStats()).rejects.toThrow(
+      'Could not load donation stats. Please try again.',
+    );
   });
 
   it('throws when the body fails validation', async () => {
     stubFetch({ ok: true, status: 200, body: { giftCount: 1 } });
-    await expect(fetchGiftStats()).rejects.toThrow('Could not load gift stats. Please try again.');
+    await expect(fetchGiftStats()).rejects.toThrow(
+      'Could not load donation stats. Please try again.',
+    );
+  });
+});
+
+describe('fetchShopActivity', () => {
+  function thirtyDays(): { day: string; shopCount: number }[] {
+    const start = Date.parse('2026-08-22T00:00:00.000Z');
+    return Array.from({ length: 30 }, (_, i) => ({
+      day: new Date(start + i * 86_400_000).toISOString().slice(0, 10),
+      shopCount: i,
+    }));
+  }
+
+  it('returns the days array without an Authorization header', async () => {
+    const days = thirtyDays();
+    const fetchMock = stubFetch({ ok: true, status: 200, body: { days } });
+    await expect(fetchShopActivity()).resolves.toEqual(days);
+    expect(fetchMock).toHaveBeenCalledWith('/shops/activity');
+  });
+
+  it('throws visitor copy on a non-ok response', async () => {
+    stubFetch({ ok: false, status: 503, body: { error: 'Shop activity is unavailable' } });
+    await expect(fetchShopActivity()).rejects.toThrow(
+      'Could not load shop activity. Please try again.',
+    );
+  });
+
+  it('throws visitor copy when fetch itself fails', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')));
+    await expect(fetchShopActivity()).rejects.toThrow(
+      'Could not load shop activity. Please try again.',
+    );
+  });
+
+  it('throws when the body fails validation', async () => {
+    stubFetch({ ok: true, status: 200, body: { days: [] } });
+    await expect(fetchShopActivity()).rejects.toThrow(
+      'Could not load shop activity. Please try again.',
+    );
+  });
+});
+
+describe('fetchGrantContinuation', () => {
+  function sevenDays(): { day: string; shopCount: number }[] {
+    const start = Date.parse('2026-03-09T00:00:00.000Z');
+    return Array.from({ length: 7 }, (_, i) => ({
+      day: new Date(start + i * 86_400_000).toISOString().slice(0, 10),
+      shopCount: i,
+    }));
+  }
+
+  it('returns the series with an Authorization header', async () => {
+    const days = sevenDays();
+    const fetchMock = stubFetch({
+      ok: true,
+      status: 200,
+      body: { days, qualifyingShops: 2 },
+    });
+    await expect(fetchGrantContinuation('sess-1')).resolves.toEqual({
+      days,
+      qualifyingShops: 2,
+    });
+    expect(fetchMock).toHaveBeenCalledWith('/funding/goal', {
+      headers: { Authorization: 'Bearer sess-1' },
+    });
+  });
+
+  it('throws visitor copy on a non-ok response', async () => {
+    stubFetch({ ok: false, status: 503, body: { error: 'Funding goal is unavailable' } });
+    await expect(fetchGrantContinuation('sess-1')).rejects.toThrow(
+      'Could not load the shop goal. Please try again.',
+    );
+  });
+
+  it('throws visitor copy when fetch itself fails', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')));
+    await expect(fetchGrantContinuation('sess-1')).rejects.toThrow(
+      'Could not load the shop goal. Please try again.',
+    );
+  });
+
+  it('throws when the body fails validation', async () => {
+    stubFetch({ ok: true, status: 200, body: { days: [], qualifyingShops: 0 } });
+    await expect(fetchGrantContinuation('sess-1')).rejects.toThrow(
+      'Could not load the shop goal. Please try again.',
+    );
+  });
+
+  it('throws when a day is repeated', async () => {
+    const days = sevenDays();
+    days[3] = { day: days[2]!.day, shopCount: 1 };
+    stubFetch({ ok: true, status: 200, body: { days, qualifyingShops: 0 } });
+    await expect(fetchGrantContinuation('sess-1')).rejects.toThrow(
+      'Could not load the shop goal. Please try again.',
+    );
+  });
+
+  it('throws when the days are not contiguous', async () => {
+    const days = sevenDays();
+    days[4] = { day: '2026-04-01', shopCount: 0 };
+    stubFetch({ ok: true, status: 200, body: { days, qualifyingShops: 0 } });
+    await expect(fetchGrantContinuation('sess-1')).rejects.toThrow(
+      'Could not load the shop goal. Please try again.',
+    );
   });
 });
 
@@ -1418,6 +1550,15 @@ describe('fetchPlaces', () => {
       body: { places: [placeRow] },
     });
     await expect(fetchPlaces('tok')).resolves.toEqual([placeRow]);
+  });
+
+  it('keeps a shop flag on a pin', async () => {
+    stubFetch({
+      ok: true,
+      status: 200,
+      body: { places: [{ ...placeRow, shop: true }] },
+    });
+    await expect(fetchPlaces('tok')).resolves.toEqual([{ ...placeRow, shop: true }]);
   });
 
   it('rejects on status 500', async () => {
@@ -1991,6 +2132,19 @@ describe('postMessage', () => {
     expect(JSON.parse(String(without.body))).not.toHaveProperty('place');
   });
 
+  it('sends shopUsername without a leading @ and omits a blank handle', async () => {
+    const fetchMock = stubFetch({ ok: true, status: 200, body: forumMessage });
+    await postMessage('tok', { text: 'Cafe', shopUsername: '@Luna' });
+    expect(JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body))).toEqual(
+      expect.objectContaining({ text: 'Cafe', shopUsername: 'Luna' }),
+    );
+    fetchMock.mockClear();
+    await postMessage('tok', { text: 'Cafe', shopUsername: '  @  ' });
+    expect(
+      JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body)),
+    ).not.toHaveProperty('shopUsername');
+  });
+
   it('posts the text and returns the validated message', async () => {
     const fetchMock = stubFetch({ ok: true, status: 200, body: forumMessage });
     await expect(postMessage('sess', { text: 'Hello from Ada' })).resolves.toEqual(
@@ -2214,6 +2368,13 @@ describe('postMessage', () => {
     await expect(postMessage('sess', { text: 'x' })).rejects.toThrow('Message too long');
   });
 
+  it('throws the api error message on a 404', async () => {
+    stubFetch({ ok: false, status: 404, body: { error: 'No account with that username' } });
+    await expect(postMessage('sess', { text: 'x', shopUsername: 'missing' })).rejects.toThrow(
+      'No account with that username',
+    );
+  });
+
   it('throws the unpaid-reply copy on 403', async () => {
     stubFetch({ ok: false, status: 403, body: { error: 'A reply needs a Bitcoin payment' } });
     await expect(postMessage('sess', { text: 'x', inReplyTo: 'p1' })).rejects.toThrow(
@@ -2320,6 +2481,17 @@ describe('postMessageVideo', () => {
     expect(empty.get('placeLat')).toBeNull();
     expect(empty.get('placeLng')).toBeNull();
     expect(empty.get('placeLabel')).toBeNull();
+    expect(empty.get('shopUsername')).toBeNull();
+
+    fetchMock.mockClear();
+    await postMessageVideo('tok', { text: 'Hello from Ada', video: file, shopUsername: '@Luna' });
+    const withShop = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    expect((withShop.body as FormData).get('shopUsername')).toBe('Luna');
+
+    fetchMock.mockClear();
+    await postMessageVideo('tok', { text: 'Hello from Ada', video: file, shopUsername: ' @ ' });
+    const blankShop = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    expect((blankShop.body as FormData).get('shopUsername')).toBeNull();
   });
 
   it('posts multipart video and optional poster and returns the validated message', async () => {
@@ -2451,6 +2623,14 @@ describe('postMessageVideo', () => {
     await expect(postMessageVideo('sess', { text: 'x', video })).rejects.toThrow(
       'Too many messages',
     );
+  });
+
+  it('throws the api error message on a 404', async () => {
+    stubFetch({ ok: false, status: 404, body: { error: 'No account with that username' } });
+    const video = new File([new Uint8Array([1])], 'clip.mp4', { type: 'video/mp4' });
+    await expect(
+      postMessageVideo('sess', { text: 'x', video, shopUsername: 'missing' }),
+    ).rejects.toThrow('No account with that username');
   });
 
   it('falls back when a 400 body is not an error envelope', async () => {
@@ -2833,6 +3013,42 @@ describe('fetchPublicMessage', () => {
     expect(fetchMock).toHaveBeenNthCalledWith(4, '/public-messages/uuid');
   });
 
+  it('appends sinceReceivedSats=0 when sinceReceivedSats is 0', async () => {
+    const fetchMock = stubFetch({ ok: true, status: 200, body: forumMessage });
+    await expect(fetchPublicMessage('uuid', { sinceReceivedSats: 0 })).resolves.toEqual(
+      forumMessage,
+    );
+    expect(fetchMock).toHaveBeenCalledWith('/public-messages/uuid?sinceReceivedSats=0');
+  });
+
+  it('does not append sinceReceivedSats for a non-integer', async () => {
+    const fetchMock = stubFetch({ ok: true, status: 200, body: forumMessage });
+    await fetchPublicMessage('uuid', { sinceReceivedSats: 1.5 });
+    expect(fetchMock).toHaveBeenCalledWith('/public-messages/uuid');
+  });
+
+  it('does not append sinceReceivedSats for a negative integer', async () => {
+    const fetchMock = stubFetch({ ok: true, status: 200, body: forumMessage });
+    await fetchPublicMessage('uuid', { sinceReceivedSats: -1 });
+    expect(fetchMock).toHaveBeenCalledWith('/public-messages/uuid');
+  });
+
+  it('appends sinceSats first when both since queries are valid', async () => {
+    const fetchMock = stubFetch({ ok: true, status: 200, body: forumMessage });
+    await expect(
+      fetchPublicMessage('uuid', { sinceSats: 21, sinceReceivedSats: 0 }),
+    ).resolves.toEqual(forumMessage);
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/public-messages/uuid?sinceSats=21&sinceReceivedSats=0',
+    );
+  });
+
+  it('omits sinceSats when only sinceReceivedSats is valid', async () => {
+    const fetchMock = stubFetch({ ok: true, status: 200, body: forumMessage });
+    await fetchPublicMessage('uuid', { sinceReceivedSats: 21 });
+    expect(fetchMock).toHaveBeenCalledWith('/public-messages/uuid?sinceReceivedSats=21');
+  });
+
   it('passes signal to fetch when provided', async () => {
     const fetchMock = stubFetch({ ok: true, status: 200, body: forumMessage });
     const controller = new AbortController();
@@ -2893,6 +3109,218 @@ describe('fetchPublicMessage', () => {
   it('throws visitor copy when the body fails validation', async () => {
     stubFetch({ ok: true, status: 200, body: { id: 'm1' } });
     await expect(fetchPublicMessage('uuid')).rejects.toThrow(
+      'Could not load messages. Please try again.',
+    );
+  });
+});
+
+describe('fetchExternalAuthorProfile', () => {
+  it('GETs /public-messages/:id/external-profile without Authorization and returns the profile', async () => {
+    const profile = {
+      name: 'Robin',
+      npub: 'npub1example',
+      nip05: 'ada@nostr.example',
+      lud16: 'pay@ln.example',
+    };
+    const fetchMock = stubFetch({ ok: true, status: 200, body: profile });
+    await expect(fetchExternalAuthorProfile('uuid')).resolves.toEqual(profile);
+    expect(fetchMock).toHaveBeenCalledWith('/public-messages/uuid/external-profile');
+  });
+
+  it('returns null on 404', async () => {
+    stubFetch({ ok: false, status: 404, body: {} });
+    await expect(fetchExternalAuthorProfile('uuid')).resolves.toBeNull();
+  });
+
+  it('returns null when the body fails the schema', async () => {
+    stubFetch({ ok: true, status: 200, body: { name: 'Robin' } });
+    await expect(fetchExternalAuthorProfile('uuid')).resolves.toBeNull();
+  });
+
+  it('returns null when the response body cannot be read', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: () => Promise.reject(new Error('bad json')),
+      }),
+    );
+    await expect(fetchExternalAuthorProfile('uuid')).resolves.toBeNull();
+  });
+
+  it('returns null when fetch throws', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')));
+    await expect(fetchExternalAuthorProfile('a/b')).resolves.toBeNull();
+  });
+});
+
+describe('fetchExternalAuthorPosts', () => {
+  it('GETs /public-messages/:id/external-posts without bearer and parses messages', async () => {
+    const fetchMock = stubFetch({
+      ok: true,
+      status: 200,
+      body: { messages: [forumMessage] },
+    });
+    await expect(fetchExternalAuthorPosts('parent')).resolves.toEqual([forumMessage]);
+    expect(fetchMock).toHaveBeenCalledWith('/public-messages/parent/external-posts');
+    expect(fetchMock.mock.calls[0]?.[1]).toBeUndefined();
+  });
+
+  it('returns an empty list on HTTP 200 with messages: []', async () => {
+    stubFetch({ ok: true, status: 200, body: { messages: [] } });
+    await expect(fetchExternalAuthorPosts('parent')).resolves.toEqual([]);
+  });
+
+  it('keeps valid messages and skips an invalid empty name', async () => {
+    const invalidEmptyName = { ...forumMessage, id: 'm-invalid', name: '' };
+    const secondValid = { ...forumMessage, id: 'm2' };
+    stubFetch({
+      ok: true,
+      status: 200,
+      body: { messages: [forumMessage, invalidEmptyName, secondValid] },
+    });
+    await expect(fetchExternalAuthorPosts('parent')).resolves.toEqual([forumMessage, secondValid]);
+  });
+
+  it('returns an empty list when every message is invalid', async () => {
+    stubFetch({
+      ok: true,
+      status: 200,
+      body: { messages: [{ ...forumMessage, name: '' }] },
+    });
+    await expect(fetchExternalAuthorPosts('parent')).resolves.toEqual([]);
+  });
+
+  it('throws visitor copy on HTTP 404', async () => {
+    stubFetch({ ok: false, status: 404, body: { error: 'Not found' } });
+    await expect(fetchExternalAuthorPosts('parent')).rejects.toThrow(
+      'Could not load messages. Please try again.',
+    );
+  });
+
+  it('throws visitor copy on a non-ok response', async () => {
+    stubFetch({ ok: false, status: 500, body: {} });
+    await expect(fetchExternalAuthorPosts('parent')).rejects.toThrow(
+      'Could not load messages. Please try again.',
+    );
+  });
+
+  it('throws visitor copy when the body is not { messages: array }', async () => {
+    stubFetch({ ok: true, status: 200, body: { notMessages: [] } });
+    await expect(fetchExternalAuthorPosts('parent')).rejects.toThrow(
+      'Could not load messages. Please try again.',
+    );
+    stubFetch({ ok: true, status: 200, body: { messages: 'nope' } });
+    await expect(fetchExternalAuthorPosts('parent')).rejects.toThrow(
+      'Could not load messages. Please try again.',
+    );
+  });
+
+  it('throws visitor copy when the body is not JSON', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: () => Promise.reject(new SyntaxError('Unexpected token')),
+      } as unknown as Response),
+    );
+    await expect(fetchExternalAuthorPosts('parent')).rejects.toThrow(
+      'Could not load messages. Please try again.',
+    );
+  });
+
+  it('throws visitor copy when fetch itself fails', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')));
+    await expect(fetchExternalAuthorPosts('parent')).rejects.toThrow(
+      'Could not load messages. Please try again.',
+    );
+  });
+});
+
+describe('fetchExternalAuthorReplies', () => {
+  it('GETs /public-messages/:id/external-replies without bearer and parses messages', async () => {
+    const fetchMock = stubFetch({
+      ok: true,
+      status: 200,
+      body: { messages: [forumMessage] },
+    });
+    await expect(fetchExternalAuthorReplies('parent')).resolves.toEqual([forumMessage]);
+    expect(fetchMock).toHaveBeenCalledWith('/public-messages/parent/external-replies');
+    expect(fetchMock.mock.calls[0]?.[1]).toBeUndefined();
+  });
+
+  it('returns an empty list on HTTP 200 with messages: []', async () => {
+    stubFetch({ ok: true, status: 200, body: { messages: [] } });
+    await expect(fetchExternalAuthorReplies('parent')).resolves.toEqual([]);
+  });
+
+  it('keeps valid messages and skips an invalid empty name', async () => {
+    const invalidEmptyName = { ...forumMessage, id: 'm-invalid', name: '' };
+    const secondValid = { ...forumMessage, id: 'm2' };
+    stubFetch({
+      ok: true,
+      status: 200,
+      body: { messages: [forumMessage, invalidEmptyName, secondValid] },
+    });
+    await expect(fetchExternalAuthorReplies('parent')).resolves.toEqual([
+      forumMessage,
+      secondValid,
+    ]);
+  });
+
+  it('returns an empty list when every message is invalid', async () => {
+    stubFetch({
+      ok: true,
+      status: 200,
+      body: { messages: [{ ...forumMessage, name: '' }] },
+    });
+    await expect(fetchExternalAuthorReplies('parent')).resolves.toEqual([]);
+  });
+
+  it('throws visitor copy on HTTP 404', async () => {
+    stubFetch({ ok: false, status: 404, body: { error: 'Not found' } });
+    await expect(fetchExternalAuthorReplies('parent')).rejects.toThrow(
+      'Could not load messages. Please try again.',
+    );
+  });
+
+  it('throws visitor copy on a non-ok response', async () => {
+    stubFetch({ ok: false, status: 500, body: {} });
+    await expect(fetchExternalAuthorReplies('parent')).rejects.toThrow(
+      'Could not load messages. Please try again.',
+    );
+  });
+
+  it('throws visitor copy when the body is not { messages: array }', async () => {
+    stubFetch({ ok: true, status: 200, body: { notMessages: [] } });
+    await expect(fetchExternalAuthorReplies('parent')).rejects.toThrow(
+      'Could not load messages. Please try again.',
+    );
+    stubFetch({ ok: true, status: 200, body: { messages: 'nope' } });
+    await expect(fetchExternalAuthorReplies('parent')).rejects.toThrow(
+      'Could not load messages. Please try again.',
+    );
+  });
+
+  it('throws visitor copy when the body is not JSON', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: () => Promise.reject(new SyntaxError('Unexpected token')),
+      } as unknown as Response),
+    );
+    await expect(fetchExternalAuthorReplies('parent')).rejects.toThrow(
+      'Could not load messages. Please try again.',
+    );
+  });
+
+  it('throws visitor copy when fetch itself fails', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')));
+    await expect(fetchExternalAuthorReplies('parent')).rejects.toThrow(
       'Could not load messages. Please try again.',
     );
   });
@@ -3742,6 +4170,191 @@ describe('markNotificationRead', () => {
       'Could not mark notification as read',
     );
   });
+
+  it('sends the push endpoint when this browser has one', async () => {
+    const read = { ...notification, readAt: '2026-08-28T13:00:00.000Z' };
+    const registration = {
+      pushManager: {
+        getSubscription: vi.fn().mockResolvedValue({ endpoint: 'https://push.example/sub' }),
+      },
+    };
+    const restoreNavigator = installNavigator({
+      serviceWorker: {
+        ready: Promise.resolve(registration),
+        getRegistration: vi.fn().mockResolvedValue(registration),
+      },
+    });
+    try {
+      const fetchMock = stubFetch({ ok: true, status: 200, body: read });
+      await expect(markNotificationRead('sess', 'n1')).resolves.toEqual(read);
+      expect(fetchMock).toHaveBeenCalledWith('/forum/notifications/n1/read', {
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer sess',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ endpoint: 'https://push.example/sub' }),
+      });
+    } finally {
+      restoreNavigator();
+    }
+  });
+});
+
+describe('markNotificationsReadForMessage', () => {
+  it('posts the message id without an endpoint when service workers are unavailable', async () => {
+    const restoreNavigator = installNavigator({});
+    try {
+      const fetchMock = stubFetch({ ok: true, status: 200, body: { ok: true } });
+      await expect(markNotificationsReadForMessage('sess', 'm1')).resolves.toEqual({
+        ok: true,
+        tags: [],
+      });
+      expect(fetchMock).toHaveBeenCalledWith('/forum/notifications/read-by-message', {
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer sess',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ messageId: 'm1' }),
+      });
+    } finally {
+      restoreNavigator();
+    }
+  });
+
+  it('posts the push endpoint and closes notifications for returned tags', async () => {
+    const matchingClose = vi.fn();
+    const otherClose = vi.fn();
+    const registration = {
+      pushManager: {
+        getSubscription: vi.fn().mockResolvedValue({ endpoint: 'https://push.example/sub' }),
+      },
+      getNotifications: vi.fn().mockResolvedValue([
+        { tag: 'forum_post:m1', close: matchingClose },
+        { tag: 'forum_post:m2', close: otherClose },
+      ]),
+    };
+    const restoreNavigator = installNavigator({
+      serviceWorker: {
+        ready: Promise.resolve(registration),
+        getRegistration: vi.fn().mockResolvedValue(registration),
+      },
+    });
+    try {
+      const fetchMock = stubFetch({
+        ok: true,
+        status: 200,
+        body: { ok: true, tags: ['forum_post:m1'] },
+      });
+      await expect(markNotificationsReadForMessage('sess', 'm1')).resolves.toEqual({
+        ok: true,
+        tags: ['forum_post:m1'],
+      });
+      expect(fetchMock).toHaveBeenCalledWith('/forum/notifications/read-by-message', {
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer sess',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ messageId: 'm1', endpoint: 'https://push.example/sub' }),
+      });
+      expect(matchingClose).toHaveBeenCalledTimes(1);
+      expect(otherClose).not.toHaveBeenCalled();
+    } finally {
+      restoreNavigator();
+    }
+  });
+
+  it('throws visitor copy on a non-ok response', async () => {
+    const restoreNavigator = installNavigator({});
+    try {
+      stubFetch({ ok: false, status: 503, body: {} });
+      await expect(markNotificationsReadForMessage('sess', 'm1')).rejects.toThrow(
+        'Could not mark notification as read',
+      );
+    } finally {
+      restoreNavigator();
+    }
+  });
+});
+
+describe('markVisibleForumNoteRead', () => {
+  it('posts the message id without an endpoint when service workers are unavailable', async () => {
+    const restoreNavigator = installNavigator({});
+    try {
+      const fetchMock = stubFetch({ ok: true, status: 200, body: { ok: true } });
+      await expect(markVisibleForumNoteRead('sess', 'm1')).resolves.toEqual({
+        ok: true,
+        tags: [],
+      });
+      expect(fetchMock).toHaveBeenCalledWith('/forum/notifications/read-visible', {
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer sess',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ messageId: 'm1' }),
+      });
+    } finally {
+      restoreNavigator();
+    }
+  });
+
+  it('posts the push endpoint and closes notifications for returned tags', async () => {
+    const matchingClose = vi.fn();
+    const otherClose = vi.fn();
+    const registration = {
+      pushManager: {
+        getSubscription: vi.fn().mockResolvedValue({ endpoint: 'https://push.example/sub' }),
+      },
+      getNotifications: vi.fn().mockResolvedValue([
+        { tag: 'forum_post:m1', close: matchingClose },
+        { tag: 'forum_post:m2', close: otherClose },
+      ]),
+    };
+    const restoreNavigator = installNavigator({
+      serviceWorker: {
+        ready: Promise.resolve(registration),
+        getRegistration: vi.fn().mockResolvedValue(registration),
+      },
+    });
+    try {
+      const fetchMock = stubFetch({
+        ok: true,
+        status: 200,
+        body: { ok: true, tags: ['forum_post:m1'] },
+      });
+      await expect(markVisibleForumNoteRead('sess', 'm1')).resolves.toEqual({
+        ok: true,
+        tags: ['forum_post:m1'],
+      });
+      expect(fetchMock).toHaveBeenCalledWith('/forum/notifications/read-visible', {
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer sess',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ messageId: 'm1', endpoint: 'https://push.example/sub' }),
+      });
+      expect(matchingClose).toHaveBeenCalledTimes(1);
+      expect(otherClose).not.toHaveBeenCalled();
+    } finally {
+      restoreNavigator();
+    }
+  });
+
+  it('throws visitor copy on a non-ok response', async () => {
+    const restoreNavigator = installNavigator({});
+    try {
+      stubFetch({ ok: false, status: 503, body: {} });
+      await expect(markVisibleForumNoteRead('sess', 'm1')).rejects.toThrow(
+        'Could not mark notification as read',
+      );
+    } finally {
+      restoreNavigator();
+    }
+  });
 });
 
 describe('markAllNotificationsRead', () => {
@@ -3754,11 +4367,141 @@ describe('markAllNotificationsRead', () => {
     });
   });
 
+  it('does not close local notifications when tags are missing', async () => {
+    const close = vi.fn();
+    const registration = {
+      pushManager: { getSubscription: vi.fn().mockResolvedValue(null) },
+      getNotifications: vi.fn().mockResolvedValue([{ tag: 'forum_post:m1', close }]),
+    };
+    const restoreNavigator = installNavigator({
+      serviceWorker: {
+        ready: Promise.resolve(registration),
+        getRegistration: vi.fn().mockResolvedValue(registration),
+      },
+    });
+    try {
+      stubFetch({ ok: true, status: 200, body: { ok: true } });
+      await expect(markAllNotificationsRead('sess')).resolves.toBeUndefined();
+      expect(close).not.toHaveBeenCalled();
+    } finally {
+      restoreNavigator();
+    }
+  });
+
+  it('closes local notifications for returned tags', async () => {
+    const matchingClose = vi.fn();
+    const otherClose = vi.fn();
+    const registration = {
+      pushManager: { getSubscription: vi.fn().mockResolvedValue(null) },
+      getNotifications: vi.fn().mockResolvedValue([
+        { tag: 'forum_post:m1', close: matchingClose },
+        { tag: 'forum_post:m2', close: otherClose },
+      ]),
+    };
+    const restoreNavigator = installNavigator({
+      serviceWorker: {
+        ready: Promise.resolve(registration),
+        getRegistration: vi.fn().mockResolvedValue(registration),
+      },
+    });
+    try {
+      stubFetch({ ok: true, status: 200, body: { ok: true, tags: ['forum_post:m1'] } });
+      await expect(markAllNotificationsRead('sess')).resolves.toBeUndefined();
+      expect(matchingClose).toHaveBeenCalledTimes(1);
+      expect(otherClose).not.toHaveBeenCalled();
+    } finally {
+      restoreNavigator();
+    }
+  });
+
+  it('does not close local notifications when tags are not an array', async () => {
+    const close = vi.fn();
+    const registration = {
+      pushManager: { getSubscription: vi.fn().mockResolvedValue(null) },
+      getNotifications: vi.fn().mockResolvedValue([{ tag: 'forum_post:m1', close }]),
+    };
+    const restoreNavigator = installNavigator({
+      serviceWorker: {
+        ready: Promise.resolve(registration),
+        getRegistration: vi.fn().mockResolvedValue(registration),
+      },
+    });
+    try {
+      stubFetch({ ok: true, status: 200, body: { ok: true, tags: 'forum_post:m1' } });
+      await expect(markAllNotificationsRead('sess')).resolves.toBeUndefined();
+      expect(close).not.toHaveBeenCalled();
+    } finally {
+      restoreNavigator();
+    }
+  });
+
   it('throws visitor copy on a non-ok response', async () => {
     stubFetch({ ok: false, status: 503, body: {} });
     await expect(markAllNotificationsRead('sess')).rejects.toThrow(
       'Could not mark notifications as read',
     );
+  });
+
+  it('sends the push endpoint when this browser has one', async () => {
+    const registration = {
+      pushManager: {
+        getSubscription: vi.fn().mockResolvedValue({ endpoint: 'https://push.example/sub' }),
+      },
+      getNotifications: vi.fn().mockResolvedValue([]),
+    };
+    const restoreNavigator = installNavigator({
+      serviceWorker: {
+        ready: Promise.resolve(registration),
+        getRegistration: vi.fn().mockResolvedValue(registration),
+      },
+    });
+    try {
+      const fetchMock = stubFetch({ ok: true, status: 200, body: { ok: true, tags: [] } });
+      await expect(markAllNotificationsRead('sess')).resolves.toBeUndefined();
+      expect(fetchMock).toHaveBeenCalledWith('/forum/notifications/read-all', {
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer sess',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ endpoint: 'https://push.example/sub' }),
+      });
+    } finally {
+      restoreNavigator();
+    }
+  });
+
+  it('ignores a body that is not JSON', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: () => Promise.reject(new Error('not json')),
+      }),
+    );
+    await expect(markAllNotificationsRead('sess')).resolves.toBeUndefined();
+  });
+
+  it('closes only string tags', async () => {
+    const close = vi.fn();
+    const registration = {
+      pushManager: { getSubscription: vi.fn().mockResolvedValue(null) },
+      getNotifications: vi.fn().mockResolvedValue([{ tag: 'forum_post:m1', close }]),
+    };
+    const restoreNavigator = installNavigator({
+      serviceWorker: {
+        ready: Promise.resolve(registration),
+        getRegistration: vi.fn().mockResolvedValue(registration),
+      },
+    });
+    try {
+      stubFetch({ ok: true, status: 200, body: { ok: true, tags: [1, 'forum_post:m1'] } });
+      await expect(markAllNotificationsRead('sess')).resolves.toBeUndefined();
+      expect(close).toHaveBeenCalledTimes(1);
+    } finally {
+      restoreNavigator();
+    }
   });
 });
 
@@ -3895,6 +4638,67 @@ describe('startPasskeyRegistration', () => {
     });
   });
 
+  it('posts JSON name when provided without a viewKey', async () => {
+    const fetchMock = stubFetch({ ok: true, status: 200, body: passkeyBegin });
+    await expect(startPasskeyRegistration(undefined, 'ada')).resolves.toEqual(passkeyBegin);
+    expect(fetchMock).toHaveBeenCalledWith('/auth/passkey/register/begin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'ada' }),
+    });
+  });
+
+  it('ignores name when viewKey is non-empty', async () => {
+    const viewKey = 'a'.repeat(64);
+    const fetchMock = stubFetch({ ok: true, status: 200, body: passkeyBegin });
+    await expect(startPasskeyRegistration(viewKey, 'ada')).resolves.toEqual(passkeyBegin);
+    expect(fetchMock).toHaveBeenCalledWith('/auth/passkey/register/begin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ viewKey }),
+    });
+  });
+
+  it('posts JSON name when viewKey is empty', async () => {
+    const fetchMock = stubFetch({ ok: true, status: 200, body: passkeyBegin });
+    await expect(startPasskeyRegistration('', 'ada')).resolves.toEqual(passkeyBegin);
+    expect(fetchMock).toHaveBeenCalledWith('/auth/passkey/register/begin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'ada' }),
+    });
+  });
+
+  it('posts with no body when name is empty', async () => {
+    const fetchMock = stubFetch({ ok: true, status: 200, body: passkeyBegin });
+    await expect(startPasskeyRegistration(undefined, '')).resolves.toEqual(passkeyBegin);
+    expect(fetchMock).toHaveBeenCalledWith('/auth/passkey/register/begin', { method: 'POST' });
+  });
+
+  it('throws the exact invalid-username string on 400', async () => {
+    stubFetch({
+      ok: false,
+      status: 400,
+      body: {
+        error: 'Username must be 1–32 characters of a-z, 0-9, hyphen, underscore, or dot',
+      },
+    });
+    await expect(startPasskeyRegistration(undefined, 'ada')).rejects.toThrow(
+      'Username must be 1–32 characters of a-z, 0-9, hyphen, underscore, or dot',
+    );
+  });
+
+  it('throws the exact taken-username string on 409', async () => {
+    stubFetch({
+      ok: false,
+      status: 409,
+      body: { error: 'Username is already in use' },
+    });
+    await expect(startPasskeyRegistration(undefined, 'ada')).rejects.toThrow(
+      'Username is already in use',
+    );
+  });
+
   it('throws the body error on 409', async () => {
     stubFetch({
       ok: false,
@@ -3941,6 +4745,25 @@ describe('finishPasskeyRegistration', () => {
     stubFetch({ ok: false, status: 403, body: { error: 'forbidden' } });
     await expect(finishPasskeyRegistration('ch', {})).rejects.toThrow(
       'Failed to finish passkey registration: 403',
+    );
+  });
+
+  it('throws the exact taken-username string on 409', async () => {
+    stubFetch({ ok: false, status: 409, body: { error: 'Username is already in use' } });
+    await expect(finishPasskeyRegistration('ch', {})).rejects.toThrow('Username is already in use');
+  });
+
+  it('throws the generic finish error on 409 with another body', async () => {
+    stubFetch({ ok: false, status: 409, body: { error: 'This profile already has a passkey' } });
+    await expect(finishPasskeyRegistration('ch', {})).rejects.toThrow(
+      'Failed to finish passkey registration: 409',
+    );
+  });
+
+  it('throws the generic finish error on 409 without an error string', async () => {
+    stubFetch({ ok: false, status: 409, body: {} });
+    await expect(finishPasskeyRegistration('ch', {})).rejects.toThrow(
+      'Failed to finish passkey registration: 409',
     );
   });
 });
@@ -4351,22 +5174,22 @@ describe('fetchTrustProposals', () => {
 describe('postTrustVerify', () => {
   const result = { id: 'acc_1', name: 'Carol', role: 'verified' as const };
 
-  it('posts Bearer JSON { accountId } and returns the snapshot', async () => {
+  it('posts Bearer JSON { accountId, confirmedName } and returns the snapshot', async () => {
     const fetchMock = stubFetch({ ok: true, status: 200, body: result });
-    await expect(postTrustVerify('sess', 'acc_1')).resolves.toEqual(result);
+    await expect(postTrustVerify('sess', 'acc_1', 'Carol')).resolves.toEqual(result);
     expect(fetchMock).toHaveBeenCalledWith('/trust/verify', {
       method: 'POST',
       headers: {
         Authorization: 'Bearer sess',
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ accountId: 'acc_1' }),
+      body: JSON.stringify({ accountId: 'acc_1', confirmedName: 'Carol' }),
     });
   });
 
   it('throws visitor copy on a non-ok response', async () => {
     stubFetch({ ok: false, status: 403, body: {} });
-    await expect(postTrustVerify('sess', 'acc_1')).rejects.toThrow(
+    await expect(postTrustVerify('sess', 'acc_1', 'Carol')).rejects.toThrow(
       'Could not update this member. Please try again.',
     );
   });
@@ -4877,6 +5700,94 @@ describe('setMessageShopAccount', () => {
     await expect(setMessageShopAccount('token', 'm1', null)).rejects.toThrow(
       'Could not save account',
     );
+  });
+});
+
+describe('setMessageShopText', () => {
+  it('patches the draft and returns the parsed message', async () => {
+    const fetchMock = stubFetch({
+      ok: true,
+      status: 200,
+      body: { ...forumMessage, text: 'Cafe Sol\n\n#21GiftsShop' },
+    });
+    await expect(setMessageShopText('token', 'a/b', 'Cafe Sol')).resolves.toEqual({
+      ...parsedForumMessage,
+      text: 'Cafe Sol\n\n#21GiftsShop',
+    });
+    expect(fetchMock).toHaveBeenCalledWith('/forum/messages/a%2Fb/text', {
+      method: 'PATCH',
+      headers: {
+        Authorization: 'Bearer token',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ text: 'Cafe Sol' }),
+    });
+  });
+
+  it('throws when the response is not ok', async () => {
+    stubFetch({ ok: false, status: 403, body: { error: 'Forbidden' } });
+    await expect(setMessageShopText('token', 'm1', 'Cafe')).rejects.toThrow(
+      'Could not save shop note',
+    );
+  });
+});
+
+describe('setMessageShopPhotos', () => {
+  it('patches stills and omits a blank capture time', async () => {
+    const fetchMock = stubFetch({
+      ok: true,
+      status: 200,
+      body: { ...forumMessage, hasPhoto: true, photoCount: 1 },
+    });
+    await expect(
+      setMessageShopPhotos('token', 'a/b', [
+        { contentType: 'image/jpeg', data: 'abc', takenAt: '2020-01-01T00:00:00+00:00' },
+        { contentType: 'image/png', data: 'def', takenAt: '' },
+      ]),
+    ).resolves.toEqual({ ...parsedForumMessage, hasPhoto: true, photoCount: 1 });
+    expect(fetchMock).toHaveBeenCalledWith('/forum/messages/a%2Fb/photos', {
+      method: 'PATCH',
+      headers: {
+        Authorization: 'Bearer token',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        photos: [
+          { contentType: 'image/jpeg', data: 'abc', takenAt: '2020-01-01T00:00:00+00:00' },
+          { contentType: 'image/png', data: 'def' },
+        ],
+      }),
+    });
+  });
+
+  it('throws when the response is not ok', async () => {
+    stubFetch({ ok: false, status: 400, body: {} });
+    await expect(setMessageShopPhotos('token', 'm1', [])).rejects.toThrow(
+      'Could not save shop note',
+    );
+  });
+});
+
+describe('fetchShopNoteEdits', () => {
+  it('returns the parsed history', async () => {
+    const edit = {
+      id: 'e1',
+      createdAt: '2026-08-28T13:00:00.000Z',
+      field: 'text',
+      before: 'Cafe',
+      after: 'Cafe Sol',
+      actor: { id: 'acc', name: 'Ada', role: 'moderator' },
+    };
+    const fetchMock = stubFetch({ ok: true, status: 200, body: { edits: [edit] } });
+    await expect(fetchShopNoteEdits('token', 'a/b')).resolves.toEqual([edit]);
+    expect(fetchMock).toHaveBeenCalledWith('/forum/messages/a%2Fb/edits', {
+      headers: { Authorization: 'Bearer token' },
+    });
+  });
+
+  it('throws when the response is not ok', async () => {
+    stubFetch({ ok: false, status: 401, body: {} });
+    await expect(fetchShopNoteEdits('token', 'm1')).rejects.toThrow('Could not load edit history');
   });
 });
 

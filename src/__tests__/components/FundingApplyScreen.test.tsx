@@ -11,6 +11,14 @@ import { MissingRequirementsError } from '@/lib/missing-requirements';
 import { useAuthStore } from '@/stores/auth-store';
 import { renderWithLocale } from '@/__tests__/render-with-locale';
 
+vi.mock('@/lib/grant-applications', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/grant-applications')>();
+  return {
+    ...actual,
+    grantApplicationsPaused: vi.fn(() => false),
+  };
+});
+
 const push = vi.fn();
 
 vi.mock('next/navigation', () => ({
@@ -38,9 +46,11 @@ vi.mock('@/lib/api', () => ({
   fetchMemberPosts: vi.fn(),
   postFundingApply: vi.fn(),
   putAboutMe: vi.fn(),
+  markNotificationsReadForMessage: vi.fn().mockResolvedValue({ ok: true, tags: [] }),
 }));
 
 import { fetchMemberPosts, postFundingApply, putAboutMe } from '@/lib/api';
+import { grantApplicationsPaused } from '@/lib/grant-applications';
 
 const postsMock = vi.mocked(fetchMemberPosts);
 const applyMock = vi.mocked(postFundingApply);
@@ -94,6 +104,7 @@ const post: ForumMessage = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(grantApplicationsPaused).mockReturnValue(false);
   push.mockReset();
   postsMock.mockResolvedValue([post]);
   applyMock.mockResolvedValue({
@@ -267,7 +278,7 @@ describe('FundingApplyScreen', () => {
     expect(
       await screen.findByText('Do your profile posts match the core principles of 21.gifts?'),
     ).toBeTruthy();
-    expect(screen.getByRole('link', { name: 'About' }).getAttribute('href')).toBe(
+    expect(screen.getByRole('link', { name: 'About 21.gifts' }).getAttribute('href')).toBe(
       'https://21.gifts/about',
     );
     expect(screen.queryByText('Giving is a duty')).toBeNull();
@@ -276,7 +287,7 @@ describe('FundingApplyScreen', () => {
     expect(
       await screen.findByText('Do these posts, to your knowledge, correspond to the truth?'),
     ).toBeTruthy();
-    expect(screen.queryByRole('link', { name: 'About' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'About 21.gifts' })).toBeNull();
     expect(applyMock).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Yes' }));
     await waitFor(() => {
@@ -433,5 +444,162 @@ describe('FundingApplyScreen', () => {
     ).toBeNull();
     expect(screen.queryByText('You are on a one-day trial. Review repeats tomorrow.')).toBeNull();
     expect(screen.queryByText('You are admitted to daily 21.gifts grant payouts.')).toBeNull();
+  });
+
+  it('keeps pending, trial, and admitted copy while applications are paused', () => {
+    vi.mocked(grantApplicationsPaused).mockReturnValue(true);
+    const cases = [
+      ['pending', 'Your application is open. A moderator will review your posts.'],
+      ['trial', 'You are on a one-day trial. Review repeats tomorrow.'],
+      ['admitted', 'You are admitted to daily 21.gifts grant payouts.'],
+    ] as const;
+    for (const [status, copy] of cases) {
+      cleanup();
+      useAuthStore.setState({
+        session: 'sess',
+        account: {
+          ...complete,
+          username: 'ada',
+          funding: {
+            status,
+            trialUtcDate: status === 'trial' ? '2026-09-20' : null,
+            admittedAt: status === 'admitted' ? 1 : null,
+            reviewedByName: status === 'admitted' ? 'Ada' : null,
+          },
+        },
+      });
+      renderWithLocale(<FundingApplyScreen />);
+      expect(screen.getByText(copy)).toBeTruthy();
+      expect(
+        screen.queryByText(
+          'Applications are currently paused. You can apply again when shop transactions have increased.',
+        ),
+      ).toBeNull();
+    }
+  });
+
+  it('shows the paused sentence for a rejected account that is not on the roster', () => {
+    vi.mocked(grantApplicationsPaused).mockReturnValue(true);
+    useAuthStore.setState({
+      session: 'sess',
+      account: {
+        ...complete,
+        username: 'ada',
+        funding: {
+          status: 'rejected',
+          trialUtcDate: null,
+          admittedAt: null,
+          reviewedByName: null,
+        },
+      },
+    });
+    renderWithLocale(<FundingApplyScreen />);
+    expect(
+      screen.getByText(
+        'Applications are currently paused. You can apply again when shop transactions have increased.',
+      ),
+    ).toBeTruthy();
+    expect(
+      screen.queryByText('Do your profile posts match the core principles of 21.gifts?'),
+    ).toBeNull();
+  });
+
+  it('shows the paused sentence instead of the apply walk', () => {
+    vi.mocked(grantApplicationsPaused).mockReturnValue(true);
+    useAuthStore.setState({ session: 'sess', account: null });
+    renderWithLocale(<FundingApplyScreen />);
+    expect(
+      screen.getByText(
+        'Applications are currently paused. You can apply again when shop transactions have increased.',
+      ),
+    ).toBeTruthy();
+    expect(
+      screen.queryByText('First, write a short About me so people can get to know you.'),
+    ).toBeNull();
+  });
+
+  it('shows the apply walk for joey-rosima', () => {
+    vi.mocked(grantApplicationsPaused).mockReturnValue(true);
+    useAuthStore.setState({
+      session: 'sess',
+      account: { ...account, username: 'joey-rosima' },
+    });
+    renderWithLocale(<FundingApplyScreen />);
+    expect(
+      screen.queryByText(
+        'Applications are currently paused. You can apply again when shop transactions have increased.',
+      ),
+    ).toBeNull();
+    expect(
+      screen.getByText('First, write a short About me so people can get to know you.'),
+    ).toBeTruthy();
+  });
+
+  it('shows the paused sentence for a basis account named ada', () => {
+    vi.mocked(grantApplicationsPaused).mockReturnValue(true);
+    useAuthStore.setState({
+      session: 'sess',
+      account: {
+        ...account,
+        username: 'ada',
+        role: 'basis',
+        funding: {
+          status: 'none',
+          trialUtcDate: null,
+          admittedAt: null,
+          reviewedByName: null,
+        },
+      },
+    });
+    renderWithLocale(<FundingApplyScreen />);
+    expect(
+      screen.getByText(
+        'Applications are currently paused. You can apply again when shop transactions have increased.',
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByText('You are not verified yet.')).toBeNull();
+  });
+
+  it('shows not-verified copy for a basis account named joey-rosima', () => {
+    vi.mocked(grantApplicationsPaused).mockReturnValue(true);
+    useAuthStore.setState({
+      session: 'sess',
+      account: { ...account, username: 'joey-rosima', role: 'basis' },
+    });
+    renderWithLocale(<FundingApplyScreen />);
+    expect(screen.getByText('You are not verified yet.')).toBeTruthy();
+    expect(
+      screen.queryByText(
+        'Applications are currently paused. You can apply again when shop transactions have increased.',
+      ),
+    ).toBeNull();
+  });
+
+  it('shows not-verified copy for a pending basis account that is not on the roster', () => {
+    vi.mocked(grantApplicationsPaused).mockReturnValue(true);
+    useAuthStore.setState({
+      session: 'sess',
+      account: {
+        ...account,
+        username: 'ada',
+        role: 'basis',
+        funding: {
+          status: 'pending',
+          trialUtcDate: null,
+          admittedAt: null,
+          reviewedByName: null,
+        },
+      },
+    });
+    renderWithLocale(<FundingApplyScreen />);
+    expect(screen.getByText('You are not verified yet.')).toBeTruthy();
+    expect(
+      screen.queryByText('Your application is open. A moderator will review your posts.'),
+    ).toBeNull();
+    expect(
+      screen.queryByText(
+        'Applications are currently paused. You can apply again when shop transactions have increased.',
+      ),
+    ).toBeNull();
   });
 });

@@ -2,7 +2,7 @@
 
 import { MapPin } from 'lucide-react';
 import Link from 'next/link';
-import { useEffect, useState, type ReactElement } from 'react';
+import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { useFiatPreference } from '@/components/FiatPreferenceProvider';
 import { ForumGoalBar } from '@/components/ForumGoalBar';
 import { MessageKindTags, noteKinds } from '@/components/MessageKindTags';
@@ -13,6 +13,7 @@ import { TranslatableNoteBody } from '@/components/TranslatableNoteBody';
 import { ForumQuotedBody } from '@/components/QuotedForumNote';
 import { useNumberFormat } from '@/components/NumberFormatProvider';
 import { preferredFiatSuffix } from '@/components/PreferredFiatSuffix';
+import { ReplyDirectionAmounts } from '@/components/ReplyDirectionAmounts';
 import { PublicMessageThread } from '@/components/PublicMessageThread';
 import { Button, Card } from '@/components/ui';
 import { useHydrateSession } from '@/hooks/useHydrateSession';
@@ -23,11 +24,17 @@ import {
   fetchPublicMessagePhoto,
   fetchPublicReplies,
   fetchReplies,
+  markNotificationsReadForMessage,
 } from '@/lib/api';
 import type { ForumMessage } from '@/lib/api-types';
 import { formatForumTime } from '@/lib/forum-time';
 import { forumVideoSrc } from '@/lib/forum-video';
-import { formatBitcoin, latestRateDay, type FiatCode, type FiatRateDay } from '@/lib/stats-money';
+import {
+  formatBitcoin,
+  latestRateDayFor,
+  type FiatCode,
+  type FiatRateDay,
+} from '@/lib/stats-money';
 import { useAuthStore } from '@/stores/auth-store';
 
 const MESSAGE_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -113,7 +120,13 @@ function PublicThreadCard({
         >
           {note.via === 'nostr' ? (
             <span className="flex flex-wrap items-center gap-2">
-              <span className="text-sm font-medium text-app-fg">{note.name}</span>
+              <Link
+                href={`/messages/${note.id}/author?name=${encodeURIComponent(note.name)}`}
+                aria-label={t('forum.authorProfile')}
+                className="text-sm font-medium text-app-fg underline underline-offset-2"
+              >
+                {note.name}
+              </Link>
               <span className="rounded-full border border-app-border-strong px-2 py-0.5 text-xs font-medium text-app-muted">
                 {t('forum.via.nostr')}
               </span>
@@ -130,8 +143,6 @@ function PublicThreadCard({
         <ForumVideo
           src={forumVideoSrc(note.id, note.videoContentType)}
           poster={photoUrl ?? undefined}
-          controls
-          playsInline
           preload="metadata"
           className="mx-auto block h-auto w-auto max-h-80 max-w-full shrink-0 rounded-xl object-contain"
           onError={() => {
@@ -180,16 +191,34 @@ function PublicThreadCard({
           {note.place.label ?? `${note.place.lat.toFixed(5)}, ${note.place.lng.toFixed(5)}`}
         </Link>
       ) : null}
-      <p
-        className={
-          fiatSuffix === null
-            ? 'text-sm font-medium text-app-fg'
-            : 'text-sm font-medium tabular-nums lining-nums text-app-fg'
-        }
-      >
-        {formatBitcoin(note.sats, numberFormat)}
-        {fiatSuffix}
-      </p>
+      {note.parentId !== undefined && (note.receivedSats ?? 0) > 0 ? (
+        <ReplyDirectionAmounts
+          text={note.text}
+          sats={note.sats}
+          receivedSats={note.receivedSats}
+          rateDay={rateDay}
+          fiat={fiat}
+          numberFormat={numberFormat}
+          sent={note}
+          received={{
+            amountUsd: note.receivedAmountUsd,
+            amountChf: note.receivedAmountChf,
+            amountEur: note.receivedAmountEur,
+            amountPhp: note.receivedAmountPhp,
+          }}
+        />
+      ) : (
+        <p
+          className={
+            fiatSuffix === null
+              ? 'text-sm font-medium text-app-fg'
+              : 'text-sm font-medium tabular-nums lining-nums text-app-fg'
+          }
+        >
+          {formatBitcoin(note.sats, numberFormat)}
+          {fiatSuffix}
+        </p>
+      )}
       {note.parentId === undefined && typeof note.goalSats === 'number' && note.goalSats > 0 ? (
         <ForumGoalBar
           sats={note.sats}
@@ -236,8 +265,10 @@ function PublicThreadCard({
  * the read-only cards. When hydrate is ready and both session and account are
  * set, mounts {@link PublicMessageThread} (`ForumBoard` with `composerHidden`)
  * so copy, reply, Gift on a payable nested reply, and staff delete work.
- * Passes optional `seedReply` when the highlighted row is a hidden reply. No
- * OnboardingGate, top-level composer, or envelope.
+ * Passes optional `seedReply` when the highlighted row is a hidden reply. A
+ * signed-in load that reaches ready with a root marks that root's
+ * notifications read once (`markNotificationsReadForMessage`); a signed-out
+ * visitor does not. No OnboardingGate, top-level composer, or envelope.
  *
  * @param props - Dynamic route `id`.
  * @returns Loading, missing, error, unsigned cards, or the signed-in thread.
@@ -255,7 +286,9 @@ export function PublicMessageLoader({ id }: { id: string }): ReactElement {
   const [replies, setReplies] = useState<ForumMessage[]>([]);
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
-  const [rateDay, setRateDay] = useState<FiatRateDay | null>(null);
+  const [rateSeries, setRateSeries] = useState<readonly FiatRateDay[] | null>(null);
+  const rateDay = rateSeries === null ? null : latestRateDayFor(rateSeries, fiat);
+  const markedRootStampRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!MESSAGE_ID_RE.test(id)) {
@@ -276,12 +309,13 @@ export function PublicMessageLoader({ id }: { id: string }): ReactElement {
     setReplies([]);
     setHighlightId(null);
 
-    const authed = session !== null;
+    const sessionToken = session;
+    const authed = sessionToken !== null;
     const loadNote = authed
-      ? (noteId: string) => fetchForumMessage(session, noteId)
+      ? (noteId: string) => fetchForumMessage(sessionToken, noteId)
       : fetchPublicMessage;
     const loadReplies = authed
-      ? (rootId: string) => fetchReplies(session, rootId)
+      ? (rootId: string) => fetchReplies(sessionToken, rootId)
       : fetchPublicReplies;
 
     void (async () => {
@@ -321,6 +355,13 @@ export function PublicMessageLoader({ id }: { id: string }): ReactElement {
         setReplies(replies);
         setHighlightId(highlight);
         setStatus('ready');
+        if (authed) {
+          const stamp = `${sessionToken}:${id}:${rootNote.id}`;
+          if (markedRootStampRef.current !== stamp) {
+            markedRootStampRef.current = stamp;
+            void markNotificationsReadForMessage(sessionToken, rootNote.id).catch(() => undefined);
+          }
+        }
       } catch {
         if (!cancelled) {
           setStatus('error');
@@ -341,12 +382,12 @@ export function PublicMessageLoader({ id }: { id: string }): ReactElement {
     void fetchGiftStats()
       .then((stats) => {
         if (!cancelled) {
-          setRateDay(latestRateDay(stats.spendOverTime));
+          setRateSeries(stats.spendOverTime);
         }
       })
       .catch(() => {
         if (!cancelled) {
-          setRateDay(null);
+          setRateSeries([]);
         }
       });
     return () => {

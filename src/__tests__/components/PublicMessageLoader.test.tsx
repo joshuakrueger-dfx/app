@@ -11,8 +11,21 @@ const MESSAGE_ID = '11111111-1111-4111-8111-111111111111';
 const push = vi.fn();
 
 vi.mock('next/link', () => ({
-  default: ({ href, children }: { href: string; children: ReactNode }) => (
-    <a href={href}>{children}</a>
+  default: ({
+    href,
+    children,
+    onClick,
+    ...rest
+  }: {
+    href: string;
+    children: ReactNode;
+    onClick?: (event: { stopPropagation: () => void }) => void;
+    'aria-label'?: string;
+    className?: string;
+  }) => (
+    <a href={href} onClick={onClick} {...rest}>
+      {children}
+    </a>
   ),
 }));
 
@@ -37,6 +50,8 @@ vi.mock('@/lib/api', () => ({
   fetchGiftStats: vi.fn().mockResolvedValue({ spendOverTime: [] }),
   fetchReplies: vi.fn(),
   fetchMessagePhoto: vi.fn(),
+  markNotificationsReadForMessage: vi.fn().mockResolvedValue({ ok: true, tags: [] }),
+  fetchExternalAuthorProfile: vi.fn().mockResolvedValue(null),
   postMessage: vi.fn(),
   postMessageInvoice: vi.fn(),
   openConversation: vi.fn(),
@@ -55,6 +70,7 @@ import {
   fetchPublicMessagePhoto,
   fetchPublicReplies,
   fetchReplies,
+  markNotificationsReadForMessage,
 } from '@/lib/api';
 import { formatForumTime } from '@/lib/forum-time';
 
@@ -65,6 +81,7 @@ const fetchRepliesPublic = vi.mocked(fetchPublicReplies);
 const fetchRepliesBearer = vi.mocked(fetchReplies);
 const fetchGiftStatsMock = vi.mocked(fetchGiftStats);
 const deleteMessageMock = vi.mocked(deleteMessage);
+const markReadForMessageMock = vi.mocked(markNotificationsReadForMessage);
 const hydrate = vi.mocked(useHydrateSession);
 
 const EMPTY_STATS: GiftStats = {
@@ -111,6 +128,7 @@ beforeEach(() => {
   fetchRepliesBearer.mockResolvedValue([]);
   fetchGiftStatsMock.mockResolvedValue(EMPTY_STATS);
   deleteMessageMock.mockResolvedValue(undefined);
+  markReadForMessageMock.mockResolvedValue({ ok: true, tags: [] });
   Object.defineProperty(URL, 'createObjectURL', {
     configurable: true,
     writable: true,
@@ -217,6 +235,44 @@ describe('PublicMessageLoader', () => {
     expect(screen.queryByRole('button', { name: 'Send Bitcoin' })).toBeNull();
   });
 
+  it('marks the thread root read once a signed-in load is ready', async () => {
+    useAuthStore.setState({
+      session: 'sess',
+      account: {
+        id: 'acc_1',
+        linkingKey: null,
+        role: 'basis',
+        name: 'Ada',
+        location: null,
+        lightningAddress: 'alice@walletofsatoshi.com',
+        lightningAddressVerified: false,
+        forumLawsDismissed: false,
+        createdAt: 1,
+        rulesAgreedAt: 1,
+        viewKey: 'a'.repeat(64),
+        aboutMe: null,
+        aboutMeHasPhoto: false,
+        setup: null,
+        missing: [],
+      },
+    });
+    fetchMessageBearer.mockResolvedValue(sample);
+    renderWithLocale(<PublicMessageLoader id={MESSAGE_ID} />);
+    await waitFor(() => {
+      expect(markReadForMessageMock).toHaveBeenCalledWith('sess', MESSAGE_ID);
+    });
+    expect(markReadForMessageMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not mark notifications read for a signed-out visitor', async () => {
+    fetchMessage.mockResolvedValue(sample);
+    renderWithLocale(<PublicMessageLoader id={MESSAGE_ID} />);
+    await waitFor(() => {
+      expect(screen.getByText('Hello from Ada')).toBeTruthy();
+    });
+    expect(markReadForMessageMock).not.toHaveBeenCalled();
+  });
+
   it('shows a place link on a public note, or coordinates when the label is missing', async () => {
     fetchMessage.mockResolvedValue({
       ...sample,
@@ -253,6 +309,49 @@ describe('PublicMessageLoader', () => {
     expect(await screen.findByText('Parent note')).toBeTruthy();
     expect(await screen.findByText('A reply')).toBeTruthy();
     expect(screen.queryByRole('link', { name: 'Hidden' })).toBeNull();
+  });
+
+  it('shows sent and received as separate lines on a public reply', async () => {
+    const parentId = '22222222-2222-4222-8222-222222222222';
+    const reply: ForumMessage = {
+      ...sample,
+      parentId,
+      text: 'Thanks',
+      sats: 21000,
+      amountUsd: '18.14',
+      receivedSats: 100,
+      receivedAmountUsd: '0.09',
+    };
+    fetchMessage.mockImplementation(async (id: string) => {
+      if (id === parentId) {
+        return { ...sample, id: parentId, text: 'Parent note', sats: 21000, amountUsd: '18.14' };
+      }
+      return reply;
+    });
+    fetchRepliesPublic.mockResolvedValue([reply]);
+    renderWithLocale(<PublicMessageLoader id={MESSAGE_ID} />);
+    expect(await screen.findByText('Thanks')).toBeTruthy();
+    const sent = screen.getAllByText("sent ₿21'000");
+    expect(sent).toHaveLength(1);
+    expect(sent[0]?.closest('div')?.className).toContain('border-l-2');
+    expect(screen.getByText('received ₿100')).toBeTruthy();
+    expect(screen.getAllByText('$18.14').length).toBeGreaterThan(0);
+    expect(screen.getByText('$0.09')).toBeTruthy();
+    expect(screen.queryByText("₿21'100")).toBeNull();
+  });
+
+  it('keeps a top-level public note as one collected amount', async () => {
+    fetchMessage.mockResolvedValue({
+      ...sample,
+      sats: 21000,
+      amountUsd: '18.14',
+      receivedSats: 100,
+      receivedAmountUsd: '0.09',
+    });
+    renderWithLocale(<PublicMessageLoader id={MESSAGE_ID} />);
+    expect(await screen.findByText("₿21'000")).toBeTruthy();
+    expect(screen.queryByText(/sent /)).toBeNull();
+    expect(screen.queryByText(/received /)).toBeNull();
   });
 
   it('shows the goal bar on a top-level note past 100%', async () => {
@@ -608,8 +707,7 @@ describe('PublicMessageLoader', () => {
     });
     const video = document.querySelector('video');
     expect(video?.getAttribute('src')).toBe(`/messages/${MESSAGE_ID}/video.webm`);
-    expect(video?.hasAttribute('controls')).toBe(true);
-    expect(video?.getAttribute('controlsList')).toContain('nofullscreen');
+    expect(video?.hasAttribute('controls')).toBe(false);
     expect(screen.getByRole('button', { name: 'Full screen' })).toBeTruthy();
     const tokens = (video?.getAttribute('class') ?? '').split(/\s+/);
     expect(tokens).toEqual(
@@ -1170,8 +1268,16 @@ describe('PublicMessageLoader', () => {
     });
     expect(screen.getByText('External')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'External' })).toBeNull();
+    const author = screen.getByRole('link', { name: 'View profile' });
+    expect(author.textContent).toBe('Robin');
+    expect(author.getAttribute('href')).toBe(
+      '/messages/22222222-2222-4222-8222-222222222222/author?name=Robin',
+    );
     expect(screen.getByText('Greetings! https://example.com/hello')).toBeTruthy();
     expect(screen.queryByRole('link', { name: /example\.com/ })).toBeNull();
+    fireEvent.click(author);
+    expect(push.mock.calls.some((call) => String(call[0]).includes('/members/'))).toBe(false);
+    expect(screen.queryByRole('dialog')).toBeNull();
   });
 
   it('marks an unsigned via gift reply with a badge and no body paragraph', async () => {

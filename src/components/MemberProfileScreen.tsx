@@ -27,10 +27,12 @@ import {
   fetchPublicMessage,
   fetchPublicMessagePhoto,
   fetchReplies,
+  markNotificationsReadForMessage,
   openConversation,
   NoteDeletedError,
   postMessage,
   postMessageInvoice,
+  postRepaymentInvoice,
 } from '@/lib/api';
 import {
   FORUM_MESSAGE_MAX_LENGTH,
@@ -43,12 +45,13 @@ import type { MessageKey } from '@/lib/messages';
 import { MissingRequirementsError, nextPostRequirement } from '@/lib/missing-requirements';
 import { giftsLightningAddress, openCryptoPayQrValue } from '@/lib/gifts-address';
 import { profileQrLogo } from '@/lib/profile-qr-logo';
+import { shopStickerLangFromLocation } from '@/lib/shop-sticker';
 import { shortResourceUrl } from '@/lib/short-link';
 import { isReplyPaymentExempt, roleAtLeast } from '@/lib/roles';
 import { formatForumTimeFromMs } from '@/lib/forum-time';
 import { useFiatPreference } from '@/components/FiatPreferenceProvider';
 import {
-  latestRateDay,
+  latestRateDayFor,
   paySatsFromDraft,
   replySatsFromDraft,
   shownFiatForSats,
@@ -245,6 +248,10 @@ export function MemberProfileScreen({
   const [payDraft, setPayDraft] = useState('');
   const [payBusy, setPayBusy] = useState(false);
   const [payError, setPayError] = useState<ForumPayError>(null);
+  const [repayNotice, setRepayNotice] = useState<{
+    messageId: string;
+    error: Exclude<ForumPayError, null> | null;
+  } | null>(null);
   const [payInvoice, setPayInvoice] = useState<ForumPayInvoice | null>(null);
   const [payWaiting, setPayWaiting] = useState(false);
   const [payHost, setPayHost] = useState<'composer' | 'card' | null>(null);
@@ -267,6 +274,7 @@ export function MemberProfileScreen({
     'name' | 'username' | 'rules' | 'lightning-address' | null
   >(null);
   const pendingPostRef = useRef<(() => Promise<void>) | null>(null);
+  const startRepaymentRef = useRef<(messageId: string) => void>(() => undefined);
   const pendingComposeTextRef = useRef<string | null>(null);
   const [listedProfile, setListedProfile] = useState(profile);
   const [activity, setActivity] = useState<null | 'posts' | 'replies'>(null);
@@ -284,17 +292,28 @@ export function MemberProfileScreen({
   const qr = openCryptoPayQrValue(listedProfile.username, host);
   const [showQr, setShowQr] = useState(false);
   const [stickerOpen, setStickerOpen] = useState(false);
+  const kikambaStickerOpened = useRef(false);
 
   useEffect(() => {
     setShowQr(true);
   }, []);
 
-  const [rateDay, setRateDay] = useState<FiatRateDay | null>(null);
+  useEffect(() => {
+    if (kikambaStickerOpened.current) return;
+    if (shopStickerLangFromLocation() !== 'kikamba') return;
+    if (qr === null || address === null) return;
+    kikambaStickerOpened.current = true;
+    setStickerOpen(true);
+  }, [qr, address]);
+
+  const [rateSeries, setRateSeries] = useState<readonly FiatRateDay[] | null>(null);
+  const rateDay = rateSeries === null ? null : latestRateDayFor(rateSeries, fiat);
   const rateDayRef = useRef(rateDay);
   rateDayRef.current = rateDay;
   const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({});
   const photoUrlsRef = useRef(photoUrls);
   photoUrlsRef.current = photoUrls;
+  const [photoEpoch, setPhotoEpoch] = useState(0);
 
   const photoSource: ForumMessage[] = [];
   if (activity === 'posts' && posts !== null) {
@@ -323,12 +342,12 @@ export function MemberProfileScreen({
     void fetchGiftStats()
       .then((stats) => {
         if (!cancelled) {
-          setRateDay(latestRateDay(stats.spendOverTime));
+          setRateSeries(stats.spendOverTime);
         }
       })
       .catch(() => {
         if (!cancelled) {
-          setRateDay(null);
+          setRateSeries([]);
         }
       });
     return () => {
@@ -399,13 +418,21 @@ export function MemberProfileScreen({
     return () => {
       cancelled = true;
     };
-  }, [photoIdsKey, session]);
+  }, [photoEpoch, photoIdsKey, session]);
+
+  const bumpPayPollGeneration = (): number => {
+    payPollAbortRef.current?.abort();
+    payPollAbortRef.current = new AbortController();
+    payPollGeneration.current += 1;
+    return payPollGeneration.current;
+  };
 
   useEffect(() => {
     return () => {
       for (const url of Object.values(photoUrlsRef.current)) {
         URL.revokeObjectURL(url);
       }
+      bumpPayPollGeneration();
     };
   }, []);
 
@@ -441,13 +468,6 @@ export function MemberProfileScreen({
         setLoading(false);
       }
     }
-  };
-
-  const bumpPayPollGeneration = (): number => {
-    payPollAbortRef.current?.abort();
-    payPollAbortRef.current = new AbortController();
-    payPollGeneration.current += 1;
-    return payPollGeneration.current;
   };
 
   const handlePayCancel = (): void => {
@@ -496,6 +516,7 @@ export function MemberProfileScreen({
     messageId: string,
     baselineSats: number,
     replyParentId: string | null = null,
+    baselineReceivedSats?: number,
   ): void => {
     const generation = bumpPayPollGeneration();
     const controller = payPollAbortRef.current;
@@ -530,14 +551,21 @@ export function MemberProfileScreen({
       }
       for (;;) {
         try {
-          const next = await fetchPublicMessage(messageId, {
-            sinceSats: baselineSats,
-            signal,
-          });
+          const next = await fetchPublicMessage(
+            messageId,
+            typeof baselineReceivedSats === 'number'
+              ? { sinceReceivedSats: baselineReceivedSats, signal }
+              : { sinceSats: baselineSats, signal },
+          );
           if (generation !== payPollGeneration.current || signal.aborted) {
             return;
           }
-          if (next !== null && next.sats > baselineSats) {
+          if (
+            next !== null &&
+            (typeof baselineReceivedSats === 'number'
+              ? (next.receivedSats ?? 0) > baselineReceivedSats
+              : next.sats > baselineSats)
+          ) {
             let ownContent = !composePay;
             if (composePay) {
               try {
@@ -672,6 +700,65 @@ export function MemberProfileScreen({
     }
     setOverlayRequirement(next);
     return true;
+  };
+
+  startRepaymentRef.current = (messageId: string): void => {
+    if (session === null) {
+      return;
+    }
+    const generation = bumpPayPollGeneration();
+    setPayMessageId(null);
+    setPayHost(null);
+    setPayDraft('');
+    setPayInvoice(null);
+    setPayWaiting(false);
+    setPayError(null);
+    setRepayNotice({ messageId, error: null });
+    setPayBusy(true);
+    void postRepaymentInvoice(session, messageId)
+      .then((invoice) => {
+        if (generation !== payPollGeneration.current) {
+          return;
+        }
+        setRepayNotice(null);
+        setPayHost('card');
+        setPayMessageId(messageId);
+        setPayInvoice({
+          messageId,
+          pr: invoice.pr,
+          amountSats: invoice.amountSats,
+        });
+      })
+      .catch((err: unknown) => {
+        if (generation !== payPollGeneration.current) {
+          return;
+        }
+        if (err instanceof MissingRequirementsError) {
+          if (openOverlayForMissing(err.missing)) {
+            pendingPostRef.current = () => {
+              startRepaymentRef.current(messageId);
+              return Promise.resolve();
+            };
+            return;
+          }
+          setRepayNotice({ messageId, error: 'request' });
+          return;
+        }
+        setRepayNotice({
+          messageId,
+          error: isRateLimitError(err)
+            ? 'rateLimit'
+            : isAuthorWalletError(err)
+              ? 'authorWallet'
+              : 'request',
+        });
+      })
+      .finally(() => {
+        if (generation !== payPollGeneration.current) {
+          return;
+        }
+        setPayBusy(false);
+      });
   };
 
   const runReplyPost = async (
@@ -1005,7 +1092,11 @@ export function MemberProfileScreen({
           };
           setPayInvoice(minted);
           setPayBusy(false);
-          startPayPoll(messageId, baselineSats);
+          if (listed.parentId) {
+            startPayPoll(messageId, baselineSats, null, listed.receivedSats ?? 0);
+          } else {
+            startPayPoll(messageId, baselineSats);
+          }
         } catch (err) {
           if (generation !== payPollGeneration.current) {
             return null;
@@ -1079,6 +1170,7 @@ export function MemberProfileScreen({
       setRepliesError(true);
       return;
     }
+    void markNotificationsReadForMessage(session, messageId).catch(() => undefined);
     void (async () => {
       try {
         const next = await fetchReplies(session, messageId);
@@ -1180,6 +1272,7 @@ export function MemberProfileScreen({
     payDraft,
     payBusy,
     payError,
+    repayNotice,
     payInvoice,
     payWaiting,
     onPayOpen: handlePayOpen,
@@ -1191,6 +1284,14 @@ export function MemberProfileScreen({
     onReplyUnitChange: setReplyShownUnit,
     onPaySubmit: handlePaySubmit,
     onPayCancel: handlePayCancel,
+    viewerAccountId: account?.id ?? null,
+    ...(factsOnly
+      ? {}
+      : {
+          onRepay: (messageId: string): void => {
+            startRepaymentRef.current(messageId);
+          },
+        }),
     expandedId,
     onToggleExpand: handleToggleExpand,
     replies: expandedId === null ? null : replies,
@@ -1297,7 +1398,62 @@ export function MemberProfileScreen({
       ) : (
         <>
           {activity === 'posts' ? (
-            <ForumBoard {...IDLE_BOARD} messages={activityMessages} {...sharedForumProps} />
+            <ForumBoard
+              {...IDLE_BOARD}
+              messages={activityMessages}
+              {...sharedForumProps}
+              {...(account !== null && roleAtLeast(account.role, 'moderator')
+                ? {
+                    shopNoteEdit: true as const,
+                    onShopNoteUpdated: (updated: ForumMessage) => {
+                      setPhotoUrls((prev) => {
+                        const prefix = `${updated.id}:`;
+                        let changed = false;
+                        const next = { ...prev };
+                        for (const [key, url] of Object.entries(next)) {
+                          if (!key.startsWith(prefix)) {
+                            continue;
+                          }
+                          URL.revokeObjectURL(url);
+                          delete next[key];
+                          changed = true;
+                        }
+                        return changed ? next : prev;
+                      });
+                      setPhotoEpoch((n) => n + 1);
+                      setPosts((prev) => {
+                        /* v8 ignore next 3 -- the pencil mounts only after the post list has loaded */
+                        if (prev === null) {
+                          return prev;
+                        }
+                        return prev.map((row) => {
+                          if (row.id !== updated.id) {
+                            return row;
+                          }
+                          const next = {
+                            ...row,
+                            text: updated.text,
+                            hasPhoto: updated.hasPhoto,
+                            photoCount: updated.photoCount,
+                            hasVideo: updated.hasVideo,
+                          };
+                          if (updated.place === undefined) {
+                            delete next.place;
+                          } else {
+                            next.place = updated.place;
+                          }
+                          if (updated.shopAccount === undefined) {
+                            delete next.shopAccount;
+                          } else {
+                            next.shopAccount = updated.shopAccount;
+                          }
+                          return next;
+                        });
+                      });
+                    },
+                  }
+                : {})}
+            />
           ) : (
             <ForumBoard
               {...IDLE_BOARD}
@@ -1341,7 +1497,9 @@ export function MemberProfileScreen({
     return (
       <>
         {requirementOverlay}
-        {roleKeys !== null || showFundingReviewed ? (
+        {roleKeys !== null ||
+        showFundingReviewed ||
+        listedProfile.staffTag === 'software_developer' ? (
           <div className="flex w-full flex-wrap items-center justify-center gap-2">
             {roleKeys !== null ? (
               <button
@@ -1354,6 +1512,11 @@ export function MemberProfileScreen({
               >
                 {t(roleKeys.label)}
               </button>
+            ) : null}
+            {listedProfile.staffTag === 'software_developer' ? (
+              <span className="rounded-full border border-app-border-strong px-2 py-0.5 text-xs font-medium text-app-muted">
+                {t('forum.staff.softwareDeveloper')}
+              </span>
             ) : null}
             {typeof fundingReviewedAt === 'number' ? (
               <FundingProgramMark
@@ -1454,6 +1617,11 @@ export function MemberProfileScreen({
                 >
                   {t(roleKeys.label)}
                 </button>
+              ) : null}
+              {listedProfile.staffTag === 'software_developer' ? (
+                <span className="rounded-full border border-app-border-strong px-2 py-0.5 text-xs font-medium text-app-muted">
+                  {t('forum.staff.softwareDeveloper')}
+                </span>
               ) : null}
               {typeof fundingReviewedAt === 'number' ? (
                 <FundingProgramMark

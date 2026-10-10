@@ -1,5 +1,7 @@
 # Contributing to 21.gifts app
 
+[REVIEW.md](REVIEW.md) is binding for every change and for every review of a change. Read it and this file at the base revision of the pull request. A pull request that changes either file does not replace that base text for the rest of its diff. The review does not change files.
+
 This repository carries only frontend-specific code and docs. Protocol-level
 documentation (concept, architecture, decisions) lives in
 [`21gifts/api`](https://github.com/21gifts/api) —
@@ -149,7 +151,7 @@ app/
 │   │   │   └── apply/page.tsx   # GET /profile/apply — redirect to /grants/apply
 │   │   ├── grants/
 │   │   │   ├── page.tsx         # GET /grants — grant status and the staff queue link
-│   │   │   ├── apply/page.tsx   # GET /grants/apply — principles question, then truth
+│   │   │   ├── apply/page.tsx   # GET /grants/apply — paused applications screen
 │   │   │   └── applications/
 │   │   │       ├── page.tsx     # GET /grants/applications — grant queue
 │   │   │       └── [accountId]/page.tsx # GET /grants/applications/:id — principles, then truth
@@ -201,7 +203,7 @@ app/
 │   │   ├── TranslatableNoteBody.tsx # Exclusive original XOR translated note body
 │   │   ├── LinkedText.tsx       # Autolink http(s) in note bodies; internal Link, external warning
 │   │   ├── ExternalLinkWarning.tsx # Confirm overlay before leaving 21.gifts
-│   │   ├── ShopStickerOverlay.tsx # Member-profile shop sticker preview + PDF/PNG/JPG/SVG download
+│   │   ├── ShopStickerOverlay.tsx # Member-profile shop sticker preview, second language, PDF/PNG/JPG/SVG download
 │   │   ├── AccountActivityChart.tsx # Compact Given/Received SVG from account activity series
 │   │   ├── AboutMeSection.tsx   # About me heading + text or empty prompt; owner edit + copy-link
 │   │   ├── ProfileScreen.tsx    # Signed-in profile card (totals + About me + name/location/address + notification level + optional this-device On/Off + language + theme + fiat + number format)
@@ -287,7 +289,7 @@ app/
 │   │   ├── prf-mnemonic.ts      # WebAuthn PRF → BIP-39 English 12 words
 │   │   ├── tab-phrase.ts        # In-tab recovery phrase RAM (never localStorage)
 │   │   ├── gifts-address.ts     # Public username@21.gifts display handle
-│   │   ├── shop-sticker.ts      # Shop-sticker SVG/PDF/PNG/JPG from the member pay QR (no PDF library)
+│   │   ├── shop-sticker.ts      # Shop-sticker SVG/PDF/PNG/JPG from the member pay QR; ?lang=Kikamba (no PDF library)
 │   │   ├── shop-sticker-artwork.ts # Generated fixed sticker artwork (outlined paths); do not edit by hand
 │   │   ├── missing-requirements.ts # MissingRequirementsError + 409 body parse
 │   │   ├── rules-chapters.ts    # Ordered living-room rules chapter ids
@@ -365,7 +367,7 @@ app/
 ├── entrypoint.sh
 ├── README.md
 ├── CONTRIBUTING.md
-├── Review.md                 # PR review checklist
+├── REVIEW.md                 # PR review checklist
 ├── SECURITY.md
 └── LICENSE
 ```
@@ -377,11 +379,14 @@ app/
 | Branch    | Purpose                            | Deploy target |
 | --------- | ---------------------------------- | ------------- |
 | `develop` | Default branch, active development | DEV           |
+| `staging` | Experimental testing               | staging       |
 | `main`    | Production releases                | PRD           |
 
 - Push to `develop` via **feature branch + PR**
 - `main` is protected — updates flow via an auto-generated Release PR (`develop → main`)
-- Never force-push, never amend published commits
+- **Hard requirement:** `staging` is the environment for experimental testing. It publishes `21gifts/app:staging`. A change that is good there is released to `develop` first (`Release: staging -> develop`). `main` receives changes only from `develop` (`Release: develop -> main`). `staging` is never released directly to `main`. An open release pull request is left unchanged. The staging release is not opened when the three-dot diff against `develop` has no file changes.
+- Feature pull requests always target `develop`, not `staging` and not `main`. Developers rebase `staging` onto `develop` regularly, because those pull requests land on `develop` and do not update `staging`.
+- Never force-push, never amend published commits, except publishing a rebase of `staging` onto `develop` with `git push --force-with-lease` to `staging` only.
 
 ### Commit messages
 
@@ -412,12 +417,15 @@ update stuff
 - Every `NEXT_PUBLIC_*` variable is read through `src/lib/config.ts` — never
   `process.env` directly in components. Accessors throw on missing values; no
   silent fallbacks.
-- **Viewer permission checks use `roleAtLeast`** (`src/lib/roles.ts`), never an equality test on the viewer's role — a higher role must always do and see everything a lower role can.
+- **Viewer permission checks use `roleAtLeast`** (`src/lib/roles.ts`), never an equality test on the viewer's role — a higher role must always do and see everything a lower role can. The one named exception is `canEditDailyPayoutRoster` in `src/lib/roles.ts`, because initiator and moderator share rank 2, so a rank check cannot exclude moderators. It is true only for initiator and founder. No further equality checks.
 
 ### Styling
 
 - **Tailwind CSS only.** No CSS files beyond `src/app/globals.css`, no CSS
-  modules, no styled-components, no inline `style` attributes.
+  modules, no styled-components, no inline `style` attributes. The only
+  exception is a `style` attribute that sets viewport-measured `top`,
+  `bottom`, `left`, and `width` on a `fixed` overlay. Those four numbers
+  are the clamped box; `top-full` and `bottom-full` do not compute them.
 - Utility classes live directly on the JSX elements.
 - Visual language (shells, tokens, type, chrome, control grammar) lives in
   `docs/ui.md`. New or migrated surfaces compose those parts. Raw
@@ -442,7 +450,7 @@ A photo row may scroll sideways on `[data-scroll-x]`. That row is
 `overflow-x: auto` and `overflow-y: clip`, so it is not a second page
 scroll. `scripts/check-scrollports.mjs` fails CI on scrolling utilities,
 arbitrary values, and assignments, and on any stylesheet scrolling overflow
-except `overflow: auto` on `[data-scrollport][data-scroll-active]` and that
+except `overflow-x: clip` and `overflow-y: auto` on `[data-scrollport][data-scroll-active]` and that
 one sideways row. It rejects its own detector if that check goes blind. The document lock is
 `!important`. AppShell `<main>` stays free of `overflow-hidden` so the
 menu hosts on the frame are not clipped. `--app-offset-top` is
@@ -450,6 +458,13 @@ menu hosts on the frame are not clipped. `--app-offset-top` is
 (`position: fixed; top: var(--app-offset-top); height: var(--app-height)`).
 The offset is never added into the height. The document lock stops the page from
 scrolling under the frame.
+
+A box stays inside the window. Only a slide inside `[data-scroll-x]` may extend past the left or
+right edge, and that row's own box stays inside. A box whose top or bottom leaves the window by more than one pixel fails the same check, except content inside `[data-scrollport]`, which may sit past the top or bottom unless it is position:fixed; a position:fixed box is still reported. Do not size a panel with `vw` or `w-screen`: that
+width is the phone, which is wider than the padded column, and that is what shifts a page.
+`scripts/check-scrollports.mjs` fails lint on those widths. Every visual screenshot runs
+`pageFrameProblems` first, and the Visual job fails when a box sticks out or the page can scroll
+sideways.
 
 ### Components
 
@@ -483,12 +498,19 @@ runtime — no silent English fallback.
 
 New or changed visitor-facing copy goes through a catalog key in the **same
 PR**. Hard-coded UI strings are an undeclared deviation. Exceptions (do not
-catalogize): legal body copy (English), handbook markdown bodies and handbook
-chapter-navigation labels (English), product tokens such as
+catalogize): legal body copy (English), handbook markdown bodies for Functions
+and Endpoints, handbook chapter-navigation labels (English), product tokens such as
 `Wallet of Satoshi` / `GitHub`, language-switcher endonym labels (`English` /
 `Deutsch` / `Español` / `Filipino`), stats body copy (English), and
 document/social metadata (`title`, `description`, Open Graph alt text —
 English).
+
+Screen-card descriptions are not part of that exception. English stays in
+`docs/handbook/screens.md`. German, Spanish, and Filipino for those cards live
+in `src/lib/screen-variant-descriptions-locale.json`, keyed by catalog id.
+Route and variant labels stay identifiers. A missing translation throws; it
+does not fall back to English. When `screens.md` has no description for an id,
+every locale shows the catalog label.
 
 ### Icon controls (hard requirement)
 
@@ -512,9 +534,12 @@ icon-only when the table says labeled) is an undeclared deviation.
 The signed-in **Menu** trigger stays labeled (icon plus visible Menu word).
 **Log out**, **Continue**, **I agree to these rules**,
 **Activate**, **Try again**, pay-sheet **Pay**, and sentence-length
-links stay labeled.
+links stay labeled. Shop wizard **Add a shop**, step **Next**, summary
+**Post**, and **Save changes** stay labeled in that same column. The photo
+step's Close (X) is icon-only, accessible name Cancel, the same dismiss as
+pay-sheet Close, and it is not a second back arrow.
 
-Reviewers follow `Review.md` and `docs/ui.md`.
+Reviewers follow `REVIEW.md` and `docs/ui.md`.
 
 ### One back (hard requirement)
 
@@ -526,7 +551,7 @@ A stack of labeled moderator or founder actions on a member card is not shown as
 
 ### Amount entry (hard requirement)
 
-Every control where a person types an amount uses `AmountEntry`: the gift `SegmentedControl` (₿ and the member's fiat code) and the other unit directly under the field. Bitcoin entry shows the preferred fiat. Fiat entry shows the bitcoin equivalent. The last unit a signed-in member chooses is `account.amountUnit` (`btc` or `fiat`, default `btc`) and is the default on every amount field. A signed-out pay link still shows the switch, starts at ₿, and does not store the choice. The submitted amount is always whole sats. A new amount field without the switch or the counter is an undeclared deviation. Fiat mode is its own screenshot state. In the inbox composer the message, attach, and send stay on one row. The amount is the next row: the switch beside the input, the other unit under that input, and no visible label (the input keeps the accessible name).
+Every control where a person types an amount uses `AmountEntry`: the gift `SegmentedControl` (₿ and the member's fiat code) and the other unit directly under the field. Bitcoin entry shows the preferred fiat. Fiat entry shows the bitcoin equivalent. The last unit a signed-in member chooses is `account.amountUnit` (`btc` or `fiat`, default `btc`) and is the default on every amount field. A signed-out pay link still shows the switch, starts at ₿, and does not store the choice. The submitted amount is always whole sats. A new amount field without the switch or the counter is an undeclared deviation. The daily payout roster on `/grants/payments/amounts` is not one of these fields: each amount is the USD figure spend stores and pays, so those inputs stay `Field` and the saved body stays `amountUsd`. Fiat mode is its own screenshot state. In the inbox composer the message, attach, and send stay on one row. The amount is the next row: the switch beside the input, the other unit under that input, and no visible label (the input keeps the accessible name).
 
 ### Shown amounts (hard requirement)
 
@@ -534,7 +559,7 @@ Every place that shows a bitcoin amount also shows that amount in the visitor's 
 
 Signed in, the code is the currency stored for that person. `useFiatPreference` is that code: a profile choice they already stored wins. Signed out, there is no profile currency, so the code is the one implied by the UI language (`defaultFiatForLocale`: German CHF, English USD, Spanish EUR, Filipino PHP).
 
-The figure is the fiat string stored on that payment when the payment recorded one. A missing or null stored field uses the latest gift-day rate (`useLatestRateDay`). A missing or unusable rate is the only reason the fiat line is absent. A payment screen does not treat the amount as ready while that rate is still loading, and its visual baseline includes the fiat line. Omitting the fiat next to a shown bitcoin amount is an undeclared deviation. Reviewers follow `Review.md`.
+The figure is the fiat string stored on that payment when the payment recorded one. A missing or null stored field uses the latest gift-day rate (`useLatestRateDay`). A missing or unusable rate is the only reason the fiat line is absent. A payment screen does not treat the amount as ready while that rate is still loading, and its visual baseline includes the fiat line. Omitting the fiat next to a shown bitcoin amount is an undeclared deviation. Reviewers follow `REVIEW.md`.
 
 ### Payment QR vs deep links (hard requirement)
 
@@ -560,7 +585,7 @@ smartphone.
 Mounting any of those invoice QRs on a smartphone UA is an undeclared
 deviation and is rejected. Hiding a profile, member, public view, or
 point of sale QR on a smartphone UA is also rejected. Reviewers
-follow `Review.md`.
+follow `REVIEW.md`.
 
 ### Handbook (hard requirement)
 
@@ -715,6 +740,32 @@ npm run e2e
 
 CI will fail on the same conditions; catching them locally is faster.
 
+### A38
+
+This repository requires A38 according to the canonical A38 standard in
+[DFXswiss/agent](https://github.com/DFXswiss/agent/blob/59e31ebd11ab587897dc8e5b2a6f21e489f35f3d/docs/a38.md)
+at commit `59e31ebd11ab587897dc8e5b2a6f21e489f35f3d`. Repo job selection:
+`.github/a38.json`. Target-branch applicability and fork workflow approval:
+`.github/pr-guard.json`. `dfx pr guard` is
+[wired in](https://github.com/DFXswiss/agent/blob/59e31ebd11ab587897dc8e5b2a6f21e489f35f3d/docs/a38-guard.md#how-fork-github-actions-are-meant-to-work).
+
+This is a **public** repository. GitHub-hosted runners execute the heavy suite
+(typecheck, handbook completeness, e2e completeness, screenshot baselines,
+Vitest with the coverage gate, the production build, Playwright behavior, and
+the four visual jobs). A38 does not replace those GitHub checks. The author
+report only covers the light local job in `.github/a38.json` (`npm run lint`
+on Node 22). Do not run Vitest, the production build, or Playwright locally
+for A38.
+
+Draft pull requests run the GitHub CI jobs. GitHub holds fork runs from
+external contributors as `action_required`. Ready does not start CI. After a
+fresh A38 enforce pass on the current head, `dfx pr guard` approves those
+waiting initial runs, then sets Ready when the required GitHub jobs are green
+and the PR is mergeable. The merger does not click Approve and run workflows.
+Do not ask a maintainer to approve workflow runs. Post the light A38 report
+on the current head. Every new head needs a new report. Authors with write
+access to `21gifts/app` do not need a report.
+
 ## Docker
 
 The app ships as a Next.js standalone server on `node:22-alpine`:
@@ -730,9 +781,9 @@ values into the bundles, so the image is built with literal placeholders
 values at container start. The container refuses to start if a referenced
 variable is unset or empty.
 
-| Variable              | DEV                        | PRD                    |
-| --------------------- | -------------------------- | ---------------------- |
-| `NEXT_PUBLIC_API_URL` | `https://dev-api.21.gifts` | `https://api.21.gifts` |
+| Variable              | DEV                        | STAGING                        | PRD                    |
+| --------------------- | -------------------------- | ------------------------------ | ---------------------- |
+| `NEXT_PUBLIC_API_URL` | `https://dev-api.21.gifts` | `https://staging-api.21.gifts` | `https://api.21.gifts` |
 
 `NEXT_PUBLIC_API_URL` is the **upstream api**. The browser calls same-origin
 paths (`/auth/passkey/…`, `/me`, …) which the App Router proxies to that URL.
@@ -745,12 +796,14 @@ placeholder. Local and Playwright builds without the arg show `dev`.
 
 ## CI / CD
 
-| Workflow               | Trigger                                    | Action                                                                                                                                                                                       |
-| ---------------------- | ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ci.yaml`              | PR (including drafts); `workflow_dispatch` | Check (typecheck, lint, handbook, e2e-check, screenshots, test (100% coverage), build on Node 22) + E2E (behavior) + four visual combo jobs; **10 minutes each**; Playwright `v1.61.1-noble` |
-| `deploy-dev.yaml`      | push to `develop`                          | Docker build → push `21gifts/app:beta` → notify → wait for deploy                                                                                                                            |
-| `deploy-prd.yaml`      | push to `main`                             | Docker build → push `21gifts/app:latest` → notify → wait for deploy                                                                                                                          |
-| `auto-release-pr.yaml` | push to `develop`                          | Auto-create Release PR (`develop → main`)                                                                                                                                                    |
+| Workflow               | Trigger                                                           | Action                                                                                                                                                                                                                    |
+| ---------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ci.yaml`              | PR (including drafts); `workflow_dispatch`                        | Lint (`npm run lint` on Node 22) + Check (typecheck, handbook, e2e-check, screenshots, test (100% coverage), build on Node 22) + E2E (behavior) + four visual combo jobs; **10 minutes each**; Playwright `v1.61.1-noble` |
+| `deploy-dev.yaml`      | push to `develop`                                                 | Docker build → push `21gifts/app:beta` → notify → wait for deploy                                                                                                                                                         |
+| `deploy-staging.yaml`  | push to `staging`                                                 | Docker build → push `21gifts/app:staging` → notify → wait for deploy                                                                                                                                                      |
+| `deploy-prd.yaml`      | push to `main`                                                    | Docker build → push `21gifts/app:latest` → notify → wait for deploy                                                                                                                                                       |
+| `auto-release-pr.yaml` | push to `develop` or `staging`                                    | Open a missing release only (`staging → develop`, and `develop → main`). Leave an open release unchanged. Skip `staging → develop` when that diff has no file changes.                                                    |
+| `a38-guard.yml`        | `pull_request_target`; PR comments; schedule; `workflow_dispatch` | `dfx pr guard` verifies the A38 report, releases held fork runs of `ci.yaml`, and sets ready; never checks out the PR code                                                                                                |
 
 Images target `linux/arm64`.
 
@@ -766,8 +819,30 @@ Deploy workflows require these GitHub Actions secrets:
 If `DISPATCH_TOKEN` or `DISPATCH_REPO` is missing, deploy fails loud (the image
 may already be on Hub). After `image-published`, the job waits for the
 infrastructure run whose title is `image-published 21gifts/app:<tag> <sha>`
-and fails if that run does not succeed. The wait is what makes a failed DEV
-deploy visible on the develop→main PR.
+and fails if that run does not succeed. The wait is what makes a failed DEV deploy visible on the develop→main PR. A failed staging deploy fails that staging workflow, not the release pull request.
+
+## Breez SDK Spark
+
+This repository stores three GitHub Actions secrets for the Breez SDK (Spark).
+Deploy workflows do not read them. A later workflow can read them as
+`secrets.BREEZ_API_KEY_PRD`, `secrets.BREEZ_API_KEY_DEV`, and
+`secrets.BREEZ_API_KEY_STAGING`. GitHub does not show the values again, and
+the values are not in git.
+
+| Secret                  | Use                                                            |
+| ----------------------- | -------------------------------------------------------------- |
+| `BREEZ_API_KEY_PRD`     | Breez SDK API key for production (`https://api.21.gifts`)      |
+| `BREEZ_API_KEY_DEV`     | Breez SDK API key for development (`https://dev-api.21.gifts`) |
+| `BREEZ_API_KEY_STAGING` | Breez SDK API key for the future staging environment           |
+
+```yaml
+env:
+  BREEZ_API_KEY: ${{ secrets.BREEZ_API_KEY_DEV }}
+```
+
+Pass `BREEZ_API_KEY` to the SDK as `apiKey`. Use `BREEZ_API_KEY_PRD` only for
+production and `BREEZ_API_KEY_STAGING` only for staging. The same three secret
+names are set on [`21gifts/api`](https://github.com/21gifts/api).
 
 ## Related repos
 

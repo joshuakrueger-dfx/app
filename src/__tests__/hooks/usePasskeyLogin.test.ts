@@ -2,6 +2,7 @@ import { act, cleanup, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { obtainPrfFirst } from '@/lib/prf-mnemonic';
 import { clearSessionPhrase, rememberSessionPhrase } from '@/lib/tab-phrase';
+import { bytesToBase64Url } from '@/lib/webauthn-browser';
 import { usePasskeyLogin } from '@/hooks/usePasskeyLogin';
 import {
   finishPasskeyAuthentication,
@@ -30,11 +31,15 @@ vi.mock('@/lib/in-app-browser', () => ({
   isInAppBrowser: vi.fn(() => false),
 }));
 
-vi.mock('@/lib/webauthn-browser', () => ({
-  creationOptionsFromJSON: vi.fn().mockReturnValue({ challenge: new ArrayBuffer(1) }),
-  requestOptionsFromJSON: vi.fn().mockReturnValue({ challenge: new ArrayBuffer(1) }),
-  credentialToJSON: vi.fn().mockReturnValue({ id: 'cred' }),
-}));
+vi.mock('@/lib/webauthn-browser', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/webauthn-browser')>();
+  return {
+    ...actual,
+    creationOptionsFromJSON: vi.fn().mockReturnValue({ challenge: new ArrayBuffer(1) }),
+    requestOptionsFromJSON: vi.fn().mockReturnValue({ challenge: new ArrayBuffer(1) }),
+    credentialToJSON: vi.fn().mockReturnValue({ id: 'cred' }),
+  };
+});
 
 vi.mock('@/lib/prf-mnemonic', () => ({
   obtainPrfFirst: vi.fn().mockResolvedValue(new Uint8Array(32).fill(7)),
@@ -119,6 +124,7 @@ beforeEach(() => {
   vi.mocked(finishPasskeyRegistration).mockReset().mockResolvedValue({ token: 'tok', account });
   vi.mocked(startPasskeyAuthentication).mockReset().mockResolvedValue(begin);
   vi.mocked(finishPasskeyAuthentication).mockReset().mockResolvedValue({ token: 'tok', account });
+  vi.mocked(obtainPrfFirst).mockReset().mockResolvedValue(new Uint8Array(32).fill(7));
   vi.mocked(rememberSessionPhrase).mockClear();
   const ctor = globalThis.PublicKeyCredential as unknown;
   if (typeof ctor === 'function' || (typeof ctor === 'object' && ctor !== null)) {
@@ -148,6 +154,7 @@ describe('usePasskeyLogin', () => {
     const { result } = renderHook(() => usePasskeyLogin());
     await act(async () => {
       result.current.register();
+      result.current.submitName('Ada');
     });
     expect(finishPasskeyRegistration).not.toHaveBeenCalled();
     expect(rememberSessionPhrase).not.toHaveBeenCalled();
@@ -172,7 +179,10 @@ describe('usePasskeyLogin', () => {
     const accountId = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
     vi.mocked(startPasskeyRegistration).mockResolvedValue({
       challengeId,
-      options: { challenge: 'aa', user: { name: accountId } },
+      options: {
+        challenge: 'aa',
+        user: { id: bytesToBase64Url(new TextEncoder().encode(accountId)), name: 'ada' },
+      },
     });
     vi.mocked(obtainPrfFirst).mockRejectedValueOnce(new DOMException('no', 'NotAllowedError'));
     vi.stubGlobal('navigator', {
@@ -186,6 +196,11 @@ describe('usePasskeyLogin', () => {
     const { result } = renderHook(() => usePasskeyLogin());
     await act(async () => {
       result.current.register();
+    });
+    expect(result.current.status).toBe('name');
+    expect(startPasskeyRegistration).not.toHaveBeenCalled();
+    await act(async () => {
+      result.current.submitName('Ada');
     });
     expect(finishPasskeyRegistration).not.toHaveBeenCalled();
     expect(result.current.status).toBe('error');
@@ -216,7 +231,10 @@ describe('usePasskeyLogin', () => {
     const accountId = 'bbbbbbbb-cccc-dddd-eeee-ffffffffffff';
     vi.mocked(startPasskeyRegistration).mockResolvedValue({
       challengeId,
-      options: { challenge: 'aa', user: { name: accountId } },
+      options: {
+        challenge: 'aa',
+        user: { id: bytesToBase64Url(new TextEncoder().encode(accountId)), name: 'ada' },
+      },
     });
     vi.stubGlobal('navigator', {
       ...navigator,
@@ -229,6 +247,11 @@ describe('usePasskeyLogin', () => {
     const { result } = renderHook(() => usePasskeyLogin());
     await act(async () => {
       result.current.register();
+    });
+    expect(result.current.status).toBe('name');
+    expect(startPasskeyRegistration).not.toHaveBeenCalled();
+    await act(async () => {
+      result.current.submitName('Ada');
     });
     expect(finishPasskeyRegistration).not.toHaveBeenCalled();
     expect(result.current.status).toBe('error');
@@ -267,6 +290,10 @@ describe('usePasskeyLogin', () => {
     await act(async () => {
       result.current.register();
     });
+    expect(result.current.status).toBe('name');
+    await act(async () => {
+      result.current.submitName('Ada');
+    });
     const bodies = fetchMock.mock.calls.map(
       (call) => JSON.parse(String((call[1] as RequestInit).body)) as { message?: string },
     );
@@ -293,6 +320,10 @@ describe('usePasskeyLogin', () => {
     const { result } = renderHook(() => usePasskeyLogin());
     await act(async () => {
       result.current.register();
+    });
+    expect(result.current.status).toBe('name');
+    await act(async () => {
+      result.current.submitName('Ada');
     });
     const bodies = fetchMock.mock.calls.map(
       (call) =>
@@ -329,6 +360,11 @@ describe('usePasskeyLogin', () => {
     await act(async () => {
       result.current.register();
     });
+    expect(result.current.status).toBe('name');
+    expect(startPasskeyRegistration).not.toHaveBeenCalled();
+    await act(async () => {
+      result.current.submitName('Ada');
+    });
     expect(finishPasskeyRegistration).not.toHaveBeenCalled();
     expect(result.current.status).toBe('error');
     expect(result.current.error).toBe('login.iosVersion');
@@ -348,6 +384,531 @@ describe('usePasskeyLogin', () => {
     vi.unstubAllGlobals();
   });
 
+  it('fails an old Android register when create itself is NotAllowedError', async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response(null, { status: 204 }));
+    const challengeId = 'cd'.repeat(32);
+    const accountId = 'bbbbbbbb-cccc-dddd-eeee-ffffffffffff';
+    vi.mocked(startPasskeyRegistration).mockResolvedValue({
+      challengeId,
+      options: {
+        challenge: 'aa',
+        user: { id: bytesToBase64Url(new TextEncoder().encode(accountId)), name: 'ada' },
+      },
+    });
+    vi.stubGlobal('navigator', {
+      ...navigator,
+      userAgent:
+        'Mozilla/5.0 (Linux; Android 8.1.0; Pixel) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
+      credentials: {
+        create: vi.fn().mockRejectedValue(new DOMException('', 'NotAllowedError')),
+        get: vi.fn(),
+      },
+    });
+    const { result } = renderHook(() => usePasskeyLogin());
+    await act(async () => {
+      result.current.register();
+    });
+    expect(result.current.status).toBe('name');
+    expect(startPasskeyRegistration).not.toHaveBeenCalled();
+    await act(async () => {
+      result.current.submitName('Ada');
+    });
+    expect(finishPasskeyRegistration).not.toHaveBeenCalled();
+    expect(result.current.status).toBe('error');
+    expect(result.current.error).toBe('login.androidVersion');
+    const bodies = fetchMock.mock.calls.map(
+      (call) => JSON.parse(String((call[1] as RequestInit).body)) as { event?: string },
+    );
+    expect(bodies.filter((body) => body.event === 'client.passkey.register.ceremony')).toEqual([
+      {
+        event: 'client.passkey.register.ceremony',
+        stage: 'register',
+        name: 'NotAllowedError',
+        message: 'Android 8.1.0 below 9 at create',
+        prfPresent: false,
+        challengeId,
+        accountId,
+      },
+    ]);
+    fetchMock.mockRestore();
+    vi.unstubAllGlobals();
+  });
+
+  it('fails an old Android register when the extra key prompt is NotAllowedError', async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response(null, { status: 204 }));
+    const challengeId = 'ab'.repeat(32);
+    const accountId = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+    vi.mocked(startPasskeyRegistration).mockResolvedValue({
+      challengeId,
+      options: {
+        challenge: 'aa',
+        user: { id: bytesToBase64Url(new TextEncoder().encode(accountId)), name: 'ada' },
+      },
+    });
+    vi.mocked(obtainPrfFirst).mockRejectedValueOnce(new DOMException('', 'NotAllowedError'));
+    vi.stubGlobal('navigator', {
+      ...navigator,
+      userAgent:
+        'Mozilla/5.0 (Linux; Android 8.1.0; Pixel) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
+      credentials: {
+        create: vi.fn().mockResolvedValue({ id: 'cred', type: 'public-key' }),
+        get: vi.fn(),
+      },
+    });
+    const { result } = renderHook(() => usePasskeyLogin());
+    await act(async () => {
+      result.current.register();
+    });
+    expect(result.current.status).toBe('name');
+    expect(startPasskeyRegistration).not.toHaveBeenCalled();
+    await act(async () => {
+      result.current.submitName('Ada');
+    });
+    expect(finishPasskeyRegistration).not.toHaveBeenCalled();
+    expect(result.current.status).toBe('error');
+    expect(result.current.error).toBe('login.androidVersion');
+    const bodies = fetchMock.mock.calls.map(
+      (call) => JSON.parse(String((call[1] as RequestInit).body)) as { event?: string },
+    );
+    expect(bodies.filter((body) => body.event === 'client.passkey.register.ceremony')).toEqual([
+      {
+        event: 'client.passkey.register.ceremony',
+        stage: 'register',
+        name: 'NotAllowedError',
+        message: 'Android 8.1.0 below 9 at prf',
+        prfPresent: false,
+        challengeId,
+        accountId,
+      },
+    ]);
+    fetchMock.mockRestore();
+    vi.unstubAllGlobals();
+  });
+
+  it('names the Android version when an old Android returns no extra key', async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response(null, { status: 204 }));
+    const challengeId = 'ef'.repeat(32);
+    vi.mocked(startPasskeyRegistration).mockResolvedValue({
+      challengeId,
+      options: { challenge: 'aa' },
+    });
+    vi.mocked(obtainPrfFirst).mockResolvedValueOnce(null);
+    vi.stubGlobal('navigator', {
+      ...navigator,
+      userAgent:
+        'Mozilla/5.0 (Linux; Android 8.1.0; Pixel) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
+      credentials: {
+        create: vi.fn().mockResolvedValue({ id: 'cred', type: 'public-key' }),
+        get: vi.fn(),
+      },
+    });
+    const { result } = renderHook(() => usePasskeyLogin());
+    await act(async () => {
+      result.current.register();
+    });
+    expect(result.current.status).toBe('name');
+    expect(startPasskeyRegistration).not.toHaveBeenCalled();
+    await act(async () => {
+      result.current.submitName('Ada');
+    });
+    expect(finishPasskeyRegistration).not.toHaveBeenCalled();
+    expect(result.current.status).toBe('error');
+    expect(result.current.error).toBe('login.androidVersion');
+    const bodies = fetchMock.mock.calls.map(
+      (call) => JSON.parse(String((call[1] as RequestInit).body)) as { event?: string },
+    );
+    expect(bodies.filter((body) => body.event === 'client.passkey.register.prf')).toEqual([
+      {
+        event: 'client.passkey.register.prf',
+        prfPresent: false,
+        stage: 'register',
+        message: 'Android 8.1.0 below 9 at prf.absent',
+        challengeId,
+      },
+    ]);
+    fetchMock.mockRestore();
+    vi.unstubAllGlobals();
+  });
+
+  it('names the installed Android version on a failed login without blocking', async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response(null, { status: 204 }));
+    const challengeId = 'ef'.repeat(32);
+    vi.mocked(startPasskeyAuthentication).mockResolvedValue({
+      challengeId,
+      options: { challenge: 'aa' },
+    });
+    vi.stubGlobal('navigator', {
+      ...navigator,
+      userAgent:
+        'Mozilla/5.0 (Linux; Android 14; Pixel) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
+      credentials: {
+        get: vi.fn().mockRejectedValue(new DOMException('', 'NotAllowedError')),
+        create: vi.fn(),
+      },
+    });
+    const { result } = renderHook(() => usePasskeyLogin());
+    await act(async () => {
+      result.current.login();
+    });
+    expect(result.current.status).toBe('choice');
+    expect(result.current.error).toBeNull();
+    const bodies = fetchMock.mock.calls.map(
+      (call) =>
+        JSON.parse(String((call[1] as RequestInit).body)) as { event?: string; message?: string },
+    );
+    const failed = bodies.filter((body) => body.event === 'client.passkey.login.fail');
+    expect(failed[0]?.message?.startsWith('Android 14')).toBe(true);
+    fetchMock.mockRestore();
+    vi.unstubAllGlobals();
+  });
+
+  it('appends the browser text when an old Android create is NotAllowedError', async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response(null, { status: 204 }));
+    const challengeId = 'cd'.repeat(32);
+    const accountId = 'bbbbbbbb-cccc-dddd-eeee-ffffffffffff';
+    vi.mocked(startPasskeyRegistration).mockResolvedValue({
+      challengeId,
+      options: {
+        challenge: 'aa',
+        user: { id: bytesToBase64Url(new TextEncoder().encode(accountId)), name: 'ada' },
+      },
+    });
+    vi.stubGlobal('navigator', {
+      ...navigator,
+      userAgent:
+        'Mozilla/5.0 (Linux; Android 8.1.0; Pixel) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
+      credentials: {
+        create: vi.fn().mockRejectedValue(new DOMException('(timed out)', 'NotAllowedError')),
+        get: vi.fn(),
+      },
+    });
+    const { result } = renderHook(() => usePasskeyLogin());
+    await act(async () => {
+      result.current.register();
+    });
+    expect(result.current.status).toBe('name');
+    expect(startPasskeyRegistration).not.toHaveBeenCalled();
+    await act(async () => {
+      result.current.submitName('Ada');
+    });
+    expect(finishPasskeyRegistration).not.toHaveBeenCalled();
+    expect(result.current.status).toBe('error');
+    expect(result.current.error).toBe('login.androidVersion');
+    const bodies = fetchMock.mock.calls.map(
+      (call) => JSON.parse(String((call[1] as RequestInit).body)) as { event?: string },
+    );
+    expect(bodies.filter((body) => body.event === 'client.passkey.register.ceremony')).toEqual([
+      {
+        event: 'client.passkey.register.ceremony',
+        stage: 'register',
+        name: 'NotAllowedError',
+        message: 'Android 8.1.0 below 9 at create. timed out',
+        prfPresent: false,
+        challengeId,
+        accountId,
+      },
+    ]);
+    fetchMock.mockRestore();
+    vi.unstubAllGlobals();
+  });
+
+  it('prefixes a plain Android login failure that does not name the OS', async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response(null, { status: 204 }));
+    const challengeId = 'ef'.repeat(32);
+    vi.mocked(startPasskeyAuthentication).mockResolvedValue({
+      challengeId,
+      options: { challenge: 'aa' },
+    });
+    vi.stubGlobal('navigator', {
+      ...navigator,
+      userAgent:
+        'Mozilla/5.0 (Linux; Android 14; Pixel) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
+      credentials: {
+        get: vi.fn().mockRejectedValue(new DOMException('no', 'NotAllowedError')),
+        create: vi.fn(),
+      },
+    });
+    const { result } = renderHook(() => usePasskeyLogin());
+    await act(async () => {
+      result.current.login();
+    });
+    expect(finishPasskeyAuthentication).not.toHaveBeenCalled();
+    expect(result.current.status).toBe('choice');
+    expect(result.current.error).toBeNull();
+    const bodies = fetchMock.mock.calls.map(
+      (call) =>
+        JSON.parse(String((call[1] as RequestInit).body)) as { event?: string; message?: string },
+    );
+    const failed = bodies.filter((body) => body.event === 'client.passkey.login.fail');
+    expect(failed[0]?.message).toBe('Android 14. no');
+    fetchMock.mockRestore();
+    vi.unstubAllGlobals();
+  });
+
+  it('keeps an Android login failure that is only the OS label', async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response(null, { status: 204 }));
+    const challengeId = 'ef'.repeat(32);
+    vi.mocked(startPasskeyAuthentication).mockResolvedValue({
+      challengeId,
+      options: { challenge: 'aa' },
+    });
+    vi.stubGlobal('navigator', {
+      ...navigator,
+      userAgent:
+        'Mozilla/5.0 (Linux; Android 14; Pixel) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
+      credentials: {
+        get: vi.fn().mockRejectedValue(new DOMException('Android 14', 'NotAllowedError')),
+        create: vi.fn(),
+      },
+    });
+    const { result } = renderHook(() => usePasskeyLogin());
+    await act(async () => {
+      result.current.login();
+    });
+    expect(finishPasskeyAuthentication).not.toHaveBeenCalled();
+    expect(result.current.status).toBe('choice');
+    expect(result.current.error).toBeNull();
+    const bodies = fetchMock.mock.calls.map(
+      (call) =>
+        JSON.parse(String((call[1] as RequestInit).body)) as { event?: string; message?: string },
+    );
+    const failed = bodies.filter((body) => body.event === 'client.passkey.login.fail');
+    expect(failed[0]?.message).toBe('Android 14');
+    fetchMock.mockRestore();
+    vi.unstubAllGlobals();
+  });
+
+  it('keeps an Android login failure that already starts with the OS label and a space', async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response(null, { status: 204 }));
+    const challengeId = 'ef'.repeat(32);
+    vi.mocked(startPasskeyAuthentication).mockResolvedValue({
+      challengeId,
+      options: { challenge: 'aa' },
+    });
+    vi.stubGlobal('navigator', {
+      ...navigator,
+      userAgent:
+        'Mozilla/5.0 (Linux; Android 14; Pixel) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
+      credentials: {
+        get: vi.fn().mockRejectedValue(new DOMException('Android 14 already', 'NotAllowedError')),
+        create: vi.fn(),
+      },
+    });
+    const { result } = renderHook(() => usePasskeyLogin());
+    await act(async () => {
+      result.current.login();
+    });
+    expect(finishPasskeyAuthentication).not.toHaveBeenCalled();
+    expect(result.current.status).toBe('choice');
+    expect(result.current.error).toBeNull();
+    const bodies = fetchMock.mock.calls.map(
+      (call) =>
+        JSON.parse(String((call[1] as RequestInit).body)) as { event?: string; message?: string },
+    );
+    const failed = bodies.filter((body) => body.event === 'client.passkey.login.fail');
+    expect(failed[0]?.message).toBe('Android 14 already');
+    fetchMock.mockRestore();
+    vi.unstubAllGlobals();
+  });
+
+  it('keeps an Android login failure that already starts with the OS label and a period', async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response(null, { status: 204 }));
+    const challengeId = 'ef'.repeat(32);
+    vi.mocked(startPasskeyAuthentication).mockResolvedValue({
+      challengeId,
+      options: { challenge: 'aa' },
+    });
+    vi.stubGlobal('navigator', {
+      ...navigator,
+      userAgent:
+        'Mozilla/5.0 (Linux; Android 14; Pixel) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
+      credentials: {
+        get: vi.fn().mockRejectedValue(new DOMException('Android 14. already', 'NotAllowedError')),
+        create: vi.fn(),
+      },
+    });
+    const { result } = renderHook(() => usePasskeyLogin());
+    await act(async () => {
+      result.current.login();
+    });
+    expect(finishPasskeyAuthentication).not.toHaveBeenCalled();
+    expect(result.current.status).toBe('choice');
+    expect(result.current.error).toBeNull();
+    const bodies = fetchMock.mock.calls.map(
+      (call) =>
+        JSON.parse(String((call[1] as RequestInit).body)) as { event?: string; message?: string },
+    );
+    const failed = bodies.filter((body) => body.event === 'client.passkey.login.fail');
+    expect(failed[0]?.message).toBe('Android 14. already');
+    fetchMock.mockRestore();
+    vi.unstubAllGlobals();
+  });
+
+  it('keeps a failed Android login diagnostic inside 120 characters when the version is long', async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response(null, { status: 204 }));
+    const challengeId = 'ef'.repeat(32);
+    vi.mocked(startPasskeyAuthentication).mockResolvedValue({
+      challengeId,
+      options: { challenge: 'aa' },
+    });
+    vi.stubGlobal('navigator', {
+      ...navigator,
+      userAgent: `Mozilla/5.0 (Linux; Android 8.1.${'0'.repeat(40)}; Pixel) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36`,
+      credentials: {
+        get: vi.fn().mockRejectedValue(new DOMException('no', 'NotAllowedError')),
+        create: vi.fn(),
+      },
+    });
+    const { result } = renderHook(() => usePasskeyLogin());
+    await act(async () => {
+      result.current.login();
+    });
+    expect(finishPasskeyAuthentication).not.toHaveBeenCalled();
+    expect(result.current.status).toBe('choice');
+    expect(result.current.error).toBeNull();
+    const bodies = fetchMock.mock.calls.map(
+      (call) =>
+        JSON.parse(String((call[1] as RequestInit).body)) as { event?: string; message?: string },
+    );
+    const failed = bodies.filter((body) => body.event === 'client.passkey.login.fail');
+    expect(failed[0]?.message?.length).toBeLessThanOrEqual(120);
+    expect(failed[0]?.message).toMatch(/^[A-Za-z0-9._: -]{1,120}$/);
+    fetchMock.mockRestore();
+    vi.unstubAllGlobals();
+  });
+
+  it('keeps an old Android register diagnostic inside 120 characters when the version is long', async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response(null, { status: 204 }));
+    const challengeId = 'cd'.repeat(32);
+    const accountId = 'bbbbbbbb-cccc-dddd-eeee-ffffffffffff';
+    vi.mocked(startPasskeyRegistration).mockResolvedValue({
+      challengeId,
+      options: {
+        challenge: 'aa',
+        user: { id: bytesToBase64Url(new TextEncoder().encode(accountId)), name: 'ada' },
+      },
+    });
+    vi.stubGlobal('navigator', {
+      ...navigator,
+      userAgent: `Mozilla/5.0 (Linux; Android 8.1.${'0'.repeat(40)}; Pixel) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36`,
+      credentials: {
+        create: vi.fn().mockRejectedValue(new DOMException('n'.repeat(200), 'NotAllowedError')),
+        get: vi.fn(),
+      },
+    });
+    const { result } = renderHook(() => usePasskeyLogin());
+    await act(async () => {
+      result.current.register();
+    });
+    expect(result.current.status).toBe('name');
+    expect(startPasskeyRegistration).not.toHaveBeenCalled();
+    await act(async () => {
+      result.current.submitName('Ada');
+    });
+    expect(finishPasskeyRegistration).not.toHaveBeenCalled();
+    expect(result.current.status).toBe('error');
+    expect(result.current.error).toBe('login.androidVersion');
+    const bodies = fetchMock.mock.calls.map(
+      (call) =>
+        JSON.parse(String((call[1] as RequestInit).body)) as { event?: string; message?: string },
+    );
+    const ceremony = bodies.filter((body) => body.event === 'client.passkey.register.ceremony');
+    expect(ceremony[0]?.message?.length).toBeLessThanOrEqual(120);
+    expect(ceremony[0]?.message).toMatch(/^[A-Za-z0-9._: -]{1,120}$/);
+    expect(ceremony[0]?.message?.startsWith('Android ')).toBe(true);
+    fetchMock.mockRestore();
+    vi.unstubAllGlobals();
+  });
+
+  it('leaves a desktop login failure unprefixed', async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response(null, { status: 204 }));
+    const challengeId = 'ef'.repeat(32);
+    vi.mocked(startPasskeyAuthentication).mockResolvedValue({
+      challengeId,
+      options: { challenge: 'aa' },
+    });
+    vi.stubGlobal('navigator', {
+      ...navigator,
+      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Chrome/120.0.0.0',
+      credentials: {
+        get: vi.fn().mockRejectedValue(new DOMException('no', 'NotAllowedError')),
+        create: vi.fn(),
+      },
+    });
+    const { result } = renderHook(() => usePasskeyLogin());
+    await act(async () => {
+      result.current.login();
+    });
+    expect(result.current.status).toBe('choice');
+    expect(result.current.error).toBeNull();
+    const bodies = fetchMock.mock.calls.map(
+      (call) =>
+        JSON.parse(String((call[1] as RequestInit).body)) as { event?: string; message?: string },
+    );
+    const failed = bodies.filter((body) => body.event === 'client.passkey.login.fail');
+    expect(failed[0]?.message).toBe('no');
+    fetchMock.mockRestore();
+    vi.unstubAllGlobals();
+  });
+
+  it('names the installed iOS version on a failed login without blocking', async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response(null, { status: 204 }));
+    const challengeId = 'ef'.repeat(32);
+    vi.mocked(startPasskeyAuthentication).mockResolvedValue({
+      challengeId,
+      options: { challenge: 'aa' },
+    });
+    vi.stubGlobal('navigator', {
+      ...navigator,
+      userAgent:
+        'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1',
+      credentials: {
+        get: vi.fn().mockRejectedValue(new DOMException('', 'NotAllowedError')),
+        create: vi.fn(),
+      },
+    });
+    const { result } = renderHook(() => usePasskeyLogin());
+    await act(async () => {
+      result.current.login();
+    });
+    expect(result.current.status).toBe('choice');
+    expect(result.current.error).toBeNull();
+    const bodies = fetchMock.mock.calls.map(
+      (call) =>
+        JSON.parse(String((call[1] as RequestInit).body)) as { event?: string; message?: string },
+    );
+    const failed = bodies.filter((body) => body.event === 'client.passkey.login.fail');
+    expect(failed[0]?.message?.startsWith('iOS 18.0')).toBe(true);
+    fetchMock.mockRestore();
+    vi.unstubAllGlobals();
+  });
+
   it('reports a cancelled PRF prompt and does not finish registration', async () => {
     const fetchMock = vi
       .spyOn(globalThis, 'fetch')
@@ -363,9 +924,10 @@ describe('usePasskeyLogin', () => {
     const { result } = renderHook(() => usePasskeyLogin());
     await act(async () => {
       result.current.register();
+      result.current.submitName('Ada');
     });
     expect(finishPasskeyRegistration).not.toHaveBeenCalled();
-    expect(result.current.status).toBe('idle');
+    expect(result.current.status).toBe('name');
     const bodies = fetchMock.mock.calls.map(
       (call) => JSON.parse(String((call[1] as RequestInit).body)) as { event?: string },
     );
@@ -389,7 +951,10 @@ describe('usePasskeyLogin', () => {
     const accountId = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
     vi.mocked(startPasskeyRegistration).mockResolvedValue({
       challengeId,
-      options: { challenge: 'aa', user: { name: accountId } },
+      options: {
+        challenge: 'aa',
+        user: { id: bytesToBase64Url(new TextEncoder().encode(accountId)), name: 'ada' },
+      },
     });
     vi.mocked(obtainPrfFirst).mockRejectedValueOnce(new DOMException('no', 'NotAllowedError'));
     vi.stubGlobal('navigator', {
@@ -403,8 +968,12 @@ describe('usePasskeyLogin', () => {
     await act(async () => {
       result.current.register();
     });
+    expect(result.current.status).toBe('name');
+    await act(async () => {
+      result.current.submitName('Ada');
+    });
     expect(finishPasskeyRegistration).not.toHaveBeenCalled();
-    expect(result.current.status).toBe('idle');
+    expect(result.current.status).toBe('name');
     const bodies = fetchMock.mock.calls.map(
       (call) => JSON.parse(String((call[1] as RequestInit).body)) as { event?: string },
     );
@@ -512,7 +1081,10 @@ describe('usePasskeyLogin', () => {
       challengeId: 'cd'.repeat(32),
       options: {
         challenge: 'aa',
-        user: { name: 'bbbbbbbb-cccc-dddd-eeee-ffffffffffff' },
+        user: {
+          id: bytesToBase64Url(new TextEncoder().encode('bbbbbbbb-cccc-dddd-eeee-ffffffffffff')),
+          name: 'ada',
+        },
       },
     });
     vi.mocked(obtainPrfFirst).mockRejectedValueOnce(new TypeError('Boom'));
@@ -526,6 +1098,7 @@ describe('usePasskeyLogin', () => {
     const { result } = renderHook(() => usePasskeyLogin());
     await act(async () => {
       result.current.register();
+      result.current.submitName('Ada');
     });
     expect(finishPasskeyRegistration).not.toHaveBeenCalled();
     expect(result.current.status).toBe('error');
@@ -561,6 +1134,7 @@ describe('usePasskeyLogin', () => {
     const { result } = renderHook(() => usePasskeyLogin());
     await act(async () => {
       result.current.register();
+      result.current.submitName('Ada');
     });
     expect(result.current.status).toBe('error');
     const bodies = fetchMock.mock.calls.map(
@@ -582,6 +1156,7 @@ describe('usePasskeyLogin', () => {
     const { result } = renderHook(() => usePasskeyLogin());
     await act(async () => {
       result.current.register();
+      result.current.submitName('Ada');
     });
     expect(result.current.status).toBe('idle');
     expect(useAuthStore.getState().session).toBe('tok');
@@ -606,7 +1181,84 @@ describe('usePasskeyLogin', () => {
       result.current.register(viewKey);
     });
     expect(startPasskeyRegistration).toHaveBeenCalledWith(viewKey);
+    expect(result.current.status).not.toBe('name');
     expect(useAuthStore.getState().session).toBe('tok');
+    vi.unstubAllGlobals();
+  });
+
+  it('register without a view key opens the name step', () => {
+    const { result } = renderHook(() => usePasskeyLogin());
+    act(() => {
+      result.current.register();
+    });
+    expect(result.current.status).toBe('name');
+    expect(result.current.nameError).toBeNull();
+    expect(startPasskeyRegistration).not.toHaveBeenCalled();
+  });
+
+  it('submitName forwards the normalized name to startPasskeyRegistration', async () => {
+    const cred = { id: 'cred', type: 'public-key' };
+    vi.stubGlobal('navigator', {
+      ...navigator,
+      credentials: { create: vi.fn().mockResolvedValue(cred), get: vi.fn() },
+    });
+    const { result } = renderHook(() => usePasskeyLogin());
+    await act(async () => {
+      result.current.submitName('Ada');
+    });
+    expect(startPasskeyRegistration).toHaveBeenCalledWith(undefined, 'ada');
+    vi.unstubAllGlobals();
+  });
+
+  it('submitName stays on name when the typed name is invalid', () => {
+    const { result } = renderHook(() => usePasskeyLogin());
+    act(() => {
+      result.current.submitName('Ada Lovelace');
+    });
+    expect(startPasskeyRegistration).not.toHaveBeenCalled();
+    expect(result.current.status).toBe('name');
+    expect(result.current.nameError).toBe('invalid');
+  });
+
+  it('taken username stays on name', async () => {
+    vi.mocked(startPasskeyRegistration).mockRejectedValue(new Error('Username is already in use'));
+    const { result } = renderHook(() => usePasskeyLogin());
+    await act(async () => {
+      result.current.submitName('Ada');
+    });
+    expect(result.current.status).toBe('name');
+    expect(result.current.nameError).toBe('taken');
+    expect(result.current.status).not.toBe('error');
+  });
+
+  it('invalid username from begin stays on name', async () => {
+    vi.mocked(startPasskeyRegistration).mockRejectedValue(
+      new Error('Username must be 1–32 characters of a-z, 0-9, hyphen, underscore, or dot'),
+    );
+    const { result } = renderHook(() => usePasskeyLogin());
+    await act(async () => {
+      result.current.submitName('Ada');
+    });
+    expect(result.current.status).toBe('name');
+    expect(result.current.nameError).toBe('invalid');
+  });
+
+  it('named create NotAllowedError returns to name', async () => {
+    vi.stubGlobal('navigator', {
+      ...navigator,
+      credentials: {
+        create: vi.fn().mockRejectedValue(new DOMException('no', 'NotAllowedError')),
+        get: vi.fn(),
+      },
+    });
+    const { result } = renderHook(() => usePasskeyLogin());
+    await act(async () => {
+      result.current.submitName('Ada');
+    });
+    expect(result.current.status).toBe('name');
+    expect(result.current.status).not.toBe('idle');
+    expect(result.current.status).not.toBe('choice');
+    expect(result.current.status).not.toBe('error');
     vi.unstubAllGlobals();
   });
 
@@ -865,7 +1517,7 @@ describe('usePasskeyLogin', () => {
     vi.unstubAllGlobals();
   });
 
-  it('returns to unknown when register is dismissed after unknown', async () => {
+  it('returns to the name form when a named create is dismissed after unknown', async () => {
     const cred = { id: 'cred', type: 'public-key' };
     stubSignalUnknownCredential();
     vi.mocked(startPasskeyAuthentication).mockResolvedValue(beginWithRp);
@@ -885,13 +1537,15 @@ describe('usePasskeyLogin', () => {
     expect(result.current.status).toBe('unknown');
     await act(async () => {
       result.current.register();
+      result.current.submitName('Ada');
     });
-    expect(result.current.status).toBe('unknown');
+    expect(result.current.status).toBe('name');
     expect(create).toHaveBeenCalledTimes(1);
     await act(async () => {
       result.current.register();
+      result.current.submitName('Ada');
     });
-    expect(result.current.status).toBe('unknown');
+    expect(result.current.status).toBe('name');
     expect(create).toHaveBeenCalledTimes(2);
     vi.unstubAllGlobals();
   });
@@ -942,7 +1596,7 @@ describe('usePasskeyLogin', () => {
     vi.unstubAllGlobals();
   });
 
-  it('returns to unknown when register is dismissed after choice then unknown', async () => {
+  it('returns to the name form when dismissed after choice then unknown', async () => {
     const cred = { id: 'cred', type: 'public-key' };
     stubSignalUnknownCredential();
     const get = vi
@@ -967,8 +1621,9 @@ describe('usePasskeyLogin', () => {
     expect(result.current.status).toBe('unknown');
     await act(async () => {
       result.current.register();
+      result.current.submitName('Ada');
     });
-    expect(result.current.status).toBe('unknown');
+    expect(result.current.status).toBe('name');
     vi.unstubAllGlobals();
   });
 
@@ -991,6 +1646,7 @@ describe('usePasskeyLogin', () => {
     expect(result.current.status).toBe('unknown');
     await act(async () => {
       result.current.register();
+      result.current.submitName('Ada');
     });
     expect(result.current.status).toBe('idle');
     expect(useAuthStore.getState().session).toBe('tok');
@@ -1110,6 +1766,7 @@ describe('usePasskeyLogin', () => {
     expect(result.current.status).toBe('choice');
     await act(async () => {
       result.current.register();
+      result.current.submitName('Ada');
     });
     expect(create).toHaveBeenCalledTimes(1);
     expect(startPasskeyRegistration).toHaveBeenCalledTimes(1);
@@ -1139,7 +1796,7 @@ describe('usePasskeyLogin', () => {
     vi.unstubAllGlobals();
   });
 
-  it('returns to choice when register is cancelled after a choice', async () => {
+  it('returns to the name form when a named create is cancelled after a choice', async () => {
     vi.stubGlobal('navigator', {
       ...navigator,
       credentials: {
@@ -1154,8 +1811,9 @@ describe('usePasskeyLogin', () => {
     expect(result.current.status).toBe('choice');
     await act(async () => {
       result.current.register();
+      result.current.submitName('Ada');
     });
-    expect(result.current.status).toBe('choice');
+    expect(result.current.status).toBe('name');
     vi.unstubAllGlobals();
   });
 
@@ -1259,6 +1917,7 @@ describe('usePasskeyLogin', () => {
     const { result } = renderHook(() => usePasskeyLogin());
     await act(async () => {
       result.current.register();
+      result.current.submitName('Ada');
     });
     expect(result.current.status).toBe('unsupported');
     expect(startPasskeyRegistration).not.toHaveBeenCalled();
@@ -1331,12 +1990,19 @@ describe('usePasskeyLogin', () => {
     vi.unstubAllGlobals();
   });
 
-  it('returns to idle when the user cancels', async () => {
+  it('returns to the name form when a named create is cancelled', async () => {
+    const accountId = 'cccccccc-dddd-eeee-ffff-000000000001';
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response(null, { status: 204 }));
     vi.mocked(startPasskeyRegistration).mockResolvedValue({
       challengeId: 'ch',
       options: {
         challenge: 'aa',
-        user: { name: 'cccccccc-dddd-eeee-ffff-000000000001' },
+        user: {
+          id: bytesToBase64Url(new TextEncoder().encode(accountId)),
+          name: 'ada',
+        },
       },
     });
     vi.stubGlobal('navigator', {
@@ -1349,8 +2015,22 @@ describe('usePasskeyLogin', () => {
     const { result } = renderHook(() => usePasskeyLogin());
     await act(async () => {
       result.current.register();
+      result.current.submitName('Ada');
     });
-    expect(result.current.status).toBe('idle');
+    expect(result.current.status).toBe('name');
+    const bodies = fetchMock.mock.calls.map(
+      (call) => JSON.parse(String((call[1] as RequestInit).body)) as { event?: string },
+    );
+    expect(bodies.filter((body) => body.event === 'client.passkey.register.fail')).toEqual([
+      {
+        event: 'client.passkey.register.fail',
+        stage: 'register',
+        name: 'NotAllowedError',
+        message: 'no',
+        accountId,
+      },
+    ]);
+    fetchMock.mockRestore();
     vi.unstubAllGlobals();
   });
 
@@ -1371,6 +2051,7 @@ describe('usePasskeyLogin', () => {
     const { result } = renderHook(() => usePasskeyLogin());
     act(() => {
       result.current.register();
+      result.current.submitName('Ada');
     });
     act(() => {
       result.current.cancel();
@@ -1401,6 +2082,7 @@ describe('usePasskeyLogin', () => {
     const { result, unmount } = renderHook(() => usePasskeyLogin());
     act(() => {
       result.current.register();
+      result.current.submitName('Ada');
     });
     unmount();
     await act(async () => {
@@ -1416,6 +2098,7 @@ describe('usePasskeyLogin', () => {
     const { result } = renderHook(() => usePasskeyLogin());
     await act(async () => {
       result.current.register();
+      result.current.submitName('Ada');
     });
     expect(result.current.status).toBe('error');
     expect(result.current.error).toBe('plain-fail');
@@ -1429,6 +2112,7 @@ describe('usePasskeyLogin', () => {
     const { result } = renderHook(() => usePasskeyLogin());
     await act(async () => {
       result.current.register();
+      result.current.submitName('Ada');
     });
     expect(result.current.status).toBe('error');
     vi.unstubAllGlobals();
@@ -1477,6 +2161,7 @@ describe('usePasskeyLogin', () => {
     const { result } = renderHook(() => usePasskeyLogin());
     await act(async () => {
       result.current.register();
+      result.current.submitName('Ada');
     });
     expect(result.current.status).toBe('error');
   });
@@ -1547,17 +2232,19 @@ describe('usePasskeyLogin', () => {
     expect(vi.mocked(startPasskeyRegistration)).not.toHaveBeenCalled();
   });
 
-  it('retries register after a failed register', async () => {
+  it('retry after a failed named create returns to the name form', async () => {
     vi.mocked(startPasskeyRegistration).mockRejectedValue(new Error('nope'));
     const { result } = renderHook(() => usePasskeyLogin());
     await act(async () => {
       result.current.register();
+      result.current.submitName('Ada');
     });
     expect(result.current.status).toBe('error');
     await act(async () => {
       result.current.retry();
     });
-    expect(vi.mocked(startPasskeyRegistration)).toHaveBeenCalledTimes(2);
+    expect(result.current.status).toBe('name');
+    expect(vi.mocked(startPasskeyRegistration)).toHaveBeenCalledTimes(1);
   });
 
   it('goes to error when create returns a non-passkey credential', async () => {
@@ -1568,6 +2255,7 @@ describe('usePasskeyLogin', () => {
     const { result } = renderHook(() => usePasskeyLogin());
     await act(async () => {
       result.current.register();
+      result.current.submitName('Ada');
     });
     expect(result.current.status).toBe('error');
     vi.unstubAllGlobals();
@@ -1601,10 +2289,12 @@ describe('usePasskeyLogin', () => {
     const { result } = renderHook(() => usePasskeyLogin());
     await act(async () => {
       result.current.register();
+      result.current.submitName('Ada');
     });
     vi.mocked(startPasskeyRegistration).mockRejectedValueOnce(new Error('second'));
     await act(async () => {
       result.current.register();
+      result.current.submitName('Ada');
     });
     await act(async () => {
       resolveFinish({ token: 'tok', account });
@@ -1656,10 +2346,12 @@ describe('usePasskeyLogin', () => {
     const { result } = renderHook(() => usePasskeyLogin());
     await act(async () => {
       result.current.register();
+      result.current.submitName('Ada');
     });
     vi.mocked(startPasskeyRegistration).mockRejectedValueOnce(new Error('second'));
     await act(async () => {
       result.current.register();
+      result.current.submitName('Ada');
     });
     await act(async () => {
       resolveCreate({ id: 'cred', type: 'public-key' });
@@ -1717,9 +2409,11 @@ describe('usePasskeyLogin', () => {
     const { result } = renderHook(() => usePasskeyLogin());
     act(() => {
       result.current.register();
+      result.current.submitName('Ada');
     });
     act(() => {
       result.current.register();
+      result.current.submitName('Ada');
     });
     await act(async () => {
       resolveBegin(begin);
@@ -1742,9 +2436,11 @@ describe('usePasskeyLogin', () => {
     const { result } = renderHook(() => usePasskeyLogin());
     act(() => {
       result.current.register();
+      result.current.submitName('Ada');
     });
     await act(async () => {
       result.current.register();
+      result.current.submitName('Ada');
     });
     await act(async () => {
       rejectFirst(new Error('late first'));
@@ -1851,6 +2547,7 @@ describe('usePasskeyLogin', () => {
     const { result } = renderHook(() => usePasskeyLogin());
     await act(async () => {
       result.current.register();
+      result.current.submitName('Ada');
     });
     expect(create).toHaveBeenCalledTimes(1);
     expect(create.mock.calls[0]?.[0]).toEqual(
@@ -1943,7 +2640,7 @@ describe('usePasskeyLogin', () => {
     vi.unstubAllGlobals();
   });
 
-  it('records a string account id and ignores a null or non-string name', async () => {
+  it('records a decoded user.id and ignores a null, non-string, or undecodable id', async () => {
     const cred = { id: 'cred', type: 'public-key' };
     vi.stubGlobal('navigator', {
       ...navigator,
@@ -1956,34 +2653,72 @@ describe('usePasskeyLogin', () => {
     vi.mocked(startPasskeyRegistration)
       .mockResolvedValueOnce({
         challengeId: 'ab'.repeat(32),
-        options: { user: { name: accountId } },
+        options: {
+          user: {
+            id: bytesToBase64Url(new TextEncoder().encode(accountId)),
+            name: 'ada',
+          },
+        },
       })
       .mockResolvedValueOnce({ challengeId: 'ch', options: { user: null } })
-      .mockResolvedValueOnce({ challengeId: 'ch', options: { user: { name: 4 } } });
+      .mockResolvedValueOnce({ challengeId: 'ch', options: { user: { id: 4 } } })
+      .mockResolvedValueOnce({ challengeId: 'ch', options: { user: 'ada' } })
+      .mockResolvedValueOnce({
+        challengeId: 'ch',
+        options: { user: { id: '###', name: 'ada' } },
+      })
+      .mockResolvedValueOnce({
+        challengeId: 'ch',
+        options: { user: { id: bytesToBase64Url(Uint8Array.of(0xff)), name: 'ada' } },
+      });
     const { result } = renderHook(() => usePasskeyLogin());
     await act(async () => {
       result.current.register();
+      result.current.submitName('Ada');
     });
     await act(async () => {
       result.current.register();
+      result.current.submitName('Ada');
     });
     await act(async () => {
       result.current.register();
+      result.current.submitName('Ada');
+    });
+    await act(async () => {
+      result.current.register();
+      result.current.submitName('Ada');
+    });
+    await act(async () => {
+      result.current.register();
+      result.current.submitName('Ada');
+    });
+    await act(async () => {
+      result.current.register();
+      result.current.submitName('Ada');
     });
     const bodies = fetchMock.mock.calls.map(
       (call) => JSON.parse(String((call[1] as RequestInit).body)) as { accountId?: string },
     );
-    expect(bodies.some((body) => body.accountId === accountId)).toBe(true);
+    expect(bodies.map((body) => body.accountId).filter((id) => id !== undefined)).toEqual([
+      accountId,
+    ]);
     fetchMock.mockRestore();
     vi.unstubAllGlobals();
   });
 
   it('reports a ceremony error that is not a cancel', async () => {
+    const accountId = 'dddddddd-eeee-ffff-0000-111111111111';
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response(null, { status: 204 }));
     vi.mocked(startPasskeyRegistration).mockResolvedValueOnce({
       challengeId: 'ch',
       options: {
         challenge: 'aa',
-        user: { name: 'dddddddd-eeee-ffff-0000-111111111111' },
+        user: {
+          id: bytesToBase64Url(new TextEncoder().encode(accountId)),
+          name: 'ada',
+        },
       },
     });
     vi.stubGlobal('navigator', {
@@ -1996,16 +2731,54 @@ describe('usePasskeyLogin', () => {
     const { result } = renderHook(() => usePasskeyLogin());
     await act(async () => {
       result.current.register();
+      result.current.submitName('Ada');
     });
     expect(result.current.status).toBe('error');
+    const bodies = fetchMock.mock.calls.map(
+      (call) => JSON.parse(String((call[1] as RequestInit).body)) as { event?: string },
+    );
+    expect(bodies.filter((body) => body.event === 'client.passkey.register.ceremony')).toEqual([
+      {
+        event: 'client.passkey.register.ceremony',
+        stage: 'register',
+        name: 'TypeError',
+        message: 'blocked',
+        accountId,
+      },
+    ]);
+    const createCalls = vi.mocked(navigator.credentials.create).mock.calls.length;
     await act(async () => {
       result.current.register();
     });
+    expect(result.current.status).toBe('name');
+    expect(vi.mocked(navigator.credentials.create).mock.calls.length).toBe(createCalls);
+    await act(async () => {
+      result.current.submitName('Ada');
+    });
     expect(result.current.status).toBe('error');
+    const later = fetchMock.mock.calls.map(
+      (call) => JSON.parse(String((call[1] as RequestInit).body)) as { event?: string },
+    );
+    expect(later.filter((body) => body.event === 'client.passkey.register.ceremony')).toEqual([
+      {
+        event: 'client.passkey.register.ceremony',
+        stage: 'register',
+        name: 'TypeError',
+        message: 'blocked',
+        accountId,
+      },
+      {
+        event: 'client.passkey.register.ceremony',
+        stage: 'register',
+        name: 'TypeError',
+        message: 'blocked',
+      },
+    ]);
     await act(async () => {
       result.current.authenticate();
     });
     expect(result.current.status).toBe('error');
+    fetchMock.mockRestore();
     vi.unstubAllGlobals();
   });
 
@@ -2021,6 +2794,7 @@ describe('usePasskeyLogin', () => {
     const { result } = renderHook(() => usePasskeyLogin());
     await act(async () => {
       result.current.register();
+      result.current.submitName('Ada');
     });
     expect(result.current.status).toBe('error');
     await act(async () => {

@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { useTranslations } from '@/components/LocaleProvider';
+import { ShopNoteEditControl } from '@/components/ShopNoteEditControl';
 import { Button } from '@/components/ui';
 import { fetchMessages } from '@/lib/api';
 import type { ForumMessage } from '@/lib/api-types';
@@ -135,18 +136,18 @@ export function ShopTable(): ReactElement | null {
   }
 
   return (
-    <div className="mt-4">
+    <div className="mt-4 w-full min-w-0 max-w-full self-stretch">
       {rows.length === 0 ? null : (
-        <table className="w-full text-left text-sm text-app-fg">
+        <table className="w-full table-fixed text-left text-sm text-app-fg">
           <thead>
             <tr className="text-app-muted">
-              <th scope="col" className="py-2 pr-3 font-medium">
+              <th scope="col" className="min-w-0 break-words align-top py-2 pr-3 font-medium">
                 {t('shops.columnName')}
               </th>
-              <th scope="col" className="py-2 pr-3 font-medium">
+              <th scope="col" className="min-w-0 break-words align-top py-2 pr-3 font-medium">
                 {t('shops.columnPlace')}
               </th>
-              <th scope="col" className="py-2 font-medium">
+              <th scope="col" className="min-w-0 break-words align-top py-2 font-medium">
                 {t('shops.columnOperator')}
               </th>
             </tr>
@@ -157,8 +158,24 @@ export function ShopTable(): ReactElement | null {
               const operator = row.shopAccount;
               return (
                 <tr key={row.id} className="border-t border-app-border">
-                  <td className="py-2 pr-3">{shopDisplayName(row)}</td>
-                  <td className="py-2 pr-3">
+                  <td className="min-w-0 break-words align-top py-2 pr-3">
+                    <span className="flex min-w-0 flex-wrap items-center gap-2">
+                      {shopDisplayName(row)}
+                      <ShopNoteEditControl
+                        message={row}
+                        onUpdated={(updated) => {
+                          setRows((current) => {
+                            /* v8 ignore next 3 -- the table is on screen before a row editor can save */
+                            if (current === null) {
+                              return current;
+                            }
+                            return current.map((item) => (item.id === updated.id ? updated : item));
+                          });
+                        }}
+                      />
+                    </span>
+                  </td>
+                  <td className="min-w-0 break-words align-top py-2 pr-3">
                     {place === null ? (
                       t('shops.missing')
                     ) : (
@@ -167,7 +184,7 @@ export function ShopTable(): ReactElement | null {
                       </a>
                     )}
                   </td>
-                  <td className="py-2">
+                  <td className="min-w-0 break-words align-top py-2">
                     {operator === undefined ? (
                       t('shops.missing')
                     ) : (

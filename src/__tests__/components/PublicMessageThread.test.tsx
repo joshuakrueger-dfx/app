@@ -8,8 +8,11 @@ import {
   NoteDeletedError,
   fetchGiftStats,
   fetchMessagePhoto,
+  fetchShopNoteEdits,
+  setMessageShopText,
   fetchPublicMessage,
   fetchReplies,
+  markNotificationsReadForMessage,
   postMessage,
   postMessageInvoice,
   setLightningAddress,
@@ -48,10 +51,13 @@ vi.mock('@/lib/api', () => ({
   fetchMessagePhoto: vi.fn(),
   fetchReplies: vi.fn(),
   fetchGiftStats: vi.fn().mockResolvedValue({ spendOverTime: [] }),
+  fetchShopNoteEdits: vi.fn(),
+  setMessageShopText: vi.fn(),
   deleteMessage: vi.fn(),
   setLightningAddress: vi.fn(),
   setName: vi.fn(),
   agreeToRules: vi.fn(),
+  markNotificationsReadForMessage: vi.fn().mockResolvedValue({ ok: true, tags: [] }),
 }));
 
 const account: Account = {
@@ -193,6 +199,7 @@ beforeEach(() => {
     parentId: MESSAGE_ID,
   });
   vi.mocked(deleteMessage).mockResolvedValue(undefined);
+  vi.mocked(markNotificationsReadForMessage).mockResolvedValue({ ok: true, tags: [] });
   Object.defineProperty(URL, 'createObjectURL', {
     configurable: true,
     writable: true,
@@ -209,9 +216,24 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  vi.unstubAllGlobals();
   vi.useRealTimers();
   vi.restoreAllMocks();
 });
+
+function stubShopPhotoFetch(): void {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => ({
+      ok: true,
+      blob: () =>
+        Promise.resolve({
+          type: 'image/jpeg',
+          arrayBuffer: () => Promise.resolve(Uint8Array.of(1).buffer),
+        }),
+    })),
+  );
+}
 
 const NO_RATE_SHOWN = {
   amountUsd: null,
@@ -399,7 +421,39 @@ describe('PublicMessageThread', () => {
       payable: false,
     };
     vi.mocked(fetchReplies).mockResolvedValue([payableNested, otherReply]);
-    vi.mocked(fetchPublicMessage).mockResolvedValue({ ...payableNested, sats: 21 });
+    vi.mocked(fetchPublicMessage).mockResolvedValue({
+      ...payableNested,
+      sats: 0,
+      receivedSats: 21,
+    });
+    signIn();
+    renderThread();
+    await screen.findByPlaceholderText('Write a reaction');
+    await openNestedPaySheet();
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    await waitFor(() => {
+      expect(fetchPublicMessage).toHaveBeenCalledWith(
+        REPLY_ID,
+        expect.objectContaining({ sinceReceivedSats: 0 }),
+      );
+    });
+    expect(fetchPublicMessage).not.toHaveBeenCalledWith(
+      REPLY_ID,
+      expect.objectContaining({ sinceSats: expect.anything() }),
+    );
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: 'Pay with Wallet of Satoshi' })).toBeNull();
+    });
+    const replyCard = document.querySelector(`[data-reply-id="${REPLY_ID}"]`) as HTMLElement;
+    expect(within(replyCard).getByText('received ₿21')).toBeTruthy();
+    expect(within(replyCard).queryByText('₿21')).toBeNull();
+    expect(screen.getByText('Hello from Carol')).toBeTruthy();
+  });
+
+  it('polls nested Gift sats when the listed row has no parentId', async () => {
+    const orphan: ForumMessage = { ...payableNested, parentId: undefined };
+    vi.mocked(fetchReplies).mockResolvedValue([orphan]);
+    vi.mocked(fetchPublicMessage).mockResolvedValue({ ...orphan, sats: 21 });
     signIn();
     renderThread();
     await screen.findByPlaceholderText('Write a reaction');
@@ -414,9 +468,31 @@ describe('PublicMessageThread', () => {
     await waitFor(() => {
       expect(screen.queryByRole('button', { name: 'Pay with Wallet of Satoshi' })).toBeNull();
     });
-    const replyCard = document.querySelector(`[data-reply-id="${REPLY_ID}"]`) as HTMLElement;
-    expect(within(replyCard).getByText('₿21')).toBeTruthy();
-    expect(screen.getByText('Hello from Carol')).toBeTruthy();
+  });
+
+  it('keeps the nested Gift sheet until receivedSats rises', async () => {
+    vi.mocked(fetchReplies).mockResolvedValue([payableNested]);
+    vi.mocked(fetchPublicMessage).mockResolvedValueOnce({ ...payableNested, sats: 0 });
+    vi.mocked(fetchPublicMessage).mockResolvedValueOnce({
+      ...payableNested,
+      sats: 0,
+      receivedSats: 21,
+    });
+    signIn();
+    renderThread();
+    await screen.findByPlaceholderText('Write a reaction');
+    await openNestedPaySheet();
+    vi.useFakeTimers();
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(screen.getByRole('button', { name: 'Pay with Wallet of Satoshi' })).toBeTruthy();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2000);
+    });
+    expect(screen.queryByRole('button', { name: 'Pay with Wallet of Satoshi' })).toBeNull();
   });
 
   it('maps a pay missing-requirements miss onto the pay error', async () => {
@@ -1483,15 +1559,19 @@ describe('PublicMessageThread', () => {
     signIn();
     renderThread();
     await screen.findByPlaceholderText('Write a reaction');
+    vi.mocked(markNotificationsReadForMessage).mockClear();
     fireEvent.click(screen.getByRole('button', { name: 'Hide reactions' }));
     await waitFor(() => {
       expect(screen.queryByPlaceholderText('Write a reaction')).toBeNull();
     });
+    expect(markNotificationsReadForMessage).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Show reactions' }));
     await waitFor(() => {
       expect(screen.getByPlaceholderText('Write a reaction')).toBeTruthy();
     });
     expect(fetchReplies).toHaveBeenCalledTimes(2);
+    expect(markNotificationsReadForMessage).toHaveBeenCalledTimes(1);
+    expect(markNotificationsReadForMessage).toHaveBeenCalledWith('sess', MESSAGE_ID);
   });
 
   it('keeps the replies error when retry fails', async () => {
@@ -1819,5 +1899,123 @@ describe('PublicMessageThread', () => {
       resolveInvoice({ pr: 'lnbc1', amountSats: 21 });
     });
     expect(screen.queryByRole('button', { name: 'Pay with Wallet of Satoshi' })).toBeNull();
+  });
+
+  it('shows the shop pencil to a moderator and applies a saved note', async () => {
+    const shopRoot: ForumMessage = {
+      ...root,
+      text: 'Cafe Luna\n\n#21GiftsShop',
+      sats: 0,
+      payable: false,
+    };
+    renderThread({ root: shopRoot });
+    expect(screen.queryByRole('button', { name: 'Edit shop note' })).toBeNull();
+    cleanup();
+
+    signIn();
+    renderThread({ root: shopRoot });
+    expect(screen.queryByRole('button', { name: 'Edit shop note' })).toBeNull();
+    cleanup();
+
+    signIn({ role: 'moderator' });
+    vi.mocked(fetchShopNoteEdits).mockResolvedValue([]);
+    vi.mocked(setMessageShopText).mockResolvedValue({
+      ...shopRoot,
+      text: 'Cafe Sol\n\n#21GiftsShop',
+      place: { lat: 1, lng: 2, label: 'Stall' },
+      shopAccount: { id: 'shop-acc', username: 'luna', name: 'Luna' },
+    });
+    renderThread({ root: shopRoot });
+    fireEvent.click(screen.getByRole('button', { name: 'Edit shop note' }));
+    expect(await screen.findByText('1 / 5 · Photos')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Shop text' }), {
+      target: { value: 'Cafe Sol' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+    await waitFor(() => {
+      expect(screen.getByText('Cafe Sol')).toBeTruthy();
+    });
+  });
+
+  it('drops the public note’s photo address after a shop edit', async () => {
+    const shopRoot: ForumMessage = {
+      ...root,
+      text: 'Cafe Luna\n\n#21GiftsShop',
+      sats: 0,
+      payable: false,
+      hasPhoto: true,
+      photoCount: 1,
+      replyCount: 1,
+    };
+    signIn({ role: 'moderator' });
+    vi.mocked(fetchShopNoteEdits).mockResolvedValue([]);
+    vi.mocked(fetchReplies).mockResolvedValue([
+      {
+        ...root,
+        id: '99999999-9999-4999-8999-999999999999',
+        name: 'Ada',
+        accountId: 'acc_ada',
+        text: 'A photo reply',
+        sats: 0,
+        payable: false,
+        parentId: MESSAGE_ID,
+        hasPhoto: true,
+        photoCount: 1,
+        replyCount: 0,
+      },
+    ]);
+    stubShopPhotoFetch();
+    let photoUrl = 0;
+    vi.mocked(URL.createObjectURL).mockImplementation(() => `blob:thread-${photoUrl++}`);
+    vi.mocked(fetchMessagePhoto).mockResolvedValue(
+      new Blob([new Uint8Array([1])], { type: 'image/jpeg' }),
+    );
+    vi.mocked(setMessageShopText).mockResolvedValue({
+      ...shopRoot,
+      text: 'Cafe Sol\n\n#21GiftsShop',
+    });
+    renderThread({ root: shopRoot });
+    await waitFor(() => {
+      expect(screen.getByAltText('Photo from Carol').getAttribute('src')).toMatch(/^blob:thread-/);
+      expect(screen.getByText('A photo reply')).toBeTruthy();
+      expect(fetchMessagePhoto).toHaveBeenCalledWith(
+        'sess',
+        '99999999-9999-4999-8999-999999999999',
+        0,
+      );
+      expect(vi.mocked(URL.createObjectURL).mock.calls.length).toBeGreaterThanOrEqual(2);
+    });
+    const shopSrc = screen.getByAltText('Photo from Carol').getAttribute('src');
+    // The reply still is stored, but that card does not paint an img. Keep every
+    // address created before the editor except the shop photo on screen.
+    const otherSrcs = vi
+      .mocked(URL.createObjectURL)
+      .mock.results.map((result) => String(result.value))
+      .filter((src) => src !== shopSrc);
+    expect(otherSrcs.length).toBeGreaterThan(0);
+    vi.mocked(URL.revokeObjectURL).mockClear();
+    fireEvent.click(screen.getByRole('button', { name: 'Edit shop note' }));
+    expect(await screen.findByText('1 / 5 · Photos')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Shop text' }), {
+      target: { value: 'Cafe Sol' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+    await waitFor(() => {
+      expect(URL.revokeObjectURL).toHaveBeenCalledWith(shopSrc);
+    });
+    for (const src of otherSrcs) {
+      expect(URL.revokeObjectURL).not.toHaveBeenCalledWith(src);
+    }
+    expect(
+      vi.mocked(URL.revokeObjectURL).mock.calls.filter((call) => call[0] === shopSrc),
+    ).toHaveLength(1);
   });
 });

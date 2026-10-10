@@ -1,4 +1,5 @@
 import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemberProfileScreen } from '@/components/MemberProfileScreen';
 import {
@@ -6,15 +7,21 @@ import {
   fetchComposeTarget,
   NoteDeletedError,
   fetchGiftStats,
+  fetchMember,
   fetchMemberPosts,
+  fetchShopNoteEdits,
+  postTrustAppoint,
+  setMessageShopText,
   fetchMemberReplies,
   fetchMessagePhoto,
   fetchPublicMessage,
   fetchPublicMessagePhoto,
   fetchReplies,
+  markNotificationsReadForMessage,
   openConversation,
   postMessage,
   postMessageInvoice,
+  postRepaymentInvoice,
   setLightningAddress,
   setName,
 } from '@/lib/api';
@@ -31,14 +38,22 @@ import { renderWithLocale } from '@/__tests__/render-with-locale';
 import { walletOfSatoshiHref } from '@/lib/wos-deep-link';
 
 const push = vi.fn();
+const refresh = vi.fn();
 
 vi.mock('next/navigation', () => ({
-  useRouter: (): { push: typeof push; replace: typeof push } => ({
+  useRouter: (): { push: typeof push; replace: typeof push; refresh: typeof refresh } => ({
     push,
     replace: push,
+    refresh,
   }),
   usePathname: (): string => '/',
   useSearchParams: (): URLSearchParams => new URLSearchParams(),
+}));
+
+vi.mock('next/link', () => ({
+  default: ({ href, children }: { href: string; children: ReactNode }) => (
+    <a href={href}>{children}</a>
+  ),
 }));
 
 vi.mock('@/lib/api', () => ({
@@ -46,6 +61,7 @@ vi.mock('@/lib/api', () => ({
   postMessage: vi.fn(),
   postMessageVideo: vi.fn(),
   postMessageInvoice: vi.fn(),
+  postRepaymentInvoice: vi.fn(),
   NoteDeletedError: class NoteDeletedError extends Error {
     constructor() {
       super('This note was deleted');
@@ -72,6 +88,9 @@ vi.mock('@/lib/api', () => ({
   postTrustConfirm: vi.fn(),
   postTrustAppoint: vi.fn(),
   fetchGiftStats: vi.fn().mockResolvedValue({ spendOverTime: [] }),
+  fetchShopNoteEdits: vi.fn(),
+  setMessageShopText: vi.fn(),
+  markNotificationsReadForMessage: vi.fn().mockResolvedValue({ ok: true, tags: [] }),
 }));
 
 let hydrateReady = true;
@@ -81,6 +100,7 @@ vi.mock('@/hooks/useHydrateSession', () => ({
 }));
 
 const photoMock = vi.mocked(fetchMessagePhoto);
+const repayMock = vi.mocked(postRepaymentInvoice);
 const NULL_TRUST = {
   verifiedBy: null,
   proposedBy: null,
@@ -131,6 +151,16 @@ const note = {
   role: 'verified' as const,
   replyCount: 0,
 };
+
+function fundedCredit(): ForumMessage {
+  return {
+    ...note,
+    sats: 21000,
+    goalSats: 21000,
+    goalRepayable: true,
+    goalTermDays: 30,
+  };
+}
 
 const profileWithNote: MemberProfile = {
   ...profile,
@@ -199,6 +229,30 @@ async function openPostsShowingNote(feedNote: ForumMessage = note): Promise<void
     fireEvent.click(postsButton);
   }
   await screen.findByText(feedNote.text);
+}
+
+/** Shop text is split from the shop chip, so the raw stored line is not one node. */
+async function openShopPosts(feedNote: ForumMessage): Promise<void> {
+  vi.mocked(fetchMemberPosts).mockResolvedValue([feedNote]);
+  const postsButton = screen.getByRole('button', { name: /posts?/ });
+  if (postsButton.getAttribute('aria-pressed') !== 'true') {
+    fireEvent.click(postsButton);
+  }
+  await screen.findByText('Cafe Luna');
+}
+
+function stubShopPhotoFetch(): void {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => ({
+      ok: true,
+      blob: () =>
+        Promise.resolve({
+          type: 'image/jpeg',
+          arrayBuffer: () => Promise.resolve(Uint8Array.of(1).buffer),
+        }),
+    })),
+  );
 }
 
 async function openPostsShowingPhotoNote(): Promise<void> {
@@ -316,11 +370,13 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
+  vi.unstubAllGlobals();
   vi.useRealTimers();
   await act(async () => {
     await Promise.resolve();
   });
   cleanup();
+  window.history.pushState(null, '', '/');
   Object.defineProperty(navigator, 'userAgent', {
     configurable: true,
     value: originalUserAgent,
@@ -412,6 +468,59 @@ describe('MemberProfileScreen', () => {
     expect(screen.getByText('carol@21.gifts')).toBeTruthy();
   });
 
+  it('shows Software Developer on a basis full card with only the staff tag', () => {
+    renderWithLocale(
+      <MemberProfileScreen
+        profile={{ ...profile, role: 'basis', staffTag: 'software_developer' }}
+        received={[]}
+        donated={[]}
+      />,
+    );
+    expect(screen.getByText('Software Developer')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Software Developer' })).toBeNull();
+  });
+
+  it('factsOnly shows Software Developer for a basis profile with only the staff tag', () => {
+    renderWithLocale(
+      <MemberProfileScreen
+        factsOnly
+        profile={{ ...profile, role: 'basis', staffTag: 'software_developer' }}
+        received={[]}
+        donated={[]}
+      />,
+    );
+    expect(screen.getByText('Software Developer')).toBeTruthy();
+  });
+
+  it('omits Software Developer on the full card and factsOnly when staffTag is absent', () => {
+    const { unmount } = renderWithLocale(
+      <MemberProfileScreen profile={{ ...profile, role: 'basis' }} received={[]} donated={[]} />,
+    );
+    expect(screen.queryByText('Software Developer')).toBeNull();
+    unmount();
+    renderWithLocale(
+      <MemberProfileScreen
+        factsOnly
+        profile={{ ...profile, role: 'basis' }}
+        received={[]}
+        donated={[]}
+      />,
+    );
+    expect(screen.queryByText('Software Developer')).toBeNull();
+  });
+
+  it('keeps the Verified button and Software Developer label on a verified profile', () => {
+    renderWithLocale(
+      <MemberProfileScreen
+        profile={{ ...profile, staffTag: 'software_developer' }}
+        received={[]}
+        donated={[]}
+      />,
+    );
+    expect(screen.getByRole('button', { name: 'Verified' })).toBeTruthy();
+    expect(screen.getByText('Software Developer')).toBeTruthy();
+  });
+
   it('factsOnly shows the reviewed pill without a role pill', () => {
     renderWithLocale(
       <MemberProfileScreen
@@ -462,6 +571,71 @@ describe('MemberProfileScreen', () => {
       screen.getByRole('img', { name: 'Shop sticker preview for carol@21.gifts' }),
     ).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    expect(screen.queryByRole('dialog', { name: 'Shop sticker' })).toBeNull();
+  });
+
+  it('opens the Kikamba shop sticker from the page language without a click and leaves it closed', () => {
+    window.history.pushState(null, '', '/?lang=Kikamba');
+    const view = renderWithLocale(
+      <MemberProfileScreen profile={profile} received={[]} donated={[]} />,
+    );
+    expect(screen.getByText('carol@21.gifts')).toBeTruthy();
+    expect(screen.getByRole('dialog', { name: 'Shop sticker' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    expect(screen.queryByRole('dialog', { name: 'Shop sticker' })).toBeNull();
+    view.rerender(<MemberProfileScreen profile={{ ...profile }} received={[]} donated={[]} />);
+    expect(screen.queryByRole('dialog', { name: 'Shop sticker' })).toBeNull();
+  });
+
+  it('keeps the Kikamba shop sticker open when the pay QR changes', () => {
+    window.history.pushState(null, '', '/?lang=Kikamba');
+    const view = renderWithLocale(
+      <MemberProfileScreen profile={profile} received={[]} donated={[]} />,
+    );
+    expect(screen.getByRole('dialog', { name: 'Shop sticker' })).toBeTruthy();
+    view.rerender(
+      <MemberProfileScreen profile={{ ...profile, username: 'ada' }} received={[]} donated={[]} />,
+    );
+    expect(screen.getByRole('dialog', { name: 'Shop sticker' })).toBeTruthy();
+  });
+
+  it('does not reopen the Kikamba sticker after the pay QR changes', async () => {
+    window.history.pushState(null, '', '/?lang=Kikamba');
+    useAuthStore.setState({
+      session: 'sess',
+      account: { ...account, role: 'founder' },
+    });
+    vi.mocked(postTrustAppoint).mockResolvedValueOnce({
+      id: profile.id,
+      name: 'Carol',
+      role: 'moderator',
+    });
+    vi.mocked(fetchMember).mockResolvedValueOnce({
+      ...profile,
+      role: 'moderator',
+      username: 'ada',
+    });
+    renderWithLocale(
+      <MemberProfileScreen profile={{ ...profile, role: 'basis' }} received={[]} donated={[]} />,
+    );
+    expect(screen.getByRole('dialog', { name: 'Shop sticker' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    expect(screen.queryByRole('dialog', { name: 'Shop sticker' })).toBeNull();
+    fireEvent.click(screen.getByText('Moderator functions'));
+    fireEvent.click(screen.getByRole('button', { name: 'Appoint as moderator' }));
+    await waitFor(() => {
+      expect(postTrustAppoint).toHaveBeenCalledWith('sess', profile.id);
+      expect(screen.getByText('ada@21.gifts')).toBeTruthy();
+    });
+    expect(screen.queryByRole('dialog', { name: 'Shop sticker' })).toBeNull();
+  });
+
+  it('offers no Kikamba shop sticker without a username', () => {
+    window.history.pushState(null, '', '/?lang=Kikamba');
+    renderWithLocale(
+      <MemberProfileScreen profile={{ ...profile, username: null }} received={[]} donated={[]} />,
+    );
+    expect(screen.queryByRole('button', { name: 'Shop sticker' })).toBeNull();
     expect(screen.queryByRole('dialog', { name: 'Shop sticker' })).toBeNull();
   });
 
@@ -655,7 +829,11 @@ describe('MemberProfileScreen', () => {
       { ...activityReply, id: '77777777-7777-4777-8777-777777777777', text: 'Another reply.' },
     ]);
     vi.mocked(postMessageInvoice).mockResolvedValue({ pr: 'lnbc1', amountSats: 21 });
-    vi.mocked(fetchPublicMessage).mockResolvedValue({ ...payableActivity, sats: 21 });
+    vi.mocked(fetchPublicMessage).mockResolvedValue({
+      ...payableActivity,
+      sats: 0,
+      receivedSats: 21,
+    });
     renderWithLocale(
       <MemberProfileScreen
         profile={{ ...profileWithNote, replyCount: 1 }}
@@ -669,8 +847,48 @@ describe('MemberProfileScreen', () => {
     fireEvent.click(within(replyCard).getByRole('button', { name: 'Send Bitcoin' }));
     fireEvent.click(within(replyCard).getByRole('button', { name: 'Continue' }));
     await waitFor(() => {
-      expect(fetchPublicMessage).toHaveBeenCalled();
+      expect(fetchPublicMessage).toHaveBeenCalledWith(
+        payableActivity.id,
+        expect.objectContaining({ sinceReceivedSats: 0 }),
+      );
     });
+    await waitFor(() => {
+      expect(within(replyCard).queryByRole('button', { name: 'Continue' })).toBeNull();
+    });
+  });
+
+  it('keeps a replies-feed Gift sheet until receivedSats rises', async () => {
+    const payableActivity = { ...activityReply, payable: true, sats: 0 };
+    vi.mocked(fetchMemberReplies).mockResolvedValue([payableActivity]);
+    vi.mocked(postMessageInvoice).mockResolvedValue({ pr: 'lnbc1', amountSats: 21 });
+    vi.mocked(fetchPublicMessage).mockResolvedValueOnce({ ...payableActivity, sats: 0 });
+    vi.mocked(fetchPublicMessage).mockResolvedValueOnce({
+      ...payableActivity,
+      sats: 0,
+      receivedSats: 21,
+    });
+    renderWithLocale(
+      <MemberProfileScreen
+        profile={{ ...profileWithNote, replyCount: 1 }}
+        received={[]}
+        donated={[]}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: '1 reaction' }));
+    expect(await screen.findByText('A reply from Carol.')).toBeTruthy();
+    const replyCard = screen.getByText('A reply from Carol.').closest('li') as HTMLElement;
+    fireEvent.click(within(replyCard).getByRole('button', { name: 'Send Bitcoin' }));
+    vi.useFakeTimers();
+    fireEvent.click(within(replyCard).getByRole('button', { name: 'Continue' }));
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(within(replyCard).getByText('Pay ₿21')).toBeTruthy();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2000);
+    });
+    expect(within(replyCard).queryByText('Pay ₿21')).toBeNull();
   });
 
   it('does not refetch replies when reopening an in-flight feed', async () => {
@@ -1167,6 +1385,7 @@ describe('MemberProfileScreen', () => {
     );
     await expandNote();
     expect(fetchReplies).toHaveBeenCalledWith('sess', note.id);
+    expect(markNotificationsReadForMessage).toHaveBeenCalledWith('sess', note.id);
   });
 
   it('rejects a non-numeric pay amount', async () => {
@@ -1320,15 +1539,29 @@ describe('MemberProfileScreen', () => {
 
   it('uses visible reactions-feed sats for Gift, not a stale expanded copy', async () => {
     vi.mocked(fetchReplies).mockResolvedValue([
-      { ...PAYABLE_NESTED, payable: true, sats: 0, parentId: activityReply.parentId },
+      {
+        ...PAYABLE_NESTED,
+        payable: true,
+        sats: 0,
+        parentId: activityReply.parentId,
+        receivedSats: 0,
+      },
     ]);
     vi.mocked(fetchMemberReplies).mockResolvedValue([
-      { ...PAYABLE_NESTED, payable: true, sats: 21, parentId: activityReply.parentId },
+      {
+        ...PAYABLE_NESTED,
+        payable: true,
+        sats: 21,
+        parentId: activityReply.parentId,
+        receivedSats: 21,
+      },
     ]);
     vi.mocked(fetchPublicMessage).mockResolvedValue({
       ...PAYABLE_NESTED,
       payable: true,
-      sats: 42,
+      sats: 21,
+      parentId: activityReply.parentId,
+      receivedSats: 42,
     });
     renderWithLocale(
       <MemberProfileScreen
@@ -1346,8 +1579,15 @@ describe('MemberProfileScreen', () => {
     await waitFor(() => {
       expect(fetchPublicMessage).toHaveBeenCalledWith(
         PAYABLE_NESTED.id,
-        expect.objectContaining({ sinceSats: 21 }),
+        expect.objectContaining({ sinceReceivedSats: 21 }),
       );
+    });
+    expect(fetchPublicMessage).not.toHaveBeenCalledWith(
+      PAYABLE_NESTED.id,
+      expect.objectContaining({ sinceSats: expect.anything() }),
+    );
+    await waitFor(() => {
+      expect(within(replyCard).queryByRole('button', { name: 'Continue' })).toBeNull();
     });
   });
 
@@ -3433,12 +3673,12 @@ describe('MemberProfileScreen', () => {
     renderWithLocale(<MemberProfileScreen profile={{ ...profile, role: 'basis' }} received={[]} />);
     expect(screen.getByTestId('state-members-staff-verify')).toBeTruthy();
     fireEvent.click(screen.getByText('Moderator functions'));
-    expect(screen.getByRole('button', { name: 'Verify' })).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Verify' })).toBeTruthy();
   });
 
   it('does not show Verify for a basis viewer', () => {
     renderWithLocale(<MemberProfileScreen profile={{ ...profile, role: 'basis' }} received={[]} />);
-    expect(screen.queryByRole('button', { name: 'Verify' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Verify' })).toBeNull();
     expect(screen.queryByTestId('state-members-staff-verify')).toBeNull();
     expect(screen.queryByTestId('staff-functions')).toBeNull();
   });
@@ -3831,5 +4071,310 @@ describe('MemberProfileScreen', () => {
       expect(within(replyCard).queryByLabelText('Amount')).toBeNull();
     });
     expect(screen.getByLabelText('Your reaction')).toBeTruthy();
+  });
+
+  it('shows the shop pencil on a moderator’s post list and applies a saved note', async () => {
+    const shopPost: ForumMessage = {
+      ...note,
+      text: 'Cafe Luna\n\n#21GiftsShop',
+      sats: 0,
+      payable: false,
+    };
+    useAuthStore.setState({ session: 'sess', account: null });
+    renderWithLocale(
+      <MemberProfileScreen profile={{ ...profile, postCount: 1 }} received={[]} donated={[]} />,
+    );
+    await openShopPosts(shopPost);
+    expect(screen.queryByRole('button', { name: 'Edit shop note' })).toBeNull();
+    cleanup();
+
+    useAuthStore.setState({ session: 'sess', account });
+    renderWithLocale(
+      <MemberProfileScreen profile={{ ...profile, postCount: 1 }} received={[]} donated={[]} />,
+    );
+    await openShopPosts(shopPost);
+    expect(screen.queryByRole('button', { name: 'Edit shop note' })).toBeNull();
+    cleanup();
+
+    useAuthStore.setState({ session: 'sess', account: { ...account, role: 'moderator' } });
+    vi.mocked(fetchShopNoteEdits).mockResolvedValue([]);
+    vi.mocked(setMessageShopText).mockResolvedValue({
+      ...shopPost,
+      text: 'Cafe Sol\n\n#21GiftsShop',
+      place: { lat: 1, lng: 2, label: 'Stall' },
+      shopAccount: { id: 'shop-acc', username: 'luna', name: 'Luna' },
+    });
+    vi.mocked(fetchMemberPosts).mockResolvedValue([
+      shopPost,
+      {
+        ...note,
+        id: '44444444-4444-4444-8444-444444444444',
+        text: 'Other note',
+        sats: 0,
+        payable: false,
+      },
+    ]);
+    renderWithLocale(
+      <MemberProfileScreen profile={{ ...profile, postCount: 2 }} received={[]} donated={[]} />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /posts?/ }));
+    await screen.findByText('Cafe Luna');
+    await screen.findByText('Other note');
+    const card = document.querySelector(`[data-message-id="${note.id}"]`) as HTMLElement;
+    fireEvent.click(within(card).getByRole('button', { name: 'Edit shop note' }));
+    expect(await within(card).findByText('1 / 5 · Photos')).toBeTruthy();
+    fireEvent.click(within(card).getByRole('button', { name: 'Next' }));
+    fireEvent.click(within(card).getByRole('button', { name: 'Next' }));
+    fireEvent.change(within(card).getByRole('textbox', { name: 'Shop text' }), {
+      target: { value: 'Cafe Sol' },
+    });
+    fireEvent.click(within(card).getByRole('button', { name: 'Next' }));
+    fireEvent.click(within(card).getByRole('button', { name: 'Next' }));
+    fireEvent.click(within(card).getByRole('button', { name: 'Save changes' }));
+    await waitFor(() => {
+      expect(within(card).getByText('Cafe Sol')).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: '0 reactions', pressed: false }));
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: 'Edit shop note' })).toBeNull();
+    });
+  });
+
+  it('drops stored photo addresses when a shop post’s pictures change', async () => {
+    const shopPost: ForumMessage = {
+      ...note,
+      text: 'Cafe Luna\n\n#21GiftsShop',
+      sats: 0,
+      payable: false,
+      hasPhoto: true,
+      photoCount: 1,
+    };
+    useAuthStore.setState({ session: 'sess', account: { ...account, role: 'moderator' } });
+    vi.mocked(fetchShopNoteEdits).mockResolvedValue([]);
+    vi.mocked(setMessageShopText).mockResolvedValue({
+      ...shopPost,
+      text: 'Cafe Sol\n\n#21GiftsShop',
+    });
+    stubShopPhotoFetch();
+    let photoUrl = 0;
+    vi.mocked(URL.createObjectURL).mockImplementation(() => `blob:profile-${photoUrl++}`);
+    vi.mocked(fetchMemberPosts).mockResolvedValue([
+      shopPost,
+      {
+        ...note,
+        id: '44444444-4444-4444-8444-444444444444',
+        text: 'Other note',
+        sats: 0,
+        payable: false,
+        hasPhoto: true,
+        photoCount: 1,
+      },
+    ]);
+    renderWithLocale(
+      <MemberProfileScreen profile={{ ...profile, postCount: 2 }} received={[]} donated={[]} />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /posts?/ }));
+    await screen.findByText('Cafe Luna');
+    const shopCard = document.querySelector(`[data-message-id="${note.id}"]`) as HTMLElement;
+    const otherCard = document.querySelector(
+      '[data-message-id="44444444-4444-4444-8444-444444444444"]',
+    ) as HTMLElement;
+    await waitFor(() => {
+      expect(within(shopCard).getByAltText('Photo from Carol').getAttribute('src')).toMatch(
+        /^blob:profile-/,
+      );
+      expect(within(otherCard).getByAltText('Photo from Carol').getAttribute('src')).toMatch(
+        /^blob:profile-/,
+      );
+    });
+    const shopSrc = within(shopCard).getByAltText('Photo from Carol').getAttribute('src');
+    const otherSrc = within(otherCard).getByAltText('Photo from Carol').getAttribute('src');
+    expect(shopSrc).not.toBe(otherSrc);
+    vi.mocked(URL.revokeObjectURL).mockClear();
+    fireEvent.click(within(shopCard).getByRole('button', { name: 'Edit shop note' }));
+    expect(await within(shopCard).findByText('1 / 5 · Photos')).toBeTruthy();
+    fireEvent.click(within(shopCard).getByRole('button', { name: 'Next' }));
+    fireEvent.click(within(shopCard).getByRole('button', { name: 'Next' }));
+    fireEvent.change(within(shopCard).getByRole('textbox', { name: 'Shop text' }), {
+      target: { value: 'Cafe Sol' },
+    });
+    fireEvent.click(within(shopCard).getByRole('button', { name: 'Next' }));
+    fireEvent.click(within(shopCard).getByRole('button', { name: 'Next' }));
+    fireEvent.click(within(shopCard).getByRole('button', { name: 'Save changes' }));
+    await waitFor(() => {
+      expect(URL.revokeObjectURL).toHaveBeenCalledWith(shopSrc);
+    });
+    expect(URL.revokeObjectURL).not.toHaveBeenCalledWith(otherSrc);
+    expect(
+      vi.mocked(URL.revokeObjectURL).mock.calls.filter((call) => call[0] === shopSrc),
+    ).toHaveLength(1);
+  });
+
+  it("shows Pay today's repayment on the author's funded credit and disables it after the invoice", async () => {
+    useAuthStore.setState({
+      session: 'sess',
+      account: { ...account, id: profile.id },
+    });
+    repayMock.mockResolvedValue({ pr: 'lnbc21n1again', amountSats: 21 });
+    renderWithLocale(<MemberProfileScreen profile={profileWithNote} received={[]} donated={[]} />);
+    await openPostsShowingNote(fundedCredit());
+    fireEvent.click(screen.getByRole('button', { name: "Pay today's repayment" }));
+    await waitFor(() => {
+      expect(postRepaymentInvoice).toHaveBeenCalledWith('sess', note.id);
+      expect(
+        (screen.getByRole('button', { name: "Pay today's repayment" }) as HTMLButtonElement)
+          .disabled,
+      ).toBe(true);
+    });
+  });
+
+  it("does not show Pay today's repayment on another member's funded credit", async () => {
+    renderWithLocale(<MemberProfileScreen profile={profileWithNote} received={[]} donated={[]} />);
+    await openPostsShowingNote(fundedCredit());
+    expect(screen.queryByRole('button', { name: "Pay today's repayment" })).toBeNull();
+  });
+
+  it("does not show Pay today's repayment on the author's own profile facts", async () => {
+    useAuthStore.setState({
+      session: 'sess',
+      account: { ...account, id: profile.id },
+    });
+    renderWithLocale(
+      <MemberProfileScreen factsOnly profile={profileWithNote} received={[]} donated={[]} />,
+    );
+    await openPostsShowingNote(fundedCredit());
+    expect(screen.queryByRole('button', { name: "Pay today's repayment" })).toBeNull();
+  });
+
+  it('pays today repayment and opens requirements when the author is missing one', async () => {
+    useAuthStore.setState({
+      session: 'sess',
+      account: { ...account, id: profile.id },
+    });
+    repayMock.mockRejectedValueOnce(new MissingRequirementsError(['rules']));
+    renderWithLocale(<MemberProfileScreen profile={profileWithNote} received={[]} donated={[]} />);
+    await openPostsShowingNote(fundedCredit());
+    fireEvent.click(screen.getByRole('button', { name: "Pay today's repayment" }));
+    await waitFor(() => {
+      expect(repayMock).toHaveBeenCalledWith('sess', note.id);
+    });
+    expect(await screen.findByRole('button', { name: 'I agree to these rules' })).toBeTruthy();
+    vi.mocked(agreeToRules).mockResolvedValue({
+      ...account,
+      id: profile.id,
+      rulesAgreedAt: 2,
+      missing: [],
+      setup: 'name',
+    });
+    repayMock.mockResolvedValueOnce({ pr: 'lnbc21n1again', amountSats: 21 });
+    fireEvent.click(screen.getByRole('button', { name: 'I agree to these rules' }));
+    await waitFor(() => {
+      expect(repayMock).toHaveBeenCalledTimes(2);
+      expect(
+        (screen.getByRole('button', { name: "Pay today's repayment" }) as HTMLButtonElement)
+          .disabled,
+      ).toBe(true);
+    });
+  });
+
+  it('shows a repayment error when the missing field is not an overlay', async () => {
+    useAuthStore.setState({
+      session: 'sess',
+      account: { ...account, id: profile.id },
+    });
+    repayMock.mockRejectedValueOnce(new MissingRequirementsError([]));
+    renderWithLocale(<MemberProfileScreen profile={profileWithNote} received={[]} donated={[]} />);
+    await openPostsShowingNote(fundedCredit());
+    fireEvent.click(screen.getByRole('button', { name: "Pay today's repayment" }));
+    expect((await screen.findByRole('alert')).textContent).toBe(
+      'Could not start the Bitcoin payment',
+    );
+  });
+
+  it('shows the rate limit, the author wallet, and a failed repayment', async () => {
+    useAuthStore.setState({
+      session: 'sess',
+      account: { ...account, id: profile.id },
+    });
+    renderWithLocale(<MemberProfileScreen profile={profileWithNote} received={[]} donated={[]} />);
+    await openPostsShowingNote(fundedCredit());
+    repayMock.mockRejectedValueOnce(new Error('Too many payments'));
+    fireEvent.click(screen.getByRole('button', { name: "Pay today's repayment" }));
+    expect((await screen.findByRole('alert')).textContent).toBe(
+      'Too many payments. Please wait a moment and try again.',
+    );
+    repayMock.mockRejectedValueOnce(
+      new Error("The author's wallet cannot receive this Bitcoin payment"),
+    );
+    fireEvent.click(screen.getByRole('button', { name: "Pay today's repayment" }));
+    await waitFor(() => {
+      expect(screen.getByRole('alert').textContent).toBe(
+        "The author's wallet cannot receive this Bitcoin payment",
+      );
+    });
+    repayMock.mockRejectedValueOnce(new Error('Could not start the Bitcoin payment'));
+    fireEvent.click(screen.getByRole('button', { name: "Pay today's repayment" }));
+    await waitFor(() => {
+      expect(screen.getByRole('alert').textContent).toBe('Could not start the Bitcoin payment');
+    });
+  });
+
+  it('does not start a repayment after the session is gone', async () => {
+    useAuthStore.setState({
+      session: 'sess',
+      account: { ...account, id: profile.id },
+    });
+    renderWithLocale(<MemberProfileScreen profile={profileWithNote} received={[]} donated={[]} />);
+    await openPostsShowingNote(fundedCredit());
+    await screen.findByRole('button', { name: "Pay today's repayment" });
+    act(() => {
+      useAuthStore.setState({ session: null });
+    });
+    fireEvent.click(screen.getByRole('button', { name: "Pay today's repayment" }));
+    expect(repayMock).not.toHaveBeenCalled();
+  });
+
+  it('drops a repayment that finishes after the feed unmounts', async () => {
+    useAuthStore.setState({
+      session: 'sess',
+      account: { ...account, id: profile.id },
+    });
+    let resolveOld: (value: { pr: string; amountSats: number }) => void = () => {};
+    repayMock.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveOld = resolve;
+        }),
+    );
+    renderWithLocale(<MemberProfileScreen profile={profileWithNote} received={[]} donated={[]} />);
+    await openPostsShowingNote(fundedCredit());
+    fireEvent.click(await screen.findByRole('button', { name: "Pay today's repayment" }));
+    await waitFor(() => {
+      expect(repayMock).toHaveBeenCalledTimes(1);
+    });
+    cleanup();
+    await act(async () => {
+      resolveOld({ pr: 'lnbc21n1old', amountSats: 99 });
+      await Promise.resolve();
+    });
+    let rejectOld: (err: Error) => void = () => {};
+    repayMock.mockImplementationOnce(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectOld = reject;
+        }),
+    );
+    renderWithLocale(<MemberProfileScreen profile={profileWithNote} received={[]} donated={[]} />);
+    await openPostsShowingNote(fundedCredit());
+    fireEvent.click(await screen.findByRole('button', { name: "Pay today's repayment" }));
+    await waitFor(() => {
+      expect(repayMock).toHaveBeenCalledTimes(2);
+    });
+    cleanup();
+    await act(async () => {
+      rejectOld(new Error('late'));
+      await Promise.resolve();
+    });
   });
 });

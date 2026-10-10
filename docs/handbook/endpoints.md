@@ -72,7 +72,7 @@
 
 ## Endpoint: POST /auth/passkey/register/begin
 
-- **Purpose:** Same-origin proxy of api `POST /auth/passkey/register/begin`. Optional JSON body `{ viewKey }` (64 hex) claims an existing public profile; omit the body for a new registration.
+- **Purpose:** Same-origin proxy of api `POST /auth/passkey/register/begin`. A new account posts JSON `{ name }`. `{ viewKey }` (64 hex) claims an existing public profile and sends no `name`. The empty body remains the old unnamed path; the new-account path of this app does not use it.
 - **Errors:** Upstream status (including 404 / 409 with `{ error }`), or 502 if the api is unreachable.
 - **Used by:** `startPasskeyRegistration`.
 - **Auth:** Public.
@@ -132,8 +132,36 @@
 
 - **Purpose:** Same-origin proxy of api `GET /gifts/stats` (aggregated outbound gift totals; optional `recipient` query forwarded).
 - **Errors:** Upstream 503, or 502 if the api is unreachable.
-- **Used by:** `fetchGiftStats` on `/stats`, `/welcome`, `/messages/[id]`, `/members/[accountId]`, and the staff payout-goal widget on `/moderate`.
+- **Used by:** `fetchGiftStats` on `/stats`, `/welcome`, `/messages/[id]`, `/members/[accountId]`, and the people-count chart on `/statistics` (every visitor, including signed-out, no goal).
 - **Auth:** Public.
+
+## Endpoint: GET /habits
+
+- **Purpose:** Same-origin proxy of api `GET /habits` (public habit list, review week, and comments). Forwards `Authorization` when the browser sent it, so the owner can receive internal notes.
+- **Errors:** The proxy forwards the upstream status, or 502 if the api is unreachable.
+- **Used by:** `fetchMemberHabits` on `/habit-tracker`.
+- **Auth:** Public. A bearer is optional and is forwarded, not added.
+
+## Endpoint: POST /habits
+
+- **Purpose:** Same-origin proxy of api `POST /habits` (add, edit, archive, log, comment, delete a comment, or request a Lightning invoice). Forwards `Authorization` and `Time-Zone`. Does not pay the invoice.
+- **Errors:** The proxy forwards the upstream status. Expected upstream errors include 401 without a bearer, 400 for a bad body, 403 `{ error: 'SUNDAY_REST' }` when a comment, a comment deletion, or an invoice request falls on the device's local Sunday, 409 when the period is closed or no wallet can be invoiced, or 502 if the api is unreachable. A missing, blank, or invalid time zone does not refuse a comment, a comment deletion, or an invoice request. Add, edit, log, and archive do not rest on Sunday.
+- **Used by:** `postMemberHabit` on `/habit-tracker`.
+- **Auth:** Bearer. The client sends `Authorization`; this proxy does not add it.
+
+## Endpoint: GET /shops/activity
+
+- **Purpose:** Same-origin proxy of api `GET /shops/activity` (shop-use counts, 30 UTC days).
+- **Errors:** The proxy forwards the upstream status. Expected upstream errors are 503 when shop activity is unavailable, or 502 if this proxy cannot reach the api.
+- **Used by:** `fetchShopActivity` on `/statistics`.
+- **Auth:** No bearer. StatisticsScreen calls it for every visitor.
+
+## Endpoint: GET /funding/goal
+
+- **Purpose:** Same-origin proxy of api `GET /funding/goal` (7 UTC days of shop till-charge counts, plus how many shops had a charge on 5 of those days). Not the public 30-day shop series.
+- **Errors:** The proxy forwards the upstream status. Expected upstream errors are 401 without a bearer session and 503 when the goal is unavailable, or 502 if this proxy cannot reach the api.
+- **Used by:** `fetchGrantContinuation` on `/grants/goals`.
+- **Auth:** Bearer. The client sends `Authorization`; this proxy does not add it.
 
 ## Endpoint: GET /lightning-address
 
@@ -401,6 +429,27 @@
 - **Used by:** `fetchReplies`.
 - **Auth:** Bearer.
 
+## Endpoint: GET /public-messages/[id]/external-profile
+
+- **Purpose:** Same-origin public proxy of api GET `/messages/:id/external-profile` (name, npub, and optional nip05 and lud16, no Bearer). Optional `postCount` and `replyCount` are nonnegative integers; absent still parses.
+- **Errors:** Upstream 404 `{ error: "Not found" }`, upstream 503, or 502 if the api is unreachable.
+- **Used by:** `fetchExternalAuthorProfile`.
+- **Auth:** Public.
+
+## Endpoint: GET /public-messages/[id]/external-posts
+
+- **Purpose:** Same-origin public proxy of api GET `/messages/:id/external-posts`, body `{ messages }` for that external author, no Bearer.
+- **Errors:** Upstream failure, or 502 if the api is unreachable.
+- **Used by:** `fetchExternalAuthorPosts`.
+- **Auth:** Public.
+
+## Endpoint: GET /public-messages/[id]/external-replies
+
+- **Purpose:** Same-origin public proxy of api GET `/messages/:id/external-replies`, body `{ messages }` for that external author, no Bearer.
+- **Errors:** Upstream failure, or 502 if the api is unreachable.
+- **Used by:** `fetchExternalAuthorReplies`.
+- **Auth:** Public.
+
 ## Endpoint: GET /public-messages/[id]
 
 - **Purpose:** Same-origin public proxy of api GET `/messages/:id` (one note as JSON, no Bearer). The HTML public note is `/messages/[id]`.
@@ -578,9 +627,9 @@
 
 ## Endpoint: GET /forum/mentions
 
-- **Purpose:** Same-origin Bearer proxy of api GET `/mentions`. Optional `q` is the username prefix. An empty query is the first page of handles. Used so the forum composer can suggest people while `@` is being typed.
+- **Purpose:** Same-origin Bearer proxy of api GET `/mentions`. Optional `q` is the username prefix. An empty query is the first page of handles. The forum composer uses it while `@` is being typed. The Person field on `/grants/payments/amounts` uses the same search and opens that first page when the field is exactly `@`.
 - **Errors:** Upstream 401/400/409, or 502 if the api is unreachable.
-- **Used by:** `searchMentionAccounts` from `MentionTextarea` on the post, reply, and ask-for-money composers.
+- **Used by:** `searchMentionAccounts` from `MentionTextarea` on the post, reply, ask-for-money, shop, inbox, and moderator-room composers, from `ShopAccountControl`, and from `DailyPaymentAmountsScreen` for the Person field on `/grants/payments/amounts`.
 - **Auth:** Bearer.
 
 ## Endpoint: GET /forum/notifications
@@ -592,14 +641,28 @@
 
 ## Endpoint: POST /forum/notifications/read-all
 
-- **Purpose:** Same-origin Bearer proxy of api POST `/notifications/read-all` (mark every notification read).
+- **Purpose:** Same-origin Bearer proxy of api POST `/notifications/read-all` (mark every notification read). Optional JSON `{ endpoint }` when this browser has a push subscription; endpoint only when the current push endpoint is a non-empty string.
 - **Errors:** Upstream 401/503, or 502 if the api is unreachable.
 - **Used by:** `markAllNotificationsRead` from `NotificationsLoader`.
 - **Auth:** Bearer.
 
+## Endpoint: POST /forum/notifications/read-by-message
+
+- **Purpose:** Same-origin Bearer proxy of api POST `/notifications/read-by-message` (mark notifications for one forum message read). JSON `{ messageId, endpoint? }`; endpoint only when the current push endpoint is a non-empty string.
+- **Errors:** Upstream 401/503, or 502 if the api is unreachable.
+- **Used by:** `markNotificationsReadForMessage` from `ForumLoader` (note becomes expanded), `NoteTranslate` (Translate requested with a session), `PublicMessageLoader` (signed-in message page ready), `MemberProfileScreen` (profile note becomes expanded), and `PublicMessageThread` (thread note becomes expanded).
+- **Auth:** Bearer.
+
+## Endpoint: POST /forum/notifications/read-visible
+
+- **Purpose:** Same-origin Bearer proxy of api POST `/notifications/read-visible`, which stamps only `forum_post`, `forum_reply`, and `forum_mention` whose reply id is that message. JSON `{ messageId, endpoint? }`; endpoint only when the current push endpoint is a non-empty string.
+- **Errors:** Upstream 401/503, or 502 if the api is unreachable.
+- **Used by:** `markVisibleForumNoteRead` from `ForumLoader` when the note card is fully inside the scrollport.
+- **Auth:** Bearer.
+
 ## Endpoint: POST /forum/notifications/[id]/read
 
-- **Purpose:** Same-origin Bearer proxy of api POST `/notifications/:id/read` (mark one notification read).
+- **Purpose:** Same-origin Bearer proxy of api POST `/notifications/:id/read` (mark one notification read). Optional JSON `{ endpoint }` when this browser has a push subscription; endpoint only when the current push endpoint is a non-empty string.
 - **Errors:** Upstream 401/404/503, or 502 if the api is unreachable.
 - **Used by:** `markNotificationRead` from `NotificationsLoader` on row click and from `ForumLoader` on the welcome appointment pill.
 - **Auth:** Bearer.
@@ -627,9 +690,9 @@
 
 ## Endpoint: POST /trust/verify
 
-- **Purpose:** Same-origin Bearer proxy of api `POST /trust/verify` with `{ accountId }`.
+- **Purpose:** Same-origin Bearer proxy of api `POST /trust/verify` with `{ accountId, confirmedName }`. The proxy forwards the JSON body unchanged.
 - **Errors:** Upstream 400/401/403/404/409/503, or 502 if the api is unreachable.
-- **Used by:** `postTrustVerify` in `MemberTrustActions`.
+- **Used by:** `postTrustVerify` in `MemberVerifyScreen`.
 - **Auth:** Bearer (moderator).
 
 ## Endpoint: POST /trust/propose-moderator
@@ -662,9 +725,9 @@
 
 ## Endpoint: POST /funding/apply
 
-- **Purpose:** Same-origin Bearer proxy of api `POST /funding/apply`. Role `basis` is 403. About me, About me photo, and location are required (400). Effective `none` or `rejected` becomes pending.
-- **Errors:** Upstream 400/401/403/409/503, or 502 if the api is unreachable.
-- **Used by:** `postFundingApply` via `FundingApplyScreen` on `/grants/apply`.
+- **Purpose:** Same-origin Bearer proxy of api `POST /funding/apply`. While applications are paused the api returns 403 `{ error: 'Applications are paused' }` for a caller whose username is not `joey-rosima`, `vincent`, or `jewel-bacolbas`. Role `basis` is 403 Forbidden, including those three usernames, and does not write a grant. The paused screen does not call this route. The apply walk calls it when `grantApplicationsPaused` is false, and, while paused, only for a verified account named one of those three with status `none` or `rejected`.
+- **Errors:** While applications are paused for everyone else: upstream 401/403, or 502 if the api is unreachable. When the apply walk is open: also upstream 400, 409, and 503, matching `postFundingApply`.
+- **Used by:** `postFundingApply`. `FundingApplyScreen` calls it when the apply walk is open: a verified account with status `none` or `rejected`, and while paused only when that account is named `joey-rosima`, `vincent`, or `jewel-bacolbas`. A basis account does not call it.
 - **Auth:** Bearer session; the api requires a role other than `basis`.
 
 ## Endpoint: GET /funding/payout-days
@@ -680,6 +743,48 @@
 - **Errors:** Upstream 401 without a Bearer session, 403 when the account is not founder or moderator, 503 when the api is unavailable, or 502 JSON if this proxy cannot reach the api origin.
 - **Used by:** `fetchFundingApplications` via `FundingApplicationsScreen` on `/grants/applications`. `ModerateScreen` on `/moderate` does not call this GET.
 - **Auth:** Bearer session; the api requires founder or moderator. The app does not fetch this list for other signed-in roles (forbidden copy, no request).
+
+## Endpoint: GET /funding/daily-roster
+
+- **Purpose:** Same-origin Bearer proxy of api `GET /funding/daily-roster` (daily payout comment, payments switch, `defaultAmountUsd`, and recipient rows). Lives under `/funding/daily-roster` because Next.js forbids a `route.ts` beside the HTML pages at `/grants/payments/comment` and `/grants/payments/amounts`.
+- **Errors:** Upstream 401 without a Bearer session, 403 when the account is not an initiator or founder, 503 when the api is unavailable, or 502 JSON if this proxy cannot reach the api origin.
+- **Used by:** `fetchDailyRoster` via `DailyPaymentCommentScreen` on `/grants/payments/comment` and `DailyPaymentAmountsScreen` on `/grants/payments/amounts`.
+- **Auth:** Bearer session. The api allows an initiator or founder only. The app does not fetch this roster for other signed-in roles (forbidden copy, no request).
+
+## Endpoint: POST /funding/daily-roster/comment
+
+- **Purpose:** Same-origin Bearer proxy of api `POST /funding/daily-roster/comment` with `{ comment }`.
+- **Errors:** Upstream 400 `Invalid comment`, 401, 403, 503, or 502 if the api is unreachable.
+- **Used by:** `saveDailyRosterComment` in `DailyPaymentCommentScreen`.
+- **Auth:** Bearer session. The api allows an initiator or founder only.
+
+## Endpoint: POST /funding/daily-roster/payments
+
+- **Purpose:** Same-origin Bearer proxy of api `POST /funding/daily-roster/payments` with `{ enabled }` (boolean). Sets the daily payments switch only.
+- **Errors:** Upstream 400 `Invalid payments switch`, 401, 403, 503, or 502 if the api is unreachable.
+- **Used by:** `saveDailyRosterPayments` in `DailyPaymentAmountsScreen`.
+- **Auth:** Bearer session. The api allows an initiator or founder only.
+
+## Endpoint: POST /funding/daily-roster/recipients
+
+- **Purpose:** Same-origin Bearer proxy of api `POST /funding/daily-roster/recipients` with `{ accountId, amountUsd }`. Appends one daily recipient for that person.
+- **Errors:** Upstream 400 `Invalid person or amount`, `Unknown person`, `Person has no Lightning address`, or `Address already listed`, 401, 403, 503, or 502 if the api is unreachable.
+- **Used by:** `addDailyRosterRecipient` in `DailyPaymentAmountsScreen`.
+- **Auth:** Bearer session. The api allows an initiator or founder only.
+
+## Endpoint: POST /funding/daily-roster/recipients/update
+
+- **Purpose:** Same-origin Bearer proxy of api `POST /funding/daily-roster/recipients/update` with `{ address, amountUsd }`. Changes one daily amount.
+- **Errors:** Upstream 400 `Unknown address` or `Invalid address or amount`, 401, 403, 503, or 502 if the api is unreachable.
+- **Used by:** `updateDailyRosterRecipient` in `DailyPaymentAmountsScreen`.
+- **Auth:** Bearer session. The api allows an initiator or founder only.
+
+## Endpoint: POST /funding/daily-roster/recipients/delete
+
+- **Purpose:** Same-origin Bearer proxy of api `POST /funding/daily-roster/recipients/delete` with `{ address }`. Removes one daily recipient.
+- **Errors:** Upstream 400 `Unknown address`, 401, 403, 503, or 502 if the api is unreachable.
+- **Used by:** `deleteDailyRosterRecipient` in `DailyPaymentAmountsScreen`.
+- **Auth:** Bearer session. The api allows an initiator or founder only.
 
 ## Endpoint: GET /funding/applications/[accountId]
 
@@ -729,6 +834,27 @@
 - **Auth:** Forwards Bearer authorization; the API requires live moderator role.
 - **Returns:** Upstream 200 public message JSON, with `place` omitted when cleared.
 - **Errors:** 401/403/404/400/503 with `{ "error": string }`; unreachable api is 502.
+
+## Endpoint: PATCH /forum/messages/[id]/photos
+
+- **Purpose:** Same-origin moderation proxy to PATCH /messages/:id/photos with JSON `{ photos }`. An empty list clears stills. A video on the note stays, and this write does not add an edit-history row.
+- **Auth:** Forwards Bearer authorization; the API requires live moderator role.
+- **Returns:** Upstream 200 public message JSON.
+- **Errors:** 401/403/404/400/503 with `{ "error": string }`; unreachable api is 502. Sunday in the device zone is refused by the API.
+
+## Endpoint: PATCH /forum/messages/[id]/text
+
+- **Purpose:** Same-origin moderation proxy to PATCH /messages/:id/text with JSON `{ text }`. The API keeps `#21GiftsShop` on the stored body and records the change.
+- **Auth:** Forwards Bearer authorization; the API requires live moderator role.
+- **Returns:** Upstream 200 public message JSON.
+- **Errors:** 401/403/404/400/503 with `{ "error": string }`; unreachable api is 502. Sunday in the device zone is refused by the API.
+
+## Endpoint: GET /forum/messages/[id]/edits
+
+- **Purpose:** Same-origin moderation proxy to GET /messages/:id/edits. Returns who changed the shop note text, place, or account, and when.
+- **Auth:** Forwards Bearer authorization; the API requires live moderator role.
+- **Returns:** Upstream 200 `{ edits }` newest first. An empty list is `{ edits: [] }`.
+- **Errors:** 401/403/404/503 with `{ "error": string }`; unreachable api is 502. This read is not a Sunday write.
 
 ## Endpoint: PATCH /forum/messages/[id]/shop-account
 

@@ -132,12 +132,28 @@ function QuotedForumNote({
               >
                 {note.name}
               </Link>
+            ) : note.via === 'nostr' ? (
+              <Link
+                href={`/messages/${note.id}/author?name=${encodeURIComponent(note.name)}`}
+                aria-label={t('forum.authorProfile')}
+                className="pointer-events-auto text-sm font-medium text-app-fg underline underline-offset-2"
+                onClick={(event) => {
+                  event.stopPropagation();
+                }}
+              >
+                {note.name}
+              </Link>
             ) : (
               <span className="text-sm font-medium text-app-fg">{note.name}</span>
             )}
             {badgeLabel !== null ? (
               <span className="rounded-full border border-app-border-strong px-2 py-0.5 text-xs font-medium text-app-muted">
                 {badgeLabel}
+              </span>
+            ) : null}
+            {note.staffTag === 'software_developer' ? (
+              <span className="rounded-full border border-app-border-strong px-2 py-0.5 text-xs font-medium text-app-muted">
+                {t('forum.staff.softwareDeveloper')}
               </span>
             ) : null}
           </span>
@@ -220,7 +236,8 @@ function QuotedForumNote({
  *   that short URL. Each nested card has one stretched permalink to
  *   `/messages/<id>` covering the caption, photo, time, and amount; the author
  *   link, Translate, Show more, and links inside the caption stay outside that
- *   permalink. `[&_[role=dialog]]:pointer-events-auto` and
+ *   permalink. A `via === 'nostr'` name is a link to `/messages/<id>/author`,
+ *   not a dialog. `[&_[role=dialog]]:pointer-events-auto` and
  *   `[&_[role=dialog]_*]:pointer-events-auto` keep the external-link confirm
  *   dialog and everything inside it clickable, because that dialog is a
  *   descendant of the card and is not portaled.

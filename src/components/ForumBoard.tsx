@@ -24,10 +24,14 @@ import {
   useState,
   type ChangeEvent,
   type FormEvent,
-  type MouseEvent,
   type ReactElement,
 } from 'react';
 import { AmountEntry } from '@/components/AmountEntry';
+import {
+  ForumPaySheet,
+  type ForumPayError,
+  type ForumPayInvoice,
+} from '@/components/ForumPaySheet';
 import { SundayWritingGate } from '@/components/SundayWritingGate';
 import { useAppShellScroller } from '@/components/AppShell';
 import {
@@ -39,6 +43,7 @@ import {
 import { ForumGoalBar } from '@/components/ForumGoalBar';
 import { ForumPhotoGallery } from '@/components/ForumPhotoGallery';
 import { ForumReplyPayPage } from '@/components/ForumReplyPayPage';
+import { ReplyDirectionAmounts } from '@/components/ReplyDirectionAmounts';
 import { ForumVideo } from '@/components/ForumVideo';
 import { useTranslations } from '@/components/LocaleProvider';
 import { PlaceField } from '@/components/PlaceField';
@@ -46,7 +51,6 @@ import { TranslatableNoteBody } from '@/components/TranslatableNoteBody';
 import { preferredFiatSuffix } from '@/components/PreferredFiatSuffix';
 import { ForumQuotedBody } from '@/components/QuotedForumNote';
 import { useNumberFormat } from '@/components/NumberFormatProvider';
-import { QrCode } from '@/components/QrCode';
 import { ForumModeSelect } from '@/components/ForumModeSelect';
 import { MentionTextarea } from '@/components/MentionTextarea';
 import { Button, IconButton, SegmentedControl } from '@/components/ui';
@@ -58,6 +62,8 @@ import {
 } from '@/lib/api-types';
 import { DeletePostControl } from '@/components/DeletePostControl';
 import { ShopAccountControl } from '@/components/ShopAccountControl';
+import { ShopAddWizard } from '@/components/ShopAddWizard';
+import { ShopNoteEditControl } from '@/components/ShopNoteEditControl';
 import { ShopPlaceControl } from '@/components/ShopPlaceControl';
 import {
   FORUM_COMPOSE_EVENT,
@@ -75,12 +81,9 @@ import { formatForumTime } from '@/lib/forum-time';
 import type { MessageKey } from '@/lib/messages';
 import { useFiatPreference } from '@/components/FiatPreferenceProvider';
 import { formatBitcoin, type FiatRateDay } from '@/lib/stats-money';
-import {
-  isAndroidUserAgent,
-  isSmartphoneUserAgent,
-  walletOfSatoshiHref,
-  walletOfSatoshiIntentHref,
-} from '@/lib/wos-deep-link';
+import { isSmartphoneUserAgent } from '@/lib/wos-deep-link';
+
+export type { ForumPayError, ForumPayInvoice } from '@/components/ForumPaySheet';
 
 /** Top-level compose mode: messenger post or Ask wizard. */
 export type ForumComposeIntent = 'post' | 'ask';
@@ -102,8 +105,21 @@ export type ForumFormError =
 /** Reply composer validation; `amount` is the paid-reply sats field. */
 export type ForumReplyFormError = ForumFormError | 'amount' | 'deleted';
 
-/** Pay-sheet validation or request failure. */
-export type ForumPayError = 'amount' | 'request' | 'rateLimit' | 'authorWallet' | 'deleted' | null;
+/** Loaded still URLs for one note, in gallery order. Missing slots are skipped. */
+function editStillUrls(
+  messageId: string,
+  photoCount: number,
+  photoUrls: Readonly<Record<string, string>>,
+): string[] {
+  const found: string[] = [];
+  for (let index = 0; index < photoCount; index += 1) {
+    const url = photoUrls[`${messageId}:${index}`];
+    if (typeof url === 'string') {
+      found.push(url);
+    }
+  }
+  return found;
+}
 
 /** Roles that show a clickable tag beside the author name. */
 type ForumTaggedRole = 'founder' | 'moderator' | 'initiator' | 'verified';
@@ -131,16 +147,6 @@ function forumTaggedRole(role: string): ForumTaggedRole | null {
 }
 
 const COPY_RESET_MS = 1200;
-
-/** Active pay invoice shown under a forum card. */
-export interface ForumPayInvoice {
-  /** Message id the invoice belongs to. */
-  messageId: string;
-  /** BOLT11 payment request. */
-  pr: string;
-  /** Whole sats confirmed by the api. */
-  amountSats: number;
-}
 
 /** Props for {@link ForumBoard}. */
 export interface ForumBoardProps {
@@ -211,6 +217,17 @@ export interface ForumBoardProps {
   formError: ForumFormError;
   /** New-post composer `maxLength`. Default {@link FORUM_MESSAGE_MAX_LENGTH}. */
   composerMaxLength?: number;
+  /**
+   * When true, the shops feed shows Add a shop instead of the message composer.
+   * Default false.
+   */
+  shopComposer?: boolean;
+  /** Optional username for the shop being composed. */
+  shopUsername?: string;
+  /** Replace the optional shop username. */
+  onShopUsernameChange?: (username: string) => void;
+  /** Bumps after a shop is sent so the wizard closes. */
+  shopResetToken?: number;
   /** Message id whose pay sheet is open, or `null`. */
   payMessageId: string | null;
   /**
@@ -354,186 +371,13 @@ export interface ForumBoardProps {
     messageId: string,
     shopAccount: { id: string; username: string; name: string } | null,
   ) => void;
-}
-
-/**
- * Amount form and invoice card for one payable reply.
- *
- * @param props - Open pay-sheet state for `messageId`.
- * @returns The in-card sheet.
- */
-function ForumPaySheet({
-  messageId,
-  payDraft,
-  payBusy,
-  payError,
-  payInvoice,
-  payWaiting,
-  onPayDraftChange,
-  onPayUnitChange,
-  onPaySubmit,
-  onPayCancel,
-  rateDay,
-  showPaymentQr,
-  onInteract,
-}: {
-  messageId: string;
-  payDraft: string;
-  payBusy: boolean;
-  payError: ForumPayError;
-  payInvoice: ForumPayInvoice | null;
-  payWaiting: boolean;
-  onPayDraftChange: (value: string) => void;
-  onPayUnitChange?: (unit: AmountUnit) => void;
-  onPaySubmit: () => void | Promise<ForumPayInvoice | null | undefined>;
-  onPayCancel: () => void;
-  rateDay: FiatRateDay | null;
-  showPaymentQr: boolean;
-  onInteract: (event: MouseEvent) => void;
-}): ReactElement {
-  const { t } = useTranslations();
-  const { numberFormat } = useNumberFormat();
-  const { fiat } = useFiatPreference();
-  const invoiceForCard =
-    payInvoice !== null && payInvoice.messageId === messageId ? payInvoice : null;
-  /* v8 ignore start -- Android vs iOS wallet href */
-  const android =
-    typeof navigator !== 'undefined' ? isAndroidUserAgent(navigator.userAgent) : false;
-  const wosHref =
-    invoiceForCard === null
-      ? null
-      : android
-        ? walletOfSatoshiIntentHref(invoiceForCard.pr)
-        : walletOfSatoshiHref(invoiceForCard.pr);
-  /* v8 ignore stop */
-
-  const handlePaySubmit = (event: FormEvent<HTMLFormElement>): void => {
-    event.preventDefault();
-    void Promise.resolve(onPaySubmit());
-  };
-
-  const walletButton =
-    wosHref === null ? null : (
-      <Button
-        type="button"
-        aria-label={t('forum.payOpenWalletAria')}
-        disabled={payBusy}
-        icon={
-          <img
-            src="/wos-icon.png"
-            alt=""
-            width={20}
-            height={20}
-            aria-hidden="true"
-            className="h-5 w-5 rounded-md ring-1 ring-white/30"
-          />
-        }
-        onClick={() => {
-          window.location.href = wosHref;
-        }}
-      >
-        {t('forum.payOpenWallet')}
-      </Button>
-    );
-
-  if (invoiceForCard === null) {
-    return (
-      <form
-        onSubmit={handlePaySubmit}
-        onClick={onInteract}
-        data-pay-sheet=""
-        className="relative mt-3 flex flex-col gap-3 rounded-xl border border-app-border bg-app-card p-3 pl-11 pt-10"
-      >
-        <div className="absolute left-2 top-2">
-          <IconButton
-            type="button"
-            size="sm"
-            variant="ghost"
-            aria-label={t('forum.payClose')}
-            onClick={onPayCancel}
-          >
-            <X aria-hidden="true" className="h-4 w-4" />
-          </IconButton>
-        </div>
-        <AmountEntry
-          label={t('forum.payAmountLabel')}
-          placeholder={t('forum.payAmountPlaceholder')}
-          value={payDraft}
-          disabled={payBusy}
-          rateDay={rateDay}
-          onValueChange={onPayDraftChange}
-          {...(onPayUnitChange === undefined ? {} : { onUnitChange: onPayUnitChange })}
-        />
-        {payError === 'amount' ? (
-          <p role="alert" className="text-sm text-app-danger">
-            {t('forum.payErrorAmount')}
-          </p>
-        ) : null}
-        {payError === 'request' ? (
-          <p role="alert" className="text-sm text-app-danger">
-            {t('forum.payErrorRequest')}
-          </p>
-        ) : null}
-        {payError === 'rateLimit' ? (
-          <p role="alert" className="text-sm text-app-danger">
-            {t('forum.payErrorRateLimit')}
-          </p>
-        ) : null}
-        {payError === 'authorWallet' ? (
-          <p role="alert" className="text-sm text-app-danger">
-            {t('forum.payErrorAuthorWallet')}
-          </p>
-        ) : null}
-        {payError === 'deleted' ? (
-          <p role="alert" className="text-sm text-app-danger">
-            {t('forum.errorNoteDeleted')}
-          </p>
-        ) : null}
-        <Button
-          type="submit"
-          disabled={payBusy}
-          icon={
-            payBusy ? <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" /> : undefined
-          }
-        >
-          {t('forum.payContinue')}
-        </Button>
-      </form>
-    );
-  }
-
-  return (
-    <div
-      onClick={onInteract}
-      data-pay-sheet=""
-      className="relative mt-3 flex flex-col items-center gap-3 rounded-xl border border-app-border bg-app-card p-4"
-    >
-      <div className="absolute left-2 top-2">
-        <IconButton
-          type="button"
-          size="sm"
-          variant="ghost"
-          aria-label={t('forum.payClose')}
-          onClick={onPayCancel}
-        >
-          <X aria-hidden="true" className="h-4 w-4" />
-        </IconButton>
-      </div>
-      <p className="px-10 text-center text-sm text-app-muted">
-        {t('forum.payConfirm', {
-          amount: formatBitcoin(invoiceForCard.amountSats, numberFormat),
-        })}
-        {preferredFiatSuffix(invoiceForCard.amountSats, rateDay, fiat, numberFormat)}
-      </p>
-      {showPaymentQr ? <QrCode value={invoiceForCard.pr} label={t('forum.payInvoiceQr')} /> : null}
-      {walletButton}
-      {/* v8 ignore start -- payWaiting is true only after invoice mint while polling */}
-      {payWaiting ? (
-        <p className="text-center text-xs text-app-muted">{t('forum.payWaiting')}</p>
-      ) : null}
-      {/* v8 ignore stop */}
-    </div>
-  );
+  /**
+   * When true, show the shop-note pencil on top-level notes.
+   * Default false. The control itself hides non-shop text.
+   */
+  shopNoteEdit?: boolean;
+  /** Apply a saved shop-note body to the listed row. */
+  onShopNoteUpdated?: (message: ForumMessage) => void;
 }
 
 const MODE_LABEL_KEY: Record<
@@ -631,13 +475,18 @@ function paySheetElement(root: HTMLElement | null): HTMLElement | null {
  * Post is attach + text + send, Ask is the four-step wizard), newest-first list (social
  * feed) or empty/loading/error, per-card expand for oldest-first replies +
  * reply composer (amount and the bitcoin/fiat switch on one line, text and
- * send on the next; gift-only rows use `forum.giftReply`
- * + `formatBitcoin(sats, numberFormat)`, text-plus-gift shows the amount
- * under the body), copy-link control, `ForumGoalBar` on a top-level note
+ * send on the next; reply money is `ReplyDirectionAmounts`: gift-only rows
+ * use `forum.giftReply`, text-plus-gift shows the bare amount under the
+ * body, and a later receipt is `forum.receivedOnReply` on its own line.
+ * A text reply that also sent sats labels that line `forum.sentOnReply`
+ * and the two lines share a left rule. The amounts are not added),
+ * copy-link control, `ForumGoalBar` on a top-level note
  * with `goalSats`, React control on posts (`forum.react`, lucide Reply;
  * expands the reply composer; omitted when `deletedAt` is set), payable-reply
  * pay sheet (Gift on nested replies and on top-level cards with `parentId`;
- * never on posts; omitted when `deletedAt` is set), optional shops staff
+ * never on posts; omitted when `deletedAt` is set), optional shop-note
+ * pencil when `shopNoteEdit` and `onShopNoteUpdated` are set (top-level
+ * notes; the control hides non-shop text), optional shops staff
  * place editor after copy and before staff Delete when `shopPlaceEdit` and
  * `onShopPlaceUpdated` are set, then the shops account editor when
  * `shopAccountEdit` and `onShopAccountUpdated` are set (top-level notes only),
@@ -691,6 +540,10 @@ export function ForumBoard({
   onRetry,
   formError,
   composerMaxLength = FORUM_MESSAGE_MAX_LENGTH,
+  shopComposer = false,
+  shopUsername = '',
+  onShopUsernameChange,
+  shopResetToken = 0,
   payMessageId,
   payHost = null,
   payDraft,
@@ -747,6 +600,8 @@ export function ForumBoard({
   onShopPlaceUpdated,
   shopAccountEdit = false,
   onShopAccountUpdated,
+  shopNoteEdit = false,
+  onShopNoteUpdated,
 }: ForumBoardProps): ReactElement {
   const hideCompose = composerHidden || readOnly;
   const { t, locale } = useTranslations();
@@ -1141,6 +996,20 @@ export function ForumBoard({
                       >
                         {message.name}
                       </button>
+                    ) : message.via === 'nostr' ? (
+                      <button
+                        type="button"
+                        aria-label={t('forum.authorProfile')}
+                        className="text-sm font-medium text-app-fg underline underline-offset-2"
+                        onClick={(event) => {
+                          stopCardToggle(event);
+                          router.push(
+                            `/messages/${message.id}/author?name=${encodeURIComponent(message.name)}`,
+                          );
+                        }}
+                      >
+                        {message.name}
+                      </button>
                     ) : (
                       <span className="text-sm font-medium text-app-fg">{message.name}</span>
                     )}
@@ -1169,6 +1038,11 @@ export function ForumBoard({
                         {t('forum.via.nostr')}
                       </button>
                     ) : null}
+                    {message.staffTag === 'software_developer' ? (
+                      <span className="rounded-full border border-app-border-strong px-2 py-0.5 text-xs font-medium text-app-muted">
+                        {t('forum.staff.softwareDeveloper')}
+                      </span>
+                    ) : null}
                   </MessageKindTags>
                   <time dateTime={message.createdAt} className="text-xs text-app-subtle">
                     {formatForumTime(message.createdAt, locale)}
@@ -1187,8 +1061,6 @@ export function ForumBoard({
                   <ForumVideo
                     src={videoSrc}
                     poster={photoUrl}
-                    controls
-                    playsInline
                     preload="metadata"
                     className="mt-2 mx-auto block h-auto w-auto max-h-80 max-w-full shrink-0 rounded-xl object-contain"
                     onClick={stopCardToggle}
@@ -1326,7 +1198,10 @@ export function ForumBoard({
                 </div>
                 <div className="ml-auto flex flex-wrap items-center gap-5">
                   <div id={`note-translate-${message.id}`} className="contents" />
-                  {message.parentId === undefined && message.deletedAt === undefined ? (
+                  {/* Signed-out forum is readOnly and still shows React. The author feed sets both flags. */}
+                  {message.parentId === undefined &&
+                  message.deletedAt === undefined &&
+                  !(readOnly && composerHidden) ? (
                     <IconButton
                       type="button"
                       size="sm"
@@ -1421,6 +1296,16 @@ export function ForumBoard({
                       <Link2 aria-hidden="true" className="h-3.5 w-3.5" />
                     )}
                   </IconButton>
+                  {shopNoteEdit &&
+                  onShopNoteUpdated !== undefined &&
+                  message.parentId === undefined ? (
+                    <ShopNoteEditControl
+                      message={message}
+                      onUpdated={onShopNoteUpdated}
+                      existingPhotos={editStillUrls(message.id, photoCount, photoUrls)}
+                      {...(videoSrc !== undefined ? { existingVideoUrl: videoSrc } : {})}
+                    />
+                  ) : null}
                   {shopPlaceEdit &&
                   onShopPlaceUpdated !== undefined &&
                   message.parentId === undefined ? (
@@ -1513,6 +1398,20 @@ export function ForumBoard({
                                   >
                                     {reply.name}
                                   </button>
+                                ) : reply.via === 'nostr' ? (
+                                  <button
+                                    type="button"
+                                    aria-label={t('forum.authorProfile')}
+                                    className="text-sm font-medium text-app-fg underline underline-offset-2"
+                                    onClick={(event) => {
+                                      stopCardToggle(event);
+                                      router.push(
+                                        `/messages/${reply.id}/author?name=${encodeURIComponent(reply.name)}`,
+                                      );
+                                    }}
+                                  >
+                                    {reply.name}
+                                  </button>
                                 ) : (
                                   <span className="text-sm font-medium text-app-fg">
                                     {reply.name}
@@ -1543,6 +1442,11 @@ export function ForumBoard({
                                     {t('forum.via.nostr')}
                                   </button>
                                 ) : null}
+                                {reply.staffTag === 'software_developer' ? (
+                                  <span className="rounded-full border border-app-border-strong px-2 py-0.5 text-xs font-medium text-app-muted">
+                                    {t('forum.staff.softwareDeveloper')}
+                                  </span>
+                                ) : null}
                               </div>
                               <time dateTime={reply.createdAt} className="text-xs text-app-subtle">
                                 {formatForumTime(reply.createdAt, locale)}
@@ -1555,20 +1459,6 @@ export function ForumBoard({
                             ) : replyHintOpen && reply.via === 'nostr' ? (
                               <p role="status" className="mt-1 text-xs text-app-muted">
                                 {t('forum.via.nostrHint')}
-                              </p>
-                            ) : null}
-                            {reply.text === '' && reply.sats > 0 ? (
-                              <p className="mt-1 text-sm tabular-nums lining-nums text-app-fg">
-                                {t('forum.giftReply', {
-                                  amount: formatBitcoin(reply.sats, numberFormat),
-                                })}
-                                {preferredFiatSuffix(
-                                  reply.sats,
-                                  rateDay,
-                                  fiat,
-                                  numberFormat,
-                                  reply,
-                                )}
                               </p>
                             ) : null}
                             {reply.text !== '' ? (
@@ -1610,18 +1500,21 @@ export function ForumBoard({
                                 )}
                               </div>
                             ) : null}
-                            {reply.text !== '' && reply.sats > 0 ? (
-                              <p className="mt-1 text-sm tabular-nums lining-nums text-app-muted">
-                                {formatBitcoin(reply.sats, numberFormat)}
-                                {preferredFiatSuffix(
-                                  reply.sats,
-                                  rateDay,
-                                  fiat,
-                                  numberFormat,
-                                  reply,
-                                )}
-                              </p>
-                            ) : null}
+                            <ReplyDirectionAmounts
+                              text={reply.text}
+                              sats={reply.sats}
+                              receivedSats={reply.receivedSats}
+                              rateDay={rateDay ?? null}
+                              fiat={fiat}
+                              numberFormat={numberFormat}
+                              sent={reply}
+                              received={{
+                                amountUsd: reply.receivedAmountUsd,
+                                amountChf: reply.receivedAmountChf,
+                                amountEur: reply.receivedAmountEur,
+                                amountPhp: reply.receivedAmountPhp,
+                              }}
+                            />
                             <div className="mt-2 flex flex-wrap items-center gap-5">
                               <div id={`note-translate-${reply.id}`} className="contents" />
                               {reply.deletedAt === undefined && reply.payable && !readOnly ? (
@@ -1819,7 +1712,7 @@ export function ForumBoard({
   return (
     <div
       ref={rootRef}
-      className="flex w-full flex-col gap-4 overscroll-y-contain border-t border-app-border pt-6"
+      className="flex w-full min-w-0 flex-col gap-4 overscroll-y-contain border-t border-app-border pt-6"
     >
       {moderatorAppointedAvailable ? (
         <div className="pointer-events-none sticky top-2 z-30 mx-auto w-fit">
@@ -1958,7 +1851,28 @@ export function ForumBoard({
         </SundayWritingGate>
       ) : null}
 
-      {!hideCompose && (!allowAsk || composeIntent === 'post') ? (
+      {!hideCompose && (!allowAsk || composeIntent === 'post') && shopComposer ? (
+        <SundayWritingGate>
+          <ShopAddWizard
+            posting={posting}
+            draft={draft}
+            onDraftChange={onDraftChange}
+            photoDrafts={photoDrafts}
+            videoDraft={videoDraft}
+            onPickFiles={onPickFiles}
+            onRemovePhoto={onRemovePhoto}
+            onClearPhoto={onClearPhoto}
+            place={placeDraft}
+            onPlaceChange={onPlaceDraftChange!}
+            username={shopUsername}
+            onUsernameChange={onShopUsernameChange!}
+            onSubmit={onPost}
+            resetToken={shopResetToken}
+            maxLength={composerMaxLength}
+          />
+        </SundayWritingGate>
+      ) : null}
+      {!hideCompose && (!allowAsk || composeIntent === 'post') && !shopComposer ? (
         <SundayWritingGate>
           <form onSubmit={handleSubmit} className="flex flex-col gap-2">
             <div className="flex items-center gap-2">

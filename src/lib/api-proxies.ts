@@ -421,6 +421,30 @@ export async function proxyGiftsStatsGet(request: Request): Promise<Response> {
 }
 
 /**
+ * Proxies GET /shops/activity to the 21.gifts api.
+ *
+ * No session is required. The incoming request is forwarded as received.
+ *
+ * @param request - Incoming App Router request.
+ * @returns The upstream response.
+ */
+export async function proxyShopActivityGet(request: Request): Promise<Response> {
+  return proxyApiRequest(request, '/shops/activity');
+}
+
+/**
+ * Proxies GET /funding/goal to the 21.gifts api.
+ *
+ * Forwards the incoming Authorization header. Does not add one.
+ *
+ * @param request - Incoming App Router request (Bearer session).
+ * @returns The upstream response.
+ */
+export async function proxyFundingGoalGet(request: Request): Promise<Response> {
+  return proxyApiRequest(request, '/funding/goal');
+}
+
+/**
  * Proxies GET /messages/stats to the 21.gifts api.
  *
  * @param request - Incoming App Router request.
@@ -453,7 +477,9 @@ export async function proxyTrustProposalsGet(request: Request): Promise<Response
 /**
  * Proxies POST /trust/verify to the 21.gifts api.
  *
- * @param request - Incoming App Router request (Bearer session + JSON `{ accountId }`).
+ * Forwards the JSON body unchanged (`{ accountId, confirmedName }`).
+ *
+ * @param request - Incoming App Router request (Bearer session + JSON `{ accountId, confirmedName }`).
  * @returns The upstream response.
  */
 export async function proxyTrustVerifyPost(request: Request): Promise<Response> {
@@ -518,6 +544,70 @@ export async function proxyFundingApplyPost(request: Request): Promise<Response>
  */
 export async function proxyFundingApplicationsGet(request: Request): Promise<Response> {
   return proxyApiRequest(request, '/funding/applications');
+}
+
+/**
+ * Proxies GET /funding/daily-roster to the 21.gifts api (founder/initiator Bearer).
+ *
+ * @param request - Incoming App Router request (Bearer session).
+ * @returns The upstream response.
+ */
+export async function proxyFundingDailyRosterGet(request: Request): Promise<Response> {
+  return proxyApiRequest(request, '/funding/daily-roster');
+}
+
+/**
+ * Proxies POST /funding/daily-roster/comment to the 21.gifts api.
+ *
+ * @param request - Incoming App Router request (Bearer session + JSON `{ comment }`).
+ * @returns The upstream response.
+ */
+export async function proxyFundingDailyRosterCommentPost(request: Request): Promise<Response> {
+  return proxyApiRequest(request, '/funding/daily-roster/comment');
+}
+
+/**
+ * Proxies POST /funding/daily-roster/payments to the 21.gifts api.
+ *
+ * @param request - Incoming App Router request (Bearer session + JSON `{ enabled }`).
+ * @returns The upstream response.
+ */
+export async function proxyFundingDailyRosterPaymentsPost(request: Request): Promise<Response> {
+  return proxyApiRequest(request, '/funding/daily-roster/payments');
+}
+
+/**
+ * Proxies POST /funding/daily-roster/recipients to the 21.gifts api.
+ *
+ * @param request - Incoming App Router request (Bearer session + JSON `{ address, amountUsd }`).
+ * @returns The upstream response.
+ */
+export async function proxyFundingDailyRosterRecipientsPost(request: Request): Promise<Response> {
+  return proxyApiRequest(request, '/funding/daily-roster/recipients');
+}
+
+/**
+ * Proxies POST /funding/daily-roster/recipients/update to the 21.gifts api.
+ *
+ * @param request - Incoming App Router request (Bearer session + JSON `{ address, amountUsd }`).
+ * @returns The upstream response.
+ */
+export async function proxyFundingDailyRosterRecipientsUpdatePost(
+  request: Request,
+): Promise<Response> {
+  return proxyApiRequest(request, '/funding/daily-roster/recipients/update');
+}
+
+/**
+ * Proxies POST /funding/daily-roster/recipients/delete to the 21.gifts api.
+ *
+ * @param request - Incoming App Router request (Bearer session + JSON `{ address }`).
+ * @returns The upstream response.
+ */
+export async function proxyFundingDailyRosterRecipientsDeletePost(
+  request: Request,
+): Promise<Response> {
+  return proxyApiRequest(request, '/funding/daily-roster/recipients/delete');
 }
 
 /**
@@ -775,6 +865,54 @@ export async function proxyPublicMessageGet(
 }
 
 /**
+ * Proxies GET /messages/:id/external-profile to the 21.gifts api (public; no auth).
+ *
+ * App path is `/public-messages/:id/external-profile`.
+ *
+ * @param request - Incoming App Router request.
+ * @param messageId - Forum message UUID.
+ * @returns The upstream response.
+ */
+export async function proxyExternalAuthorProfileGet(
+  request: Request,
+  messageId: string,
+): Promise<Response> {
+  return proxyApiRequest(request, `/messages/${encodeURIComponent(messageId)}/external-profile`);
+}
+
+/**
+ * Proxies GET /messages/:id/external-posts to the 21.gifts api (public; no auth).
+ *
+ * App path is `/public-messages/:id/external-posts`.
+ *
+ * @param request - Incoming App Router request.
+ * @param messageId - Forum message UUID.
+ * @returns The upstream response.
+ */
+export async function proxyExternalAuthorPostsGet(
+  request: Request,
+  messageId: string,
+): Promise<Response> {
+  return proxyApiRequest(request, `/messages/${encodeURIComponent(messageId)}/external-posts`);
+}
+
+/**
+ * Proxies GET /messages/:id/external-replies to the 21.gifts api (public; no auth).
+ *
+ * App path is `/public-messages/:id/external-replies`.
+ *
+ * @param request - Incoming App Router request.
+ * @param messageId - Forum message UUID.
+ * @returns The upstream response.
+ */
+export async function proxyExternalAuthorRepliesGet(
+  request: Request,
+  messageId: string,
+): Promise<Response> {
+  return proxyApiRequest(request, `/messages/${encodeURIComponent(messageId)}/external-replies`);
+}
+
+/**
  * Proxies GET /links/:code to the 21.gifts api (public; no auth).
  *
  * App path is `/links/:code`. The visitor redirect lives at `/l/:code`.
@@ -999,6 +1137,26 @@ export async function proxyNotificationsReadAllPost(request: Request): Promise<R
 }
 
 /**
+ * Proxies POST /notifications/read-by-message to the 21.gifts api.
+ *
+ * @param request - Incoming App Router request (Bearer session).
+ * @returns The upstream response.
+ */
+export async function proxyNotificationsReadByMessagePost(request: Request): Promise<Response> {
+  return proxyApiRequest(request, '/notifications/read-by-message');
+}
+
+/**
+ * Proxies POST /notifications/read-visible to the 21.gifts api.
+ *
+ * @param request - Incoming App Router request (Bearer session).
+ * @returns The upstream response.
+ */
+export async function proxyNotificationsReadVisiblePost(request: Request): Promise<Response> {
+  return proxyApiRequest(request, '/notifications/read-visible');
+}
+
+/**
  * Proxies POST /notifications/:id/read to the 21.gifts api.
  *
  * @param request - Incoming App Router request (Bearer session).
@@ -1144,4 +1302,46 @@ export async function proxyMessagesShopAccountPatch(
   messageId: string,
 ): Promise<Response> {
   return proxyApiRequest(request, `/messages/${encodeURIComponent(messageId)}/shop-account`);
+}
+
+/**
+ * Proxies a moderator's PATCH /messages/:id/text request.
+ *
+ * @param request - Incoming Bearer request with JSON `{ text }`.
+ * @param messageId - Forum message UUID.
+ * @returns The upstream response.
+ */
+export async function proxyMessagesTextPatch(
+  request: Request,
+  messageId: string,
+): Promise<Response> {
+  return proxyApiRequest(request, `/messages/${encodeURIComponent(messageId)}/text`);
+}
+
+/**
+ * Proxies a moderator's PATCH /messages/:id/photos request.
+ *
+ * @param request - Incoming Bearer request with JSON `{ photos }`.
+ * @param messageId - Forum message UUID.
+ * @returns The upstream response.
+ */
+export async function proxyMessagesPhotosPatch(
+  request: Request,
+  messageId: string,
+): Promise<Response> {
+  return proxyApiRequest(request, `/messages/${encodeURIComponent(messageId)}/photos`);
+}
+
+/**
+ * Proxies a moderator's GET /messages/:id/edits request.
+ *
+ * @param request - Incoming Bearer request.
+ * @param messageId - Forum message UUID.
+ * @returns The upstream response.
+ */
+export async function proxyMessagesEditsGet(
+  request: Request,
+  messageId: string,
+): Promise<Response> {
+  return proxyApiRequest(request, `/messages/${encodeURIComponent(messageId)}/edits`);
 }

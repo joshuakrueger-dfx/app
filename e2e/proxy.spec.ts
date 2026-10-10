@@ -17,6 +17,15 @@ test('same-origin api proxy routes exist', async ({ request }) => {
   expect((await request.get('/forum/messages/[id]/replies')).status()).toBeGreaterThanOrEqual(400);
   expect((await request.get('/public-messages/[id]')).status()).toBeGreaterThanOrEqual(400);
   expect((await request.get('/public-messages/[id]/replies')).status()).toBeGreaterThanOrEqual(400);
+  expect(
+    (await request.get('/public-messages/[id]/external-profile')).status(),
+  ).toBeGreaterThanOrEqual(400);
+  expect(
+    (await request.get('/public-messages/[id]/external-posts')).status(),
+  ).toBeGreaterThanOrEqual(400);
+  expect(
+    (await request.get('/public-messages/[id]/external-replies')).status(),
+  ).toBeGreaterThanOrEqual(400);
   expect((await request.get('/links/[code]')).status()).toBeGreaterThanOrEqual(400);
   expect((await request.get('/l/[code]')).status()).toBe(404);
   expect((await request.post('/messages/[id]/invoice')).status()).toBeGreaterThanOrEqual(400);
@@ -66,6 +75,8 @@ test('same-origin api proxy routes exist', async ({ request }) => {
   expect((await request.delete('/me/lightning-address')).status()).toBe(401);
   expect((await request.get('/lightning-address')).status()).toBe(400);
   expect((await request.get('/gifts/stats')).status()).toBe(200);
+  expect((await request.get('/habits')).status()).toBe(200);
+  expect((await request.post('/habits')).status()).toBe(401);
   expect((await request.get('/me/activity')).status()).toBe(401);
   expect(
     (await request.get('/forum/members/[accountId]/activity')).status(),

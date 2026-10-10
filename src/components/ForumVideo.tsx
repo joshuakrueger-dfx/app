@@ -1,27 +1,29 @@
 'use client';
 
-import { Maximize, Minimize } from 'lucide-react';
+import { Maximize, Minimize, Play } from 'lucide-react';
 import { useEffect, useRef, useState, type ReactElement, type VideoHTMLAttributes } from 'react';
 import { useTranslations } from '@/components/LocaleProvider';
 import { IconButton } from '@/components/ui';
 
 /**
- * Playable note video with one fullscreen control.
+ * Playable note video. No native controls; one play button while paused; a
+ * click on the playing video pauses it; the fullscreen button sits in an
+ * absolutely positioned wrapper because the small icon button stays relative;
+ * the frame is `mx-auto w-fit` (centered, and both controls sit on the
+ * picture); the fullscreen button calls `requestFullscreen` on that frame.
  *
- * Native fullscreen is hidden (`controlsList="nofullscreen"`). The button
- * calls `requestFullscreen` on the frame that also holds the button, or
- * `webkitEnterFullscreen` on the video when that API is missing. Escape
- * stays the browser's.
- *
- * @param props - Native video attributes. `controls` and `playsInline` are set here.
- * @returns The video and its fullscreen button.
+ * @param props - Native video attributes. `playsInline` is set here.
+ * @returns The video, play control, and fullscreen button.
  */
-export function ForumVideo(props: VideoHTMLAttributes<HTMLVideoElement>): ReactElement {
-  const { className, onClick, ...rest } = props;
+export function ForumVideo(
+  props: Omit<VideoHTMLAttributes<HTMLVideoElement>, 'controls' | 'controlsList' | 'playsInline'>,
+): ReactElement {
+  const { className, onClick, onPlay, onPause, ...rest } = props;
   const { t } = useTranslations();
   const frameRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [fullscreen, setFullscreen] = useState(false);
+  const [paused, setPaused] = useState(true);
 
   useEffect(() => {
     const sync = (): void => {
@@ -51,36 +53,61 @@ export function ForumVideo(props: VideoHTMLAttributes<HTMLVideoElement>): ReactE
   };
 
   return (
-    <div ref={frameRef} className="relative">
+    <div ref={frameRef} className="relative mx-auto w-fit max-w-full">
       <video
         ref={videoRef}
         {...rest}
-        controls
         playsInline
-        controlsList="nofullscreen"
         className={className}
         onClick={(event) => {
           event.stopPropagation();
+          if (!paused) {
+            videoRef.current?.pause();
+          }
           onClick?.(event);
         }}
-      />
-      <IconButton
-        type="button"
-        size="sm"
-        variant="secondary"
-        className="absolute end-2 top-4 z-10"
-        aria-label={fullscreen ? t('forum.videoExitFullscreen') : t('forum.videoFullscreen')}
-        onClick={(event) => {
-          event.stopPropagation();
-          enter();
+        onPlay={(event) => {
+          setPaused(false);
+          onPlay?.(event);
         }}
-      >
-        {fullscreen ? (
-          <Minimize aria-hidden="true" className="h-4 w-4" />
-        ) : (
-          <Maximize aria-hidden="true" className="h-4 w-4" />
-        )}
-      </IconButton>
+        onPause={(event) => {
+          setPaused(true);
+          onPause?.(event);
+        }}
+      />
+      {paused ? (
+        <button
+          type="button"
+          aria-label={t('forum.videoPlay')}
+          className="absolute inset-0 z-10 flex items-center justify-center"
+          onClick={(event) => {
+            event.stopPropagation();
+            void videoRef.current?.play();
+          }}
+        >
+          <span className="flex h-12 w-12 items-center justify-center rounded-full bg-black/60 text-white">
+            <Play aria-hidden="true" className="h-6 w-6 fill-current" />
+          </span>
+        </button>
+      ) : null}
+      <div className="absolute end-2 top-2 z-20">
+        <IconButton
+          type="button"
+          size="sm"
+          variant="secondary"
+          aria-label={fullscreen ? t('forum.videoExitFullscreen') : t('forum.videoFullscreen')}
+          onClick={(event) => {
+            event.stopPropagation();
+            enter();
+          }}
+        >
+          {fullscreen ? (
+            <Minimize aria-hidden="true" className="h-4 w-4" />
+          ) : (
+            <Maximize aria-hidden="true" className="h-4 w-4" />
+          )}
+        </IconButton>
+      </div>
     </div>
   );
 }

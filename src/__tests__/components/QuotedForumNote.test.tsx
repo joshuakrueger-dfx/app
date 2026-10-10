@@ -33,6 +33,8 @@ vi.mock('@/lib/api', () => ({
   fetchPublicMessage: vi.fn(),
   fetchPublicMessagePhoto: vi.fn(),
   fetchShortLink: vi.fn(),
+  fetchExternalAuthorProfile: vi.fn().mockResolvedValue(null),
+  markNotificationsReadForMessage: vi.fn().mockResolvedValue({ ok: true, tags: [] }),
 }));
 
 vi.mock('@/lib/note-translate', () => ({
@@ -1024,6 +1026,90 @@ describe('ForumQuotedBody', () => {
     expect(screen.getByText('Greetings! https://example.com/hello')).toBeTruthy();
     expect(screen.queryByRole('link', { name: /example\.com/ })).toBeNull();
     expect(screen.queryByText('Founder')).toBeNull();
+  });
+
+  it('shows Verified and Software Developer on a quoted note with the staff tag', async () => {
+    const tagged: ForumMessage = {
+      ...quotedNote,
+      role: 'verified',
+      staffTag: 'software_developer',
+      hasPhoto: false,
+      photoCount: 0,
+    };
+    renderWithLocale(
+      <ForumQuotedBody
+        text={QUOTED_URL}
+        knownNotes={[tagged]}
+        excludeId={PARENT_ID}
+        rateDay={null}
+        fiat="USD"
+      />,
+    );
+    await waitFor(() => {
+      expect(screen.getByText('Verified')).toBeTruthy();
+    });
+    expect(screen.getByText('Software Developer')).toBeTruthy();
+  });
+
+  it('shows External and Software Developer on a quoted nostr note with the staff tag', async () => {
+    const tagged: ForumMessage = {
+      ...quotedNote,
+      role: 'basis',
+      via: 'nostr',
+      staffTag: 'software_developer',
+      hasPhoto: false,
+      photoCount: 0,
+    };
+    renderWithLocale(
+      <ForumQuotedBody
+        text={QUOTED_URL}
+        knownNotes={[tagged]}
+        excludeId={PARENT_ID}
+        rateDay={null}
+        fiat="USD"
+      />,
+    );
+    await waitFor(() => {
+      expect(screen.getByText('External')).toBeTruthy();
+    });
+    expect(screen.getByText('Software Developer')).toBeTruthy();
+  });
+
+  it('shows an external quoted author as a View profile link without a member link', async () => {
+    const onActivate = vi.fn();
+    const viaQuoted: ForumMessage = {
+      ...quotedNote,
+      role: 'basis',
+      via: 'nostr',
+      name: 'Robin',
+      hasPhoto: false,
+      photoCount: 0,
+    };
+    renderWithLocale(
+      <ForumQuotedBody
+        text={QUOTED_URL}
+        knownNotes={[viaQuoted]}
+        excludeId={PARENT_ID}
+        rateDay={null}
+        fiat="USD"
+        onActivate={onActivate}
+      />,
+    );
+    const author = await screen.findByRole('link', { name: 'View profile' });
+    expect(author.getAttribute('href')).toBe(`/messages/${viaQuoted.id}/author?name=Robin`);
+    fireEvent.click(author);
+    expect(onActivate).not.toHaveBeenCalled();
+    expect(
+      screen
+        .queryAllByRole('link')
+        .filter((el) => el.getAttribute('href')?.startsWith('/members/')),
+    ).toEqual([]);
+    expect(
+      screen.getByRole('link', { name: 'Open linked note from Robin (external)' }),
+    ).toBeTruthy();
+    expect(screen.getByText('External')).toBeTruthy();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Close' })).toBeNull();
   });
 
   it('uses the external aria-label for a quoted note with via nostr', async () => {

@@ -52,8 +52,10 @@ vi.mock('next/navigation', () => ({
 vi.mock('@/lib/api', () => ({
   fetchPublicMessage: vi.fn().mockResolvedValue(null),
   fetchPublicMessagePhoto: vi.fn().mockRejectedValue(new Error('no photo')),
+  fetchExternalAuthorProfile: vi.fn().mockResolvedValue(null),
   setMessagePlace: vi.fn(),
   setMessageShopAccount: vi.fn(),
+  markNotificationsReadForMessage: vi.fn().mockResolvedValue({ ok: true, tags: [] }),
 }));
 
 import { fetchPublicMessage } from '@/lib/api';
@@ -2893,6 +2895,115 @@ describe('ForumBoard', () => {
     expect(screen.getByRole('status').textContent).toBe('This person was named an initiator.');
   });
 
+  it('shows a Software Developer label on a basis top-level note as text, not a button', () => {
+    renderWithLocale(
+      <ForumBoard
+        messages={[{ ...SAMPLE, staffTag: 'software_developer' }]}
+        error={false}
+        loading={false}
+        posting={false}
+        draft=""
+        onDraftChange={() => undefined}
+        onPost={() => undefined}
+        onRetry={() => undefined}
+        formError={null}
+        {...idleProps}
+        {...modeProps('all')}
+      />,
+    );
+    expect(screen.getByText('Software Developer')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Software Developer' })).toBeNull();
+  });
+
+  it('omits the Software Developer label when staffTag is absent', () => {
+    renderWithLocale(
+      <ForumBoard
+        messages={[SAMPLE]}
+        error={false}
+        loading={false}
+        posting={false}
+        draft=""
+        onDraftChange={() => undefined}
+        onPost={() => undefined}
+        onRetry={() => undefined}
+        formError={null}
+        {...idleProps}
+        {...modeProps('all')}
+      />,
+    );
+    expect(screen.queryByText('Software Developer')).toBeNull();
+  });
+
+  it('shows a Software Developer label on a reply', () => {
+    renderWithLocale(
+      <ForumBoard
+        messages={[{ ...SAMPLE, replyCount: 1 }]}
+        error={false}
+        loading={false}
+        posting={false}
+        draft=""
+        onDraftChange={() => undefined}
+        onPost={() => undefined}
+        onRetry={() => undefined}
+        formError={null}
+        {...idleProps}
+        expandedId="m1"
+        replies={[
+          {
+            ...SAMPLE,
+            id: 'r-staff',
+            name: 'Bob',
+            role: 'basis',
+            replyCount: 0,
+            staffTag: 'software_developer',
+          },
+        ]}
+        {...modeProps('all')}
+      />,
+    );
+    expect(screen.getByText('Software Developer')).toBeTruthy();
+  });
+
+  it('keeps the Verified button and Software Developer label together', () => {
+    renderWithLocale(
+      <ForumBoard
+        messages={[{ ...SAMPLE, role: 'verified', staffTag: 'software_developer' }]}
+        error={false}
+        loading={false}
+        posting={false}
+        draft=""
+        onDraftChange={() => undefined}
+        onPost={() => undefined}
+        onRetry={() => undefined}
+        formError={null}
+        {...idleProps}
+        {...modeProps('all')}
+      />,
+    );
+    expect(screen.getByRole('button', { name: 'Verified' })).toBeTruthy();
+    expect(screen.getByText('Software Developer')).toBeTruthy();
+  });
+
+  it('keeps the External button and Software Developer label together', () => {
+    renderWithLocale(
+      <ForumBoard
+        messages={[{ ...SAMPLE, via: 'nostr', payable: false, staffTag: 'software_developer' }]}
+        error={false}
+        loading={false}
+        posting={false}
+        draft=""
+        onDraftChange={() => undefined}
+        onPost={() => undefined}
+        onRetry={() => undefined}
+        formError={null}
+        {...idleProps}
+        {...modeProps('all')}
+      />,
+    );
+    expect(screen.getByRole('button', { name: 'External' })).toBeTruthy();
+    expect(screen.getByText('Software Developer')).toBeTruthy();
+  });
+
   it('shows Founder, Moderator, and Verified tags on replies', () => {
     renderWithLocale(
       <ForumBoard
@@ -3780,6 +3891,7 @@ describe('ForumBoard', () => {
   });
 
   it('shows an External badge and hint on a top-level note', () => {
+    const onToggleExpand = vi.fn();
     renderWithLocale(
       <ForumBoard
         messages={[{ ...SAMPLE, via: 'nostr', payable: false }]}
@@ -3792,13 +3904,14 @@ describe('ForumBoard', () => {
         onRetry={() => undefined}
         formError={null}
         {...idleProps}
+        onToggleExpand={onToggleExpand}
         {...modeProps('all')}
       />,
     );
     const tag = screen.getByRole('button', { name: 'External' });
     expect(tag.getAttribute('aria-expanded')).toBe('false');
-    expect(screen.queryByRole('button', { name: 'View profile' })).toBeNull();
-    expect(screen.getByText('Ada')).toBeTruthy();
+    const author = screen.getByRole('button', { name: 'View profile' });
+    expect(author.textContent).toBe('Ada');
     fireEvent.click(tag);
     expect(tag.getAttribute('aria-expanded')).toBe('true');
     expect(screen.getByRole('status').textContent).toBe(
@@ -3807,6 +3920,11 @@ describe('ForumBoard', () => {
     fireEvent.click(tag);
     expect(tag.getAttribute('aria-expanded')).toBe('false');
     expect(screen.queryByRole('status')).toBeNull();
+    fireEvent.click(author);
+    expect(push).toHaveBeenCalledWith('/messages/m1/author?name=Ada');
+    expect(push.mock.calls.some((call) => String(call[0]).includes('/members/'))).toBe(false);
+    expect(onToggleExpand).not.toHaveBeenCalled();
+    expect(screen.queryByRole('dialog')).toBeNull();
   });
 
   it('renders a via nostr shop note with the shop pill', () => {
@@ -3917,8 +4035,8 @@ describe('ForumBoard', () => {
       />,
     );
     const tag = screen.getByRole('button', { name: 'External' });
-    expect(screen.queryByRole('button', { name: 'View profile' })).toBeNull();
-    expect(screen.getByText('Robin')).toBeTruthy();
+    const author = screen.getByRole('button', { name: 'View profile' });
+    expect(author.textContent).toBe('Robin');
     expect(screen.getByText('Greetings! https://example.com/hello')).toBeTruthy();
     expect(screen.queryByRole('link', { name: /example\.com/ })).toBeNull();
     fireEvent.click(tag);
@@ -3926,6 +4044,11 @@ describe('ForumBoard', () => {
     expect(screen.getByRole('status').textContent).toContain('Wrote from another app');
     fireEvent.click(tag);
     expect(screen.queryByRole('status')).toBeNull();
+    fireEvent.click(author);
+    expect(onToggleExpand).not.toHaveBeenCalled();
+    expect(push).toHaveBeenCalledWith('/messages/r-nostr-text/author?name=Robin');
+    expect(push.mock.calls.some((call) => String(call[0]).includes('/members/'))).toBe(false);
+    expect(screen.queryByRole('dialog')).toBeNull();
   });
 
   it('keeps a long via reply full when truncate is off', () => {
@@ -4046,8 +4169,7 @@ describe('ForumBoard', () => {
     const video = document.querySelector('ul video');
     expect(video).toBeTruthy();
     expect(video?.getAttribute('src')).toBe('/messages/vid-webm/video.webm');
-    expect(video?.hasAttribute('controls')).toBe(true);
-    expect(video?.getAttribute('controlsList')).toContain('nofullscreen');
+    expect(video?.hasAttribute('controls')).toBe(false);
     expect(video?.hasAttribute('playsinline')).toBe(true);
     const frame = video?.parentElement;
     if (!(frame instanceof HTMLElement)) {
@@ -4693,6 +4815,28 @@ describe('ForumBoard', () => {
     );
     expect(screen.queryByRole('button', { name: 'View profile' })).toBeNull();
     expect(screen.getByText('Ada')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'React' })).toBeTruthy();
+  });
+
+  it('hides React when the board is read-only and the composer is hidden', () => {
+    renderWithLocale(
+      <ForumBoard
+        messages={[SAMPLE]}
+        error={false}
+        loading={false}
+        posting={false}
+        draft=""
+        onDraftChange={() => undefined}
+        onPost={() => undefined}
+        onRetry={() => undefined}
+        formError={null}
+        {...idleProps}
+        readOnly
+        composerHidden
+        {...modeProps('all')}
+      />,
+    );
+    expect(screen.queryByRole('button', { name: 'React' })).toBeNull();
   });
 
   it('keeps Damus-only names as plain text', () => {
@@ -5607,6 +5751,252 @@ describe('ForumBoard', () => {
     expect(screen.getByText("₿21'000 senden")).toBeTruthy();
     expect(screen.queryByText('—')).toBeNull();
     expect(screen.queryByText(/^CHF /)).toBeNull();
+  });
+
+  it('shows send and received as separate lines on a gift-only reply', () => {
+    renderWithLocale(
+      <ForumBoard
+        messages={[SAMPLE]}
+        error={false}
+        loading={false}
+        posting={false}
+        draft=""
+        onDraftChange={() => undefined}
+        onPost={() => undefined}
+        onRetry={() => undefined}
+        formError={null}
+        {...idleProps}
+        expandedId="m1"
+        replies={[
+          {
+            id: 'r-gift',
+            name: 'Bob',
+            text: '',
+            createdAt: '2026-08-28T12:30:00.000Z',
+            sats: 21000,
+            receivedSats: 100,
+            payable: false,
+            hasPhoto: false,
+            photoCount: 0,
+            hasVideo: false,
+            videoContentType: null,
+            role: 'basis',
+            replyCount: 0,
+          },
+        ]}
+        {...modeProps('all')}
+      />,
+    );
+    expect(screen.getByText("send ₿21'000")).toBeTruthy();
+    expect(screen.getByText('received ₿100')).toBeTruthy();
+  });
+
+  it('shows stored sent and received fiat on a text reply without mixing them', () => {
+    renderWithLocale(
+      <ForumBoard
+        messages={[SAMPLE]}
+        error={false}
+        loading={false}
+        posting={false}
+        draft=""
+        onDraftChange={() => undefined}
+        onPost={() => undefined}
+        onRetry={() => undefined}
+        formError={null}
+        {...idleProps}
+        expandedId="m1"
+        rateDay={{
+          sats: 100_000_000,
+          usd: '100000.00',
+          chf: '80000.00',
+          eur: '90000.00',
+          php: '5600000.00',
+        }}
+        replies={[
+          {
+            id: 'r-both',
+            name: 'Bob',
+            text: 'Thanks',
+            createdAt: '2026-08-28T12:30:00.000Z',
+            sats: 21000,
+            amountUsd: '18.14',
+            receivedSats: 100,
+            receivedAmountUsd: '0.09',
+            payable: false,
+            hasPhoto: false,
+            photoCount: 0,
+            hasVideo: false,
+            videoContentType: null,
+            role: 'basis',
+            replyCount: 0,
+          },
+        ]}
+        {...modeProps('all')}
+      />,
+    );
+    const sent = screen.getByText("sent ₿21'000");
+    expect(sent.closest('div')?.className).toContain('border-l-2');
+    expect(screen.getAllByText('$18.14')).toHaveLength(1);
+    const received = screen.getByText('received ₿100');
+    expect(received.closest('div')).toBe(sent.closest('div'));
+    expect(screen.getByText('$0.09')).toBeTruthy();
+    expect(screen.queryByText("₿21'000")).toBeNull();
+    expect(screen.queryByText("₿21'100")).toBeNull();
+    expect(screen.queryByText('$21.00')).toBeNull();
+    expect(screen.queryByText('$0.10')).toBeNull();
+  });
+
+  it('labels sent and received in German without adding them', () => {
+    renderWithLocale(
+      <ForumBoard
+        messages={[SAMPLE]}
+        error={false}
+        loading={false}
+        posting={false}
+        draft=""
+        onDraftChange={() => undefined}
+        onPost={() => undefined}
+        onRetry={() => undefined}
+        formError={null}
+        {...idleProps}
+        expandedId="m1"
+        replies={[
+          {
+            id: 'r-de',
+            name: 'Bob',
+            text: 'Stimmt',
+            createdAt: '2026-08-28T12:30:00.000Z',
+            sats: 21000,
+            receivedSats: 100,
+            payable: false,
+            hasPhoto: false,
+            photoCount: 0,
+            hasVideo: false,
+            videoContentType: null,
+            role: 'basis',
+            replyCount: 0,
+          },
+        ]}
+        {...modeProps('all')}
+      />,
+      'de',
+    );
+    expect(screen.getByText("₿21'000 gesendet")).toBeTruthy();
+    expect(screen.getByText('₿100 erhalten')).toBeTruthy();
+    expect(screen.queryByText("₿21'100")).toBeNull();
+  });
+
+  it('shows only the received line when the reply sent nothing', () => {
+    renderWithLocale(
+      <ForumBoard
+        messages={[SAMPLE]}
+        error={false}
+        loading={false}
+        posting={false}
+        draft=""
+        onDraftChange={() => undefined}
+        onPost={() => undefined}
+        onRetry={() => undefined}
+        formError={null}
+        {...idleProps}
+        expandedId="m1"
+        replies={[
+          {
+            id: 'r-in',
+            name: 'Bob',
+            text: 'Thanks',
+            createdAt: '2026-08-28T12:30:00.000Z',
+            sats: 0,
+            receivedSats: 100,
+            payable: false,
+            hasPhoto: false,
+            photoCount: 0,
+            hasVideo: false,
+            videoContentType: null,
+            role: 'basis',
+            replyCount: 0,
+          },
+        ]}
+        {...modeProps('all')}
+      />,
+    );
+    expect(screen.getByText('received ₿100')).toBeTruthy();
+    expect(screen.queryByText(/sent /)).toBeNull();
+    expect(screen.queryByText("₿21'100")).toBeNull();
+  });
+
+  it('omits the received line when receivedSats is absent', () => {
+    renderWithLocale(
+      <ForumBoard
+        messages={[SAMPLE]}
+        error={false}
+        loading={false}
+        posting={false}
+        draft=""
+        onDraftChange={() => undefined}
+        onPost={() => undefined}
+        onRetry={() => undefined}
+        formError={null}
+        {...idleProps}
+        expandedId="m1"
+        replies={[
+          {
+            id: 'r-none',
+            name: 'Bob',
+            text: 'Thanks',
+            createdAt: '2026-08-28T12:30:00.000Z',
+            sats: 21000,
+            payable: false,
+            hasPhoto: false,
+            photoCount: 0,
+            hasVideo: false,
+            videoContentType: null,
+            role: 'basis',
+            replyCount: 0,
+          },
+        ]}
+        {...modeProps('all')}
+      />,
+    );
+    expect(screen.queryByText(/received ₿/)).toBeNull();
+  });
+
+  it('omits the received line when receivedSats is 0', () => {
+    renderWithLocale(
+      <ForumBoard
+        messages={[SAMPLE]}
+        error={false}
+        loading={false}
+        posting={false}
+        draft=""
+        onDraftChange={() => undefined}
+        onPost={() => undefined}
+        onRetry={() => undefined}
+        formError={null}
+        {...idleProps}
+        expandedId="m1"
+        replies={[
+          {
+            id: 'r-zero',
+            name: 'Bob',
+            text: 'Thanks',
+            createdAt: '2026-08-28T12:30:00.000Z',
+            sats: 21000,
+            receivedSats: 0,
+            payable: false,
+            hasPhoto: false,
+            photoCount: 0,
+            hasVideo: false,
+            videoContentType: null,
+            role: 'basis',
+            replyCount: 0,
+          },
+        ]}
+        {...modeProps('all')}
+      />,
+    );
+    expect(screen.queryByText(/received ₿/)).toBeNull();
+    expect(screen.queryByText('received ₿0')).toBeNull();
   });
 
   it('renders reply text with the gift amount underneath', () => {

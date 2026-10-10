@@ -46,6 +46,9 @@ vi.mock('@/lib/api', () => ({
   deleteMessage: vi.fn(),
   setMessagePlace: vi.fn(),
   setMessageShopAccount: vi.fn(),
+  setMessageShopText: vi.fn(),
+  setMessageShopPhotos: vi.fn(),
+  fetchShopNoteEdits: vi.fn(),
   fetchMessages: vi.fn(),
   fetchPublicForumMessages: vi.fn(),
   fetchPublicMessage: vi.fn(),
@@ -69,6 +72,8 @@ vi.mock('@/lib/api', () => ({
   fetchGiftStats: vi.fn().mockResolvedValue({ spendOverTime: [] }),
   fetchNotifications: vi.fn(),
   markNotificationRead: vi.fn(),
+  markNotificationsReadForMessage: vi.fn().mockResolvedValue({ ok: true, tags: [] }),
+  markVisibleForumNoteRead: vi.fn().mockResolvedValue({ ok: true, tags: [] }),
   agreeToRules: vi.fn(),
   setName: vi.fn(),
   setLightningAddress: vi.fn(),
@@ -82,7 +87,15 @@ vi.mock('@/lib/forum-photo', () => ({
 vi.mock('@/lib/forum-video', () => ({
   isForumVideoFile: vi.fn(() => false),
   prepareForumVideo: vi.fn(),
+  forumVideoSrc: (id: string) => `/messages/${id}/video.mp4`,
 }));
+vi.mock('@/lib/push', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/push')>();
+  return {
+    ...actual,
+    closeLocalPushNotifications: vi.fn().mockResolvedValue(undefined),
+  };
+});
 
 import {
   agreeToRules,
@@ -99,6 +112,8 @@ import {
   PublicForumUnauthorizedError,
   NoteDeletedError,
   markNotificationRead,
+  markNotificationsReadForMessage,
+  markVisibleForumNoteRead,
   fetchComposeTarget,
   postMessage,
   postMessageInvoice,
@@ -107,11 +122,14 @@ import {
   setLightningAddress,
   setMessagePlace,
   setMessageShopAccount,
+  setMessageShopText,
+  fetchShopNoteEdits,
   setName,
 } from '@/lib/api';
 import { MissingRequirementsError } from '@/lib/missing-requirements';
 import { prepareForumPhoto } from '@/lib/forum-photo';
 import { isForumVideoFile, prepareForumVideo } from '@/lib/forum-video';
+import { closeLocalPushNotifications } from '@/lib/push';
 
 const fetchMock = vi.mocked(fetchMessages);
 const publicListMock = vi.mocked(fetchPublicForumMessages);
@@ -119,6 +137,9 @@ const publicPhotoMock = vi.mocked(fetchPublicMessagePhoto);
 const publicRepliesMock = vi.mocked(fetchPublicReplies);
 const fetchNotificationsMock = vi.mocked(fetchNotifications);
 const markNotificationReadMock = vi.mocked(markNotificationRead);
+const markNotificationsReadForMessageMock = vi.mocked(markNotificationsReadForMessage);
+const markVisibleForumNoteReadMock = vi.mocked(markVisibleForumNoteRead);
+const closeLocalPushNotificationsMock = vi.mocked(closeLocalPushNotifications);
 const fetchGiftStatsMock = vi.mocked(fetchGiftStats);
 const publicFetchMock = vi.mocked(fetchPublicMessage);
 const postMock = vi.mocked(postMessage);
@@ -286,7 +307,89 @@ const EMPTY_STATS: GiftStats = {
 };
 
 const originalScrollIntoView = HTMLElement.prototype.scrollIntoView;
+const originalGetBoundingClientRect = Element.prototype.getBoundingClientRect;
 const originalUserAgent = navigator.userAgent;
+
+const SCROLLPORT_RECT = {
+  top: 0,
+  bottom: 800,
+  left: 0,
+  right: 400,
+  width: 400,
+  height: 800,
+};
+
+const CARD_INSIDE_RECT = {
+  top: 100,
+  bottom: 500,
+  left: 16,
+  right: 384,
+  width: 368,
+  height: 400,
+};
+
+function asDomRect(box: {
+  top: number;
+  bottom: number;
+  left: number;
+  right: number;
+  width: number;
+  height: number;
+}): DOMRect {
+  return {
+    ...box,
+    x: box.left,
+    y: box.top,
+    toJSON: () => box,
+  } as DOMRect;
+}
+
+function stubForumCardRects(
+  byMessageId: Record<
+    string,
+    { top: number; bottom: number; left: number; right: number; width: number; height: number }
+  >,
+): void {
+  Element.prototype.getBoundingClientRect = function getBoundingClientRect(): DOMRect {
+    if (this instanceof Element && this.hasAttribute('data-scrollport')) {
+      return asDomRect(SCROLLPORT_RECT);
+    }
+    if (this instanceof Element) {
+      const id = this.getAttribute('data-message-id');
+      if (id !== null && byMessageId[id] !== undefined) {
+        return asDomRect(byMessageId[id]);
+      }
+    }
+    return originalGetBoundingClientRect.call(this);
+  };
+}
+
+async function flushPaint(): Promise<void> {
+  await act(async () => {
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          resolve();
+        });
+      });
+    });
+  });
+}
+
+function submitShopWizard(text: string, username?: string): void {
+  fireEvent.click(screen.getByRole('button', { name: 'Add a shop' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+  if (text !== '') {
+    fireEvent.change(screen.getByLabelText('Shop text'), { target: { value: text } });
+  }
+  fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+  if (username !== undefined) {
+    fireEvent.change(screen.getByLabelText('21.gifts username'), { target: { value: username } });
+  }
+  fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+  fireEvent.click(screen.getByRole('button', { name: /^Post$/ }));
+}
 
 function chooseForumMode(name: string | RegExp): void {
   fireEvent.click(screen.getByRole('combobox', { name: 'Forum view' }));
@@ -316,6 +419,8 @@ beforeEach(() => {
     createdAt: '2026-08-22T12:00:00.000Z',
     readAt: '2026-08-28T13:00:00.000Z',
   });
+  markNotificationsReadForMessageMock.mockResolvedValue({ ok: true, tags: [] });
+  markVisibleForumNoteReadMock.mockResolvedValue({ ok: true, tags: [] });
   isVideoMock.mockReturnValue(false);
   push.mockReset();
   replace.mockReset();
@@ -344,6 +449,7 @@ afterEach(() => {
   vi.clearAllTimers();
   vi.useRealTimers();
   HTMLElement.prototype.scrollIntoView = originalScrollIntoView;
+  Element.prototype.getBoundingClientRect = originalGetBoundingClientRect;
   Object.defineProperty(navigator, 'userAgent', {
     configurable: true,
     value: originalUserAgent,
@@ -808,7 +914,7 @@ describe('ForumLoader', () => {
     });
   });
 
-  it('keeps Active selected after posting an Ask', async () => {
+  it('switches to All after posting an unpaid Ask', async () => {
     fetchMock.mockResolvedValue(forumPage([]));
     postMock.mockResolvedValue({ ...SAMPLE, id: 'm-ask', text: 'Hello', goalSats: 21000 });
     renderWithLocale(<ForumLoader />);
@@ -827,11 +933,11 @@ describe('ForumLoader', () => {
     fireEvent.click(screen.getByRole('button', { name: /^Post$/ }));
     await waitFor(() => {
       expect(screen.getByText('Hello')).toBeTruthy();
-      expect(screen.getByRole('combobox', { name: 'Forum view' }).textContent).toContain('Active');
+      expect(screen.getByRole('combobox', { name: 'Forum view' }).textContent).toContain('All');
     });
   });
 
-  it('switches from Most popular to Active after posting an Ask', async () => {
+  it('switches from Most popular to All after posting an unpaid Ask', async () => {
     fetchMock.mockResolvedValue(forumPage([]));
     postMock.mockResolvedValue({ ...SAMPLE, id: 'm-ask-popular', text: 'Hello', goalSats: 21000 });
     renderWithLocale(<ForumLoader />);
@@ -856,7 +962,7 @@ describe('ForumLoader', () => {
     fireEvent.click(screen.getByRole('button', { name: /^Post$/ }));
     await waitFor(() => {
       expect(screen.getByText('Hello')).toBeTruthy();
-      expect(screen.getByRole('combobox', { name: 'Forum view' }).textContent).toContain('Active');
+      expect(screen.getByRole('combobox', { name: 'Forum view' }).textContent).toContain('All');
     });
   });
 
@@ -1117,7 +1223,8 @@ describe('ForumLoader', () => {
     expect(screen.queryByText('Hello from Ada')).toBeNull();
     expect(screen.getByRole('link', { name: '#Shop' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Ask for money' })).toBeNull();
-    expect(screen.getByLabelText('Your message')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Add a shop' })).toBeTruthy();
+    expect(screen.queryByLabelText('Your message')).toBeNull();
   });
 
   it('feed="shops" shows shops.empty when no listed note is a shop', async () => {
@@ -1155,10 +1262,32 @@ describe('ForumLoader', () => {
     await waitFor(() => {
       expect(screen.getByText('No shops yet — add the first one.')).toBeTruthy();
     });
-    fireEvent.change(screen.getByLabelText('Your message'), { target: { value: 'Cafe Luna' } });
-    fireEvent.click(screen.getByRole('button', { name: /^Post$/ }));
+    submitShopWizard('Cafe Luna');
     await waitFor(() => {
       expect(postMock).toHaveBeenCalledWith('sess', { text: 'Cafe Luna\n\n#21GiftsShop' });
+    });
+    expect(screen.getByRole('button', { name: 'Add a shop' })).toBeTruthy();
+  });
+
+  it('feed="shops" sends an optional shop username', async () => {
+    fetchMock.mockResolvedValue(forumPage([]));
+    postMock.mockResolvedValue({
+      ...SAMPLE,
+      id: 'shop-new',
+      text: 'Cafe Luna\n\n#21GiftsShop',
+      sats: 0,
+      payable: false,
+    });
+    renderWithLocale(<ForumLoader feed="shops" />);
+    await waitFor(() => {
+      expect(screen.getByText('No shops yet — add the first one.')).toBeTruthy();
+    });
+    submitShopWizard('Cafe Luna', '@Luna');
+    await waitFor(() => {
+      expect(postMock).toHaveBeenCalledWith('sess', {
+        text: 'Cafe Luna\n\n#21GiftsShop',
+        shopUsername: 'Luna',
+      });
     });
   });
 
@@ -1172,8 +1301,7 @@ describe('ForumLoader', () => {
     await waitFor(() => {
       expect(screen.getByText('No shops yet — add the first one.')).toBeTruthy();
     });
-    fireEvent.change(screen.getByLabelText('Your message'), { target: { value: 'Cafe Luna' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Post' }));
+    submitShopWizard('Cafe Luna');
     await waitFor(() => {
       expect(composeTargetMock).toHaveBeenCalledWith('sess');
       expect(invoiceMock).toHaveBeenCalledWith(
@@ -1225,13 +1353,111 @@ describe('ForumLoader', () => {
     await waitFor(() => {
       expect(screen.getByText('No shops yet — add the first one.')).toBeTruthy();
     });
-    fireEvent.change(screen.getByLabelText('Your message'), {
-      target: { value: 'Cafe Luna\n\n#21GiftsShop' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: /^Post$/ }));
+    submitShopWizard('Cafe Luna\n\n#21GiftsShop');
     await waitFor(() => {
       expect(postMock).toHaveBeenCalledWith('sess', { text: 'Cafe Luna\n\n#21GiftsShop' });
     });
+  });
+
+  it('feed="shops" posts a basis shop username after the compose fee', async () => {
+    useAuthStore.setState({
+      session: 'sess',
+      account: { ...account, role: 'basis', forumLawsDismissed: true, hasPosted: true },
+    });
+    fetchMock.mockResolvedValue(forumPage([]));
+    publicFetchMock.mockResolvedValue({
+      id: 'fee-note',
+      name: '21.gifts',
+      text: '',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      sats: 1,
+      payable: true,
+      hasPhoto: false,
+      photoCount: 0,
+      hasVideo: false,
+      videoContentType: null,
+      role: 'basis',
+      replyCount: 0,
+    });
+    postMock.mockResolvedValue({
+      ...SAMPLE,
+      id: 'shop-paid',
+      text: 'Cafe Luna\n\n#21GiftsShop',
+      sats: 0,
+      payable: false,
+    });
+    renderWithLocale(<ForumLoader feed="shops" />);
+    await waitFor(() => {
+      expect(screen.getByText('No shops yet — add the first one.')).toBeTruthy();
+    });
+    submitShopWizard('Cafe Luna', 'luna');
+    await waitFor(() => {
+      expect(invoiceMock).toHaveBeenCalledWith('sess', 'fee-note', 1, undefined, NO_RATE_SHOWN);
+    });
+    await waitFor(() => {
+      expect(postMock).toHaveBeenCalledWith('sess', {
+        text: 'Cafe Luna\n\n#21GiftsShop',
+        shopUsername: 'luna',
+      });
+    });
+  });
+
+  it('feed="shops" photo step has no cancel and keeps a prepared video', async () => {
+    fetchMock.mockResolvedValue(forumPage([]));
+    const file = new File(['v'], 'clip.mp4', { type: 'video/mp4' });
+    isVideoMock.mockReturnValue(true);
+    prepareVideoMock.mockResolvedValue({
+      ok: true,
+      video: { file, poster: new Blob(['p']), previewUrl: 'blob:shop-video' },
+    });
+    renderWithLocale(<ForumLoader feed="shops" />);
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Add a shop' })).toBeTruthy();
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Add a shop' }));
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [file] } });
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Remove video' })).toBeTruthy();
+    });
+    expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Remove video' })).toBeTruthy();
+  });
+
+  it('feed="shops" keeps the draft when the photo step is open', async () => {
+    fetchMock.mockResolvedValue(forumPage([]));
+    renderForumWithChrome(<ForumLoader feed="shops" />);
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Add a shop' })).toBeTruthy();
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Add a shop' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    fireEvent.change(screen.getByLabelText('Shop text'), { target: { value: 'Cafe Luna' } });
+    expect(
+      within(screen.getByLabelText('Shop text').closest('form') as HTMLElement).queryByRole(
+        'button',
+        { name: 'Back' },
+      ),
+    ).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull();
+    expect(screen.getByText('1 / 5 · Photos')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    expect((screen.getByLabelText('Shop text') as HTMLTextAreaElement).value).toBe('Cafe Luna');
+  });
+
+  it('feed="shops" refuses an empty summary', async () => {
+    fetchMock.mockResolvedValue(forumPage([]));
+    renderWithLocale(<ForumLoader feed="shops" />);
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Add a shop' })).toBeTruthy();
+    });
+    submitShopWizard('');
+    expect(screen.getByRole('alert').textContent).toBe('Enter a message or add a photo or video');
+    expect(postMock).not.toHaveBeenCalled();
   });
 
   it('feed="shops" first fetch sends hashtag 21GiftsShop', async () => {
@@ -1282,14 +1508,122 @@ describe('ForumLoader', () => {
       account: { ...account, role: 'moderator', forumLawsDismissed: true },
     });
     fetchMock.mockResolvedValue(
-      forumPage([{ ...SAMPLE, id: 'shop1', text: 'Cafe Luna\n\n#21GiftsShop', sats: 5 }]),
+      forumPage([
+        {
+          ...SAMPLE,
+          id: 'shop1',
+          text: 'Cafe Luna\n\n#21GiftsShop',
+          sats: 5,
+          hasPhoto: true,
+          photoCount: 1,
+          hasVideo: true,
+        },
+      ]),
     );
     renderWithLocale(<ForumLoader feed="shops" />);
     await waitFor(() => {
       expect(screen.getByText('Cafe Luna')).toBeTruthy();
     });
     const card = document.querySelector('[data-message-id="shop1"]') as HTMLElement;
+    await waitFor(() => {
+      expect(card.querySelector('video')?.getAttribute('poster')).toBe('blob:mock');
+    });
     expect(within(card).getByRole('button', { name: 'Add a place' })).toBeTruthy();
+    expect(within(card).getByRole('button', { name: 'Edit shop note' })).toBeTruthy();
+  });
+
+  it('updates the listed shop note text and leaves the other note', async () => {
+    useAuthStore.setState({
+      session: 'sess',
+      account: { ...account, role: 'moderator', forumLawsDismissed: true },
+    });
+    fetchMock.mockResolvedValue(
+      forumPage([
+        {
+          ...SAMPLE,
+          id: 'shop1',
+          text: 'Cafe Luna\n\n#21GiftsShop',
+          sats: 5,
+          hasPhoto: true,
+          photoCount: 1,
+        },
+        {
+          ...SAMPLE,
+          id: 'shop2',
+          text: 'Other stall\n\n#21GiftsShop',
+          sats: 5,
+          hasPhoto: true,
+          photoCount: 1,
+        },
+      ]),
+    );
+    vi.mocked(fetchShopNoteEdits).mockResolvedValue([]);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: true,
+        blob: () =>
+          Promise.resolve({
+            type: 'image/jpeg',
+            arrayBuffer: () => Promise.resolve(Uint8Array.of(1).buffer),
+          }),
+      })),
+    );
+    vi.mocked(setMessageShopText).mockResolvedValueOnce({
+      ...SAMPLE,
+      id: 'shop1',
+      text: 'Cafe Sol\n\n#21GiftsShop',
+      sats: 5,
+      hasPhoto: true,
+      photoCount: 1,
+      place: { lat: 1, lng: 2, label: 'Stall' },
+      shopAccount: { id: 'shop-acc', username: 'luna', name: 'Luna' },
+    });
+    renderWithLocale(<ForumLoader feed="shops" />);
+    await waitFor(() => {
+      expect(screen.getByText('Cafe Luna')).toBeTruthy();
+    });
+    const card = document.querySelector('[data-message-id="shop1"]') as HTMLElement;
+    fireEvent.click(within(card).getByRole('button', { name: 'Edit shop note' }));
+    expect(await within(card).findByText('1 / 5 · Photos')).toBeTruthy();
+    fireEvent.click(within(card).getByRole('button', { name: 'Next' }));
+    fireEvent.click(within(card).getByRole('button', { name: 'Next' }));
+    fireEvent.change(within(card).getByRole('textbox', { name: 'Shop text' }), {
+      target: { value: 'Cafe Sol' },
+    });
+    fireEvent.click(within(card).getByRole('button', { name: 'Next' }));
+    fireEvent.click(within(card).getByRole('button', { name: 'Next' }));
+    fireEvent.click(within(card).getByRole('button', { name: 'Save changes' }));
+    await waitFor(() => {
+      expect(within(card).getByText('Cafe Sol')).toBeTruthy();
+    });
+    expect(within(card).getByRole('button', { name: 'Edit place' })).toBeTruthy();
+    expect(screen.getByText('Other stall')).toBeTruthy();
+    vi.mocked(setMessageShopText).mockResolvedValueOnce({
+      ...SAMPLE,
+      id: 'shop1',
+      text: 'Cafe Norte\n\n#21GiftsShop',
+      sats: 5,
+      hasPhoto: true,
+      photoCount: 1,
+    });
+    fireEvent.click(within(card).getByRole('button', { name: 'Edit shop note' }));
+    expect(await within(card).findByText('1 / 5 · Photos')).toBeTruthy();
+    fireEvent.click(within(card).getByRole('button', { name: 'Next' }));
+    fireEvent.click(within(card).getByRole('button', { name: 'Next' }));
+    fireEvent.change(within(card).getByRole('textbox', { name: 'Shop text' }), {
+      target: { value: 'Cafe Norte' },
+    });
+    fireEvent.click(within(card).getByRole('button', { name: 'Next' }));
+    fireEvent.click(within(card).getByRole('button', { name: 'Next' }));
+    fireEvent.click(within(card).getByRole('button', { name: 'Save changes' }));
+    await waitFor(() => {
+      expect(within(card).getByText('Cafe Norte')).toBeTruthy();
+    });
+    expect(within(card).getByRole('button', { name: 'Add a place' })).toBeTruthy();
+    await waitFor(() => {
+      expect(photoMock.mock.calls.length).toBeGreaterThanOrEqual(2);
+    });
   });
 
   it('does not put a staff place control on living-room notes', async () => {
@@ -1363,10 +1697,10 @@ describe('ForumLoader', () => {
       expect(listeners.has('click')).toBe(true);
     });
     listeners.get('click')?.({ latLng: { lat: () => 14.6, lng: () => 120.98 } });
-    fireEvent.change(within(card).getByLabelText('Place name'), {
+    fireEvent.change(screen.getByLabelText('Place name'), {
       target: { value: 'Happyland' },
     });
-    fireEvent.click(within(card).getByRole('button', { name: 'Use this place' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Use this place' }));
     await waitFor(() => {
       expect(within(card).getByRole('link', { name: 'Happyland' })).toBeTruthy();
     });
@@ -1421,8 +1755,8 @@ describe('ForumLoader', () => {
     });
     const card = document.querySelector('[data-message-id="shop1"]') as HTMLElement;
     fireEvent.click(within(card).getByRole('button', { name: 'Edit place' }));
-    expect(await within(card).findByRole('button', { name: 'Remove place' })).toBeTruthy();
-    fireEvent.click(within(card).getByRole('button', { name: 'Remove place' }));
+    expect(await screen.findByRole('button', { name: 'Remove place' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Remove place' }));
     await waitFor(() => {
       expect(screen.queryByRole('link', { name: 'Happyland' })).toBeNull();
     });
@@ -3525,7 +3859,7 @@ describe('ForumLoader', () => {
       });
     });
     await waitFor(() => {
-      expect(screen.getByRole('combobox', { name: 'Forum view' }).textContent).toContain('Active');
+      expect(screen.getByRole('combobox', { name: 'Forum view' }).textContent).toContain('All');
     });
   });
 
@@ -5089,7 +5423,7 @@ describe('ForumLoader', () => {
       name: 'Ada',
       text: 'Half a dollar',
       createdAt: '2026-08-28T14:00:00.000Z',
-      sats: 0,
+      sats: 1,
       goalSats: 1000,
       goalCurrency: 'USD',
       goalAmount: '1.50',
@@ -5431,6 +5765,255 @@ describe('ForumLoader', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: 'Hide reactions' }));
     expect(screen.queryByLabelText('Your reaction')).toBeNull();
+  });
+
+  it('marks the note read when expanded and not when collapsed', async () => {
+    fetchMock.mockResolvedValue(forumPage([SAMPLE]));
+    repliesMock.mockResolvedValue([]);
+    renderWithLocale(<ForumLoader />);
+    await revealAll();
+    await waitFor(() => {
+      expect(screen.getByText('Hello from Ada')).toBeTruthy();
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Show reactions' }));
+    await waitFor(() => {
+      expect(markNotificationsReadForMessageMock).toHaveBeenCalledWith('sess', 'm1');
+    });
+    markNotificationsReadForMessageMock.mockClear();
+    fireEvent.click(screen.getByRole('button', { name: 'Hide reactions' }));
+    expect(markNotificationsReadForMessageMock).not.toHaveBeenCalled();
+  });
+
+  it('marks a fully visible signed-in card and not a clipped one, then marks on scroll', async () => {
+    const second: ForumMessage = { ...SAMPLE, id: 'm2', text: 'Hello from Bob' };
+    const cardRects = {
+      m1: CARD_INSIDE_RECT,
+      m2: { top: 700, bottom: 980, left: 16, right: 384, width: 368, height: 280 },
+    };
+    stubForumCardRects(cardRects);
+    fetchMock.mockResolvedValue(forumPage([SAMPLE, second]));
+    const { container } = renderWithLocale(
+      <AppShell mode="fill">
+        <ForumLoader />
+      </AppShell>,
+    );
+    await revealAll();
+    await waitFor(() => {
+      expect(screen.getByText('Hello from Ada')).toBeTruthy();
+    });
+    await waitFor(() => {
+      expect(markVisibleForumNoteReadMock).toHaveBeenCalledWith('sess', 'm1');
+    });
+    expect(markVisibleForumNoteReadMock).not.toHaveBeenCalledWith('sess', 'm2');
+    expect(markNotificationsReadForMessageMock).not.toHaveBeenCalled();
+
+    cardRects.m2 = { top: 200, bottom: 480, left: 16, right: 384, width: 368, height: 280 };
+    markVisibleForumNoteReadMock.mockClear();
+    const scroller = container.querySelector('[data-scrollport]');
+    expect(scroller).toBeTruthy();
+    if (!(scroller instanceof HTMLElement)) {
+      throw new Error('expected AppShell scroller');
+    }
+    scroller.dispatchEvent(new Event('scroll'));
+    await waitFor(() => {
+      expect(markVisibleForumNoteReadMock).toHaveBeenCalledWith('sess', 'm2');
+    });
+    expect(markVisibleForumNoteReadMock).not.toHaveBeenCalledWith('sess', 'm1');
+  });
+
+  it('does not mark a card taller than the AppShell scroller', async () => {
+    stubForumCardRects({
+      m1: { top: 0, bottom: 900, left: 16, right: 384, width: 368, height: 900 },
+    });
+    fetchMock.mockResolvedValue(forumPage([SAMPLE]));
+    renderWithLocale(
+      <AppShell mode="fill">
+        <ForumLoader />
+      </AppShell>,
+    );
+    await revealAll();
+    await waitFor(() => {
+      expect(screen.getByText('Hello from Ada')).toBeTruthy();
+    });
+    await flushPaint();
+    expect(markVisibleForumNoteReadMock).not.toHaveBeenCalled();
+  });
+
+  it('does not mark a card whose bottom is 2px past the AppShell scroller', async () => {
+    stubForumCardRects({
+      m1: { top: 100, bottom: 802, left: 16, right: 384, width: 368, height: 702 },
+    });
+    fetchMock.mockResolvedValue(forumPage([SAMPLE]));
+    renderWithLocale(
+      <AppShell mode="fill">
+        <ForumLoader />
+      </AppShell>,
+    );
+    await revealAll();
+    await waitFor(() => {
+      expect(screen.getByText('Hello from Ada')).toBeTruthy();
+    });
+    await flushPaint();
+    expect(markVisibleForumNoteReadMock).not.toHaveBeenCalled();
+  });
+
+  it('skips a card whose data-message-id is empty', async () => {
+    stubForumCardRects({
+      m1: CARD_INSIDE_RECT,
+      '': CARD_INSIDE_RECT,
+    });
+    fetchMock.mockResolvedValue(forumPage([SAMPLE]));
+    const { container } = renderWithLocale(
+      <AppShell mode="fill">
+        <ForumLoader />
+      </AppShell>,
+    );
+    await revealAll();
+    await waitFor(() => {
+      expect(screen.getByText('Hello from Ada')).toBeTruthy();
+    });
+    const scroller = container.querySelector('[data-scrollport]');
+    expect(scroller).toBeTruthy();
+    if (!(scroller instanceof HTMLElement)) {
+      throw new Error('expected AppShell scroller');
+    }
+    const emptyCard = document.createElement('li');
+    emptyCard.setAttribute('data-message-id', '');
+    scroller.appendChild(emptyCard);
+    scroller.dispatchEvent(new Event('scroll'));
+    await waitFor(() => {
+      expect(markVisibleForumNoteReadMock).toHaveBeenCalledWith('sess', 'm1');
+    });
+    expect(markVisibleForumNoteReadMock).not.toHaveBeenCalledWith('sess', '');
+  });
+
+  it('marks a card again after it leaves the fully visible set and returns', async () => {
+    const cardRects = {
+      m1: CARD_INSIDE_RECT,
+    };
+    stubForumCardRects(cardRects);
+    fetchMock.mockResolvedValue(forumPage([SAMPLE]));
+    const { container } = renderWithLocale(
+      <AppShell mode="fill">
+        <ForumLoader />
+      </AppShell>,
+    );
+    await revealAll();
+    await waitFor(() => {
+      expect(screen.getByText('Hello from Ada')).toBeTruthy();
+    });
+    await waitFor(() => {
+      expect(markVisibleForumNoteReadMock).toHaveBeenCalledWith('sess', 'm1');
+    });
+    const scroller = container.querySelector('[data-scrollport]');
+    expect(scroller).toBeTruthy();
+    if (!(scroller instanceof HTMLElement)) {
+      throw new Error('expected AppShell scroller');
+    }
+    cardRects.m1 = { top: 100, bottom: 802, left: 16, right: 384, width: 368, height: 702 };
+    scroller.dispatchEvent(new Event('scroll'));
+    await flushPaint();
+    cardRects.m1 = CARD_INSIDE_RECT;
+    markVisibleForumNoteReadMock.mockClear();
+    scroller.dispatchEvent(new Event('scroll'));
+    await flushPaint();
+    expect(markVisibleForumNoteReadMock).toHaveBeenCalledWith('sess', 'm1');
+  });
+
+  it('does not schedule a second frame while one is pending', async () => {
+    const previousRequestAnimationFrame = window.requestAnimationFrame;
+    const rafCallbacks: FrameRequestCallback[] = [];
+    let nextHandle = 1;
+    window.requestAnimationFrame = (callback: FrameRequestCallback): number => {
+      rafCallbacks.push(callback);
+      const handle = nextHandle;
+      nextHandle += 1;
+      return handle;
+    };
+    try {
+      stubForumCardRects({
+        m1: CARD_INSIDE_RECT,
+      });
+      fetchMock.mockResolvedValue(forumPage([SAMPLE]));
+      const { container } = renderWithLocale(
+        <AppShell mode="fill">
+          <ForumLoader />
+        </AppShell>,
+      );
+      await revealAll();
+      await waitFor(() => {
+        expect(screen.getByText('Hello from Ada')).toBeTruthy();
+      });
+      const scroller = container.querySelector('[data-scrollport]');
+      expect(scroller).toBeTruthy();
+      if (!(scroller instanceof HTMLElement)) {
+        throw new Error('expected AppShell scroller');
+      }
+      const queuedBeforeScroll = rafCallbacks.length;
+      expect(queuedBeforeScroll).toBeGreaterThan(0);
+      scroller.dispatchEvent(new Event('scroll'));
+      expect(rafCallbacks).toHaveLength(queuedBeforeScroll);
+      const pendingFrame = rafCallbacks[queuedBeforeScroll - 1];
+      if (pendingFrame === undefined) {
+        throw new Error('expected a pending animation frame');
+      }
+      await act(async () => {
+        pendingFrame(0);
+      });
+      expect(markVisibleForumNoteReadMock).toHaveBeenCalledTimes(1);
+      expect(markVisibleForumNoteReadMock).toHaveBeenCalledWith('sess', 'm1');
+    } finally {
+      window.requestAnimationFrame = previousRequestAnimationFrame;
+    }
+  });
+
+  it('observes the scrollport with ResizeObserver and disconnects on unmount', async () => {
+    const previousResizeObserver = globalThis.ResizeObserver;
+    const observe = vi.fn();
+    const disconnect = vi.fn();
+    let observerCallback: ResizeObserverCallback | undefined;
+    globalThis.ResizeObserver = class {
+      constructor(callback: ResizeObserverCallback) {
+        observerCallback = callback;
+      }
+      observe(element: Element): void {
+        observe(element);
+      }
+      unobserve(): void {}
+      disconnect(): void {
+        disconnect();
+      }
+    };
+    try {
+      stubForumCardRects({
+        m1: CARD_INSIDE_RECT,
+      });
+      fetchMock.mockResolvedValue(forumPage([SAMPLE]));
+      const view = renderWithLocale(
+        <AppShell mode="fill">
+          <ForumLoader />
+        </AppShell>,
+      );
+      await revealAll();
+      await waitFor(() => {
+        expect(screen.getByText('Hello from Ada')).toBeTruthy();
+      });
+      const scroller = view.container.querySelector('[data-scrollport]');
+      expect(scroller).toBeTruthy();
+      expect(observe).toHaveBeenCalledWith(scroller);
+      if (observerCallback === undefined) {
+        throw new Error('expected ResizeObserver callback');
+      }
+      observerCallback([], {} as ResizeObserver);
+      view.unmount();
+      expect(disconnect).toHaveBeenCalled();
+    } finally {
+      if (previousResizeObserver === undefined) {
+        Reflect.deleteProperty(globalThis, 'ResizeObserver');
+      } else {
+        globalThis.ResizeObserver = previousResizeObserver;
+      }
+    }
   });
 
   it('loads replies via fetchReplies when a row is expanded', async () => {
@@ -8434,6 +9017,33 @@ describe('ForumLoader', () => {
       expect(markNotificationReadMock).toHaveBeenCalledWith('sess', 'n-mod');
       expect(screen.queryByRole('button', { name: 'You are a moderator' })).toBeNull();
     });
+    expect(closeLocalPushNotificationsMock).toHaveBeenCalledWith([
+      'moderator_appointed:acc-subject',
+    ]);
+  });
+
+  it('closes local push notifications with an empty list when the read row has no tag', async () => {
+    fetchMock.mockResolvedValue(forumPage([SAMPLE]));
+    fetchNotificationsMock.mockResolvedValue({
+      notifications: [UNREAD_APPOINTED],
+      unreadCount: 1,
+    });
+    markNotificationReadMock.mockResolvedValue({
+      id: 'n-mod',
+      type: 'moderator_proposal',
+      parentId: 'acc-subject',
+      replyId: 'acc-subject',
+      name: 'Cyrill',
+      text: '',
+      createdAt: '2026-08-22T12:00:00.000Z',
+      readAt: '2026-08-28T13:00:00.000Z',
+    });
+    renderWithLocale(<ForumLoader />);
+    fireEvent.click(await screen.findByRole('button', { name: 'You are a moderator' }));
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: 'You are a moderator' })).toBeNull();
+    });
+    expect(closeLocalPushNotificationsMock).toHaveBeenCalledWith([]);
   });
 
   it('leaves the moderator banner when markNotificationRead rejects', async () => {
@@ -8449,6 +9059,7 @@ describe('ForumLoader', () => {
       expect(markNotificationReadMock).toHaveBeenCalledWith('sess', 'n-mod');
     });
     expect(screen.getByRole('button', { name: 'You are a moderator' })).toBeTruthy();
+    expect(closeLocalPushNotificationsMock).not.toHaveBeenCalled();
   });
 
   it('does not hide the moderator banner after logout during mark-read', async () => {
@@ -8475,6 +9086,7 @@ describe('ForumLoader', () => {
       await Promise.resolve();
     });
     expect(useAuthStore.getState().session).toBeNull();
+    expect(closeLocalPushNotificationsMock).not.toHaveBeenCalled();
   });
 
   it('hides the moderator banner when fetchNotifications rejects', async () => {
@@ -8864,11 +9476,16 @@ it('hides reply deletion for ordinary members', async () => {
 });
 
 it('pays a payable reply and polls that reply id', async () => {
-  const payableReply: ForumMessage = { ...NESTED_REPLY, payable: true, sats: 5 };
+  const payableReply: ForumMessage = {
+    ...NESTED_REPLY,
+    payable: true,
+    sats: 5,
+    parentId: 'm1',
+  };
   fetchMock.mockResolvedValue(forumPage([{ ...SAMPLE, replyCount: 1 }]));
   repliesMock.mockResolvedValue([payableReply]);
   invoiceMock.mockResolvedValue({ pr: 'lnbc21n1example', amountSats: 21 });
-  publicFetchMock.mockResolvedValue({ ...payableReply, sats: 26 });
+  publicFetchMock.mockResolvedValue({ ...payableReply, sats: 5, receivedSats: 21 });
   renderWithLocale(<ForumLoader />);
   await waitFor(() => expect(screen.getByRole('combobox', { name: 'Forum view' })).toBeTruthy());
   await revealAll();
@@ -8887,14 +9504,63 @@ it('pays a payable reply and polls that reply id', async () => {
     expect(publicFetchMock).toHaveBeenCalledWith(
       'r1',
       expect.objectContaining({
-        sinceSats: 5,
+        sinceReceivedSats: 0,
         signal: expect.any(AbortSignal),
       }),
     );
   });
+  expect(publicFetchMock).not.toHaveBeenCalledWith(
+    'r1',
+    expect.objectContaining({ sinceSats: expect.anything() }),
+  );
   await waitFor(() => {
     expect(within(replyCard).queryByLabelText('Amount')).toBeNull();
   });
+  expect(within(replyCard).getByText('sent ₿5')).toBeTruthy();
+  expect(within(replyCard).getByText('received ₿21')).toBeTruthy();
+  expect(within(replyCard).queryByText('₿26')).toBeNull();
+  expect(within(replyCard).queryByText('send ₿5')).toBeNull();
+});
+
+it('keeps a reply pay sheet until receivedSats rises', async () => {
+  const payableReply: ForumMessage = {
+    ...NESTED_REPLY,
+    payable: true,
+    sats: 5,
+    parentId: 'm1',
+  };
+  fetchMock.mockResolvedValue(forumPage([{ ...SAMPLE, replyCount: 1 }]));
+  repliesMock.mockResolvedValue([payableReply]);
+  invoiceMock.mockResolvedValue({ pr: 'lnbc21n1example', amountSats: 21 });
+  publicFetchMock.mockResolvedValue({ ...payableReply, sats: 5 });
+  renderWithLocale(<ForumLoader />);
+  await waitFor(() => expect(screen.getByRole('combobox', { name: 'Forum view' })).toBeTruthy());
+  await revealAll();
+  await screen.findByText('Hello from Ada');
+  fireEvent.click(screen.getByRole('button', { name: 'Show reactions' }));
+  await screen.findByText('A reply');
+  const replyCard = document.querySelector('[data-reply-id="r1"]') as HTMLElement;
+  fireEvent.click(within(replyCard).getByRole('button', { name: 'Send Bitcoin' }));
+  fireEvent.change(within(replyCard).getByLabelText('Amount'), { target: { value: '21' } });
+  vi.useFakeTimers();
+  fireEvent.click(within(replyCard).getByRole('button', { name: 'Continue' }));
+  await act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+  expect(publicFetchMock).toHaveBeenCalledWith(
+    'r1',
+    expect.objectContaining({
+      sinceReceivedSats: 0,
+      signal: expect.any(AbortSignal),
+    }),
+  );
+  expect(within(replyCard).getByText('Pay ₿21')).toBeTruthy();
+  publicFetchMock.mockResolvedValue({ ...payableReply, sats: 5, receivedSats: 21 });
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(2000);
+  });
+  expect(within(replyCard).queryByText('Pay ₿21')).toBeNull();
 });
 
 it('keeps a reply pay sheet when Active hides the parent note', async () => {

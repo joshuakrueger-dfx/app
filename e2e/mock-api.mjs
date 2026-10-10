@@ -12,7 +12,7 @@ const HOST = '127.0.0.1';
 
 /** @type {Map<string, object>} */
 const byToken = new Map();
-/** @type {Map<string, { type: 'register' | 'authenticate' | 'replace' | 'seed', account?: object }>} */
+/** @type {Map<string, { type: 'register' | 'authenticate' | 'replace' | 'seed', account?: object, requestedName?: string, claimAccountId?: string, accountId?: string }>} */
 const byPasskey = new Map();
 /** @type {Map<string, object>} */
 const byPasskeyCredential = new Map();
@@ -32,7 +32,7 @@ const aboutMePhotos = new Map();
 const messageTranslations = new Map();
 
 /** Same order as `ROLE_ORDER` in `src/lib/roles.ts`: a named role means that role or higher. */
-const ROLE_ORDER = ['basis', 'verified', 'moderator', 'founder'];
+const ROLE_ORDER = ['basis', 'verified', 'moderator', 'initiator', 'founder'];
 
 function roleAtLeast(role, min) {
   return ROLE_ORDER.indexOf(role) >= ROLE_ORDER.indexOf(min);
@@ -355,6 +355,56 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (pathName === '/habits' && method === 'GET') {
+    json(res, 200, {
+      reviewWeek: { start: '2026-09-28' },
+      habits: [
+        {
+          id: 'h-ada',
+          accountId: 'acc-ada',
+          ownerName: 'Ada',
+          role: 'initiator',
+          name: 'Walk',
+          description: 'Outside',
+          cadence: 'daily',
+          timeZone: 'Asia/Manila',
+          firstPeriod: '2026-10-01',
+          lastPeriod: null,
+          periods: [
+            {
+              period: '2026-10-04',
+              name: 'Walk',
+              description: 'Outside',
+              logged: false,
+              status: null,
+            },
+          ],
+          comments: [
+            {
+              id: 'c-bea',
+              habitId: 'h-ada',
+              accountId: 'acc-bea',
+              name: 'Bea',
+              text: 'hello',
+              week: '2026-09-28',
+              createdAt: 1,
+            },
+          ],
+        },
+      ],
+    });
+    return;
+  }
+
+  if (pathName === '/habits' && method === 'POST') {
+    if (bearer(req) === null) {
+      json(res, 401, { error: 'Unauthorized' });
+      return;
+    }
+    json(res, 200, { ok: true });
+    return;
+  }
+
   if (method === 'GET' && pathName === '/mentions') {
     if (bearer(req) === null) {
       json(res, 401, { error: 'Unauthorized' });
@@ -514,6 +564,55 @@ const server = http.createServer(async (req, res) => {
       id: decodeURIComponent(pathName.split('/')[2] ?? ''),
       shopAccount: null,
     });
+    return;
+  }
+
+  if (method === 'PATCH' && /^\/messages\/[^/]+\/text$/.test(pathName)) {
+    const token = bearer(req);
+    const account = token === null ? undefined : byToken.get(token);
+    if (!account) {
+      json(res, 401, { error: 'Unauthorized' });
+      return;
+    }
+    if (!roleAtLeast(account.role, 'moderator')) {
+      json(res, 403, { error: 'Forbidden' });
+      return;
+    }
+    json(res, 200, { id: decodeURIComponent(pathName.split('/')[2] ?? ''), text: '' });
+    return;
+  }
+
+  if (method === 'PATCH' && /^\/messages\/[^/]+\/photos$/.test(pathName)) {
+    const token = bearer(req);
+    const account = token === null ? undefined : byToken.get(token);
+    if (!account) {
+      json(res, 401, { error: 'Unauthorized' });
+      return;
+    }
+    if (!roleAtLeast(account.role, 'moderator')) {
+      json(res, 403, { error: 'Forbidden' });
+      return;
+    }
+    json(res, 200, {
+      id: decodeURIComponent(pathName.split('/')[2] ?? ''),
+      hasPhoto: false,
+      photoCount: 0,
+    });
+    return;
+  }
+
+  if (method === 'GET' && /^\/messages\/[^/]+\/edits$/.test(pathName)) {
+    const token = bearer(req);
+    const account = token === null ? undefined : byToken.get(token);
+    if (!account) {
+      json(res, 401, { error: 'Unauthorized' });
+      return;
+    }
+    if (!roleAtLeast(account.role, 'moderator')) {
+      json(res, 403, { error: 'Forbidden' });
+      return;
+    }
+    json(res, 200, { edits: [] });
     return;
   }
 
@@ -798,6 +897,26 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     json(res, 200, { ok: true });
+    return;
+  }
+
+  if (method === 'POST' && pathName === '/notifications/read-by-message') {
+    const token = bearer(req);
+    if (token === null || !byToken.get(token)) {
+      json(res, 401, { error: 'Unauthorized' });
+      return;
+    }
+    json(res, 200, { ok: true, tags: [] });
+    return;
+  }
+
+  if (method === 'POST' && pathName === '/notifications/read-visible') {
+    const token = bearer(req);
+    if (token === null || !byToken.get(token)) {
+      json(res, 401, { error: 'Unauthorized' });
+      return;
+    }
+    json(res, 200, { ok: true, tags: [] });
     return;
   }
 
@@ -1955,16 +2074,156 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (method === 'GET' && pathName === '/shops/activity') {
+    const endMs = Date.parse(`${new Date(Date.now()).toISOString().slice(0, 10)}T00:00:00.000Z`);
+    const days = Array.from({ length: 30 }, (_, i) => ({
+      day: new Date(endMs - (29 - i) * 86_400_000).toISOString().slice(0, 10),
+      shopCount: 0,
+    }));
+    json(res, 200, { days });
+    return;
+  }
+
+  if (method === 'GET' && pathName === '/funding/goal') {
+    if (bearer(req) === null) {
+      json(res, 401, { error: 'Unauthorized' });
+      return;
+    }
+    const endMs = Date.parse(`${new Date(Date.now()).toISOString().slice(0, 10)}T00:00:00.000Z`);
+    const days = Array.from({ length: 7 }, (_, i) => ({
+      day: new Date(endMs - (6 - i) * 86_400_000).toISOString().slice(0, 10),
+      shopCount: 0,
+    }));
+    json(res, 200, { days, qualifyingShops: 0 });
+    return;
+  }
+
+  if (method === 'POST' && pathName === '/e2e/unclaimed-profile') {
+    const account = newAccount(null);
+    account.name = 'Ada';
+    let username;
+    do {
+      username = `ada${hex(randomBytes(8))}`;
+    } while (usernameTaken(username, ''));
+    account.username = username;
+    account.lightningAddress = 'ada@walletofsatoshi.com';
+    account.rulesAgreedAt = Date.now();
+    account.forumLawsDismissed = true;
+    afterFieldWrite(account);
+    const token = hex(randomBytes(32));
+    byToken.set(token, account);
+    json(res, 200, { viewKey: account.viewKey, id: account.id, name: 'Ada' });
+    return;
+  }
+
   if (method === 'POST' && pathName === '/auth/passkey/register/begin') {
     const challengeId = hex(randomBytes(32));
-    const userId = hex(randomBytes(16));
-    byPasskey.set(challengeId, { type: 'register' });
+    let parsed = null;
+    if (rawBody.trim() !== '') {
+      try {
+        parsed = JSON.parse(rawBody);
+      } catch {
+        parsed = null;
+      }
+    }
+    const body =
+      parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
+
+    if (body !== null && 'viewKey' in body) {
+      if (typeof body.viewKey !== 'string') {
+        json(res, 400, {
+          error: 'Expected a JSON body with an optional "viewKey" string',
+        });
+        return;
+      }
+      if (!/^[0-9a-f]{64}$/.test(body.viewKey)) {
+        json(res, 404, { error: 'This profile could not be found.' });
+        return;
+      }
+      let claimed;
+      for (const row of byToken.values()) {
+        if (row.viewKey === body.viewKey) {
+          claimed = row;
+          break;
+        }
+      }
+      if (!claimed) {
+        json(res, 404, { error: 'This profile could not be found.' });
+        return;
+      }
+      if (typeof claimed.passkeyCredentialId === 'string' && claimed.passkeyCredentialId !== '') {
+        json(res, 409, { error: 'This profile already has a passkey' });
+        return;
+      }
+      byPasskey.set(challengeId, { type: 'register', claimAccountId: claimed.id });
+      json(res, 200, {
+        challengeId,
+        options: {
+          challenge: b64url(randomBytes(32)),
+          rp: { id: 'localhost', name: '21.gifts' },
+          user: {
+            id: b64url(Buffer.from(claimed.id)),
+            name: claimed.id,
+            displayName: claimed.name || '21.gifts',
+          },
+          pubKeyCredParams: [{ type: 'public-key', alg: -7 }],
+          authenticatorSelection: { residentKey: 'required', userVerification: 'required' },
+          extensions: { prf: {} },
+        },
+      });
+      return;
+    }
+
+    if (body !== null && 'name' in body) {
+      if (typeof body.name !== 'string') {
+        json(res, 400, {
+          error: 'Expected a JSON body with an optional "name" string',
+        });
+        return;
+      }
+      const normalized = body.name.trim().toLowerCase();
+      if (!/^[a-z0-9][a-z0-9._-]{0,31}$/.test(normalized)) {
+        json(res, 400, {
+          error: 'Username must be 1–32 characters of a-z, 0-9, hyphen, underscore, or dot',
+        });
+        return;
+      }
+      if (usernameTaken(normalized, '')) {
+        json(res, 409, { error: 'Username is already in use' });
+        return;
+      }
+      const accountId = `acc_${hex(randomBytes(8))}`;
+      byPasskey.set(challengeId, { type: 'register', requestedName: normalized, accountId });
+      json(res, 200, {
+        challengeId,
+        options: {
+          challenge: b64url(randomBytes(32)),
+          rp: { id: 'localhost', name: '21.gifts' },
+          user: {
+            id: b64url(Buffer.from(accountId)),
+            name: normalized,
+            displayName: normalized,
+          },
+          pubKeyCredParams: [{ type: 'public-key', alg: -7 }],
+          authenticatorSelection: { residentKey: 'required', userVerification: 'required' },
+          extensions: { prf: {} },
+        },
+      });
+      return;
+    }
+
+    const accountId = `acc_${hex(randomBytes(8))}`;
+    byPasskey.set(challengeId, { type: 'register', accountId });
     json(res, 200, {
       challengeId,
       options: {
         challenge: b64url(randomBytes(32)),
         rp: { id: 'localhost', name: '21.gifts' },
-        user: { id: b64url(Buffer.from(userId, 'hex')), name: userId, displayName: '21.gifts' },
+        user: {
+          id: b64url(Buffer.from(accountId)),
+          name: accountId,
+          displayName: '21.gifts',
+        },
         pubKeyCredParams: [{ type: 'public-key', alg: -7 }],
         authenticatorSelection: { residentKey: 'required', userVerification: 'required' },
         extensions: { prf: {} },
@@ -2034,9 +2293,37 @@ const server = http.createServer(async (req, res) => {
     byPasskey.delete(parsed.challengeId);
     let account;
     if (expectedType === 'register') {
-      account = newAccount(null);
-      account.passkeyCredentialId = credId;
-      byPasskeyCredential.set(credId, account);
+      if (typeof pending.claimAccountId === 'string') {
+        for (const row of byToken.values()) {
+          if (row.id === pending.claimAccountId) {
+            account = row;
+            break;
+          }
+        }
+        if (!account) {
+          json(res, 404, { error: 'This profile could not be found.' });
+          return;
+        }
+        account.passkeyCredentialId = credId;
+        byPasskeyCredential.set(credId, account);
+      } else if (typeof pending.requestedName === 'string') {
+        if (usernameTaken(pending.requestedName, '')) {
+          json(res, 409, { error: 'Username is already in use' });
+          return;
+        }
+        account = newAccount(null);
+        account.id = pending.accountId;
+        account.name = pending.requestedName;
+        account.username = pending.requestedName;
+        account.passkeyCredentialId = credId;
+        byPasskeyCredential.set(credId, account);
+        afterFieldWrite(account);
+      } else {
+        account = newAccount(null);
+        account.id = pending.accountId;
+        account.passkeyCredentialId = credId;
+        byPasskeyCredential.set(credId, account);
+      }
     } else {
       account = byPasskeyCredential.get(credId);
       if (!account) {
@@ -2299,6 +2586,16 @@ const server = http.createServer(async (req, res) => {
       json(res, 403, { error: 'Forbidden' });
       return;
     }
+    // Same allowlist as GRANT_APPLICATION_STILL_OPEN_USERNAMES. The api
+    // refuses every other username while applications are paused.
+    if (
+      account.username !== 'joey-rosima' &&
+      account.username !== 'vincent' &&
+      account.username !== 'jewel-bacolbas'
+    ) {
+      json(res, 403, { error: 'Applications are paused' });
+      return;
+    }
     json(res, 200, {
       funding: { status: 'pending', trialUtcDate: null, admittedAt: null, reviewedByName: null },
     });
@@ -2328,6 +2625,35 @@ const server = http.createServer(async (req, res) => {
       ],
       rows: [],
     });
+    return;
+  }
+
+  if (pathName === '/funding/daily-roster' || pathName.startsWith('/funding/daily-roster/')) {
+    const token = bearer(req);
+    const account = token === null ? undefined : byToken.get(token);
+    if (!account) {
+      json(res, 401, { error: 'Unauthorized' });
+      return;
+    }
+    if (account.role !== 'initiator' && account.role !== 'founder') {
+      json(res, 403, { error: 'Forbidden' });
+      return;
+    }
+    const roster = {
+      comment: '',
+      paymentsEnabled: true,
+      defaultAmountUsd: 1,
+      recipients: [],
+    };
+    if (method === 'GET' && pathName === '/funding/daily-roster') {
+      json(res, 200, roster);
+      return;
+    }
+    if (method === 'POST') {
+      json(res, 200, roster);
+      return;
+    }
+    json(res, 404, { error: 'Not found' });
     return;
   }
 

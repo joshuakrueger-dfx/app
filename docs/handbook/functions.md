@@ -1,5 +1,12 @@
 # Functions
 
+## Function: marketingMetadata
+
+- **Purpose:** Title, description, and the Open Graph image stay the same English sentences on every language URL. Only the canonical URL and the reciprocal hreflang links change with the language.
+- **Inputs:** Unprefixed path, English title, English description, and an optional locale for Home, About, Donate, and Rules.
+- **Returns / side effects:** Next.js `Metadata`; no I/O.
+- **Used by:** Home, About, Donate, Rules, Stats, Legal, and Handbook pages.
+
 ## Function: PosPage
 
 - **Purpose:** App Router page for `/pos`. Wraps `PosScreen` in `AppShell` and `OnboardingGate screen="profile"`.
@@ -86,7 +93,7 @@
 
 ## Function: GET
 
-- **Purpose:** Shared export name for App Router GET handlers. Healthz and `/maps/key` use `export function GET` (`/maps/key` is always 200 `{ key: string | null }`); same-origin api proxies re-export unique functions as `GET` (including `/forum/messages`, `/forum/messages/places` which re-exports `proxyMessagesPlacesGet`, `/forum/messages/hidden` which re-exports `proxyMessagesHiddenGet`, `/forum/notifications` which re-exports `proxyNotificationsGet`, `/messages/[id]/photo`, `/messages/[id]/photo/[file]` (`{1-9}.{jpg|jpeg|png|webp}`, proxy always requests `{n}.jpg` from the api), `/conversations/[id]/messages/[messageId]/photo`, `/conversations/[id]/messages/[messageId]/photo/[file]` (`{1-9}.{jpg|jpeg|png|webp}`, proxy always requests `{n}.jpg` from the api), `/messages/[id]/[file]`, `/messages/[id]/repayment` which re-exports `proxyMessagesRepaymentGet`, `/view-key/[viewKey]`, `/push/vapid-public`, `/trust/graph`, `/trust/proposals` which re-exports `proxyTrustProposalsGet`, `/funding/applications` which re-exports `proxyFundingApplicationsGet`, and `/funding/applications/[accountId]` which calls `proxyFundingApplicationGet`). `/translate` re-exports `proxyTranslateAvailableGet` (api GET `/translate`). HTML `/messages` is the inbox page, not a GET proxy. HTML `/notifications` is the notifications page, not a GET proxy. HTML `/moderate` is the moderation hub, not a GET proxy. HTML `/moderate/hidden` is the hidden-notes page, not a GET proxy. HTML `/moderate/proposals` is the confirm/reject queue, not a GET proxy. HTML `/moderate/applications` is the grant-application queue, not a GET proxy. HTML `/moderate/applications/[accountId]` is the grant-application review, not a GET proxy. HTML `/moderate/group` is the closed staff-room page, not a GET proxy. The signed-in HTML page `/trust-chain` is `TrustChainPage`, not this GET. `GET /l/[code]` redirects an 8-hex short code or calls `notFound()`. `GET /links/[code]` re-exports `proxyShortLinkGet`. HTML `/pos` is the till page, not a GET proxy; `GET /pos/charge` re-exports `proxyPosGet`.
+- **Purpose:** Shared export name for App Router GET handlers. Healthz and `/maps/key` use `export function GET` (`/maps/key` is always 200 `{ key: string | null }`); same-origin api proxies re-export unique functions as `GET` (including `/forum/messages`, `/forum/messages/places` which re-exports `proxyMessagesPlacesGet`, `/forum/messages/hidden` which re-exports `proxyMessagesHiddenGet`, `/forum/notifications` which re-exports `proxyNotificationsGet`, `/messages/[id]/photo`, `/messages/[id]/photo/[file]` (`{1-9}.{jpg|jpeg|png|webp}`, proxy always requests `{n}.jpg` from the api), `/conversations/[id]/messages/[messageId]/photo`, `/conversations/[id]/messages/[messageId]/photo/[file]` (`{1-9}.{jpg|jpeg|png|webp}`, proxy always requests `{n}.jpg` from the api), `/messages/[id]/[file]`, `/messages/[id]/repayment` which re-exports `proxyMessagesRepaymentGet`, `/view-key/[viewKey]`, `/push/vapid-public`, `/trust/graph`, `/trust/proposals` which re-exports `proxyTrustProposalsGet`, `/funding/applications` which re-exports `proxyFundingApplicationsGet`, `/funding/daily-roster` which re-exports `proxyFundingDailyRosterGet`, and `/funding/applications/[accountId]` which calls `proxyFundingApplicationGet`). `/translate` re-exports `proxyTranslateAvailableGet` (api GET `/translate`). HTML `/messages` is the inbox page, not a GET proxy. HTML `/notifications` is the notifications page, not a GET proxy. HTML `/moderate` is the moderation hub, not a GET proxy. HTML `/moderate/hidden` is the hidden-notes page, not a GET proxy. HTML `/moderate/proposals` is the confirm/reject queue, not a GET proxy. HTML `/moderate/applications` is the grant-application queue, not a GET proxy. HTML `/grants/payments/comment` and `/grants/payments/amounts` are the daily payment pages, not GET proxies. HTML `/moderate/applications/[accountId]` is the grant-application review, not a GET proxy. HTML `/moderate/group` is the closed staff-room page, not a GET proxy. The signed-in HTML page `/trust-chain` is `TrustChainPage`, not this GET. `GET /l/[code]` redirects an 8-hex short code or calls `notFound()`. `GET /links/[code]` re-exports `proxyShortLinkGet`. HTML `/pos` is the till page, not a GET proxy; `GET /pos/charge` re-exports `proxyPosGet`. `/forum/messages/[id]/edits` re-exports `proxyMessagesEditsGet`.
 - **Inputs:** Incoming `Request` on proxy routes (plus async `params` on dynamic photo, `/messages/[id]/photo/[file]` (`id` + `file` matching `{1-9}.{jpg|jpeg|png|webp}`; proxy always requests `{n}.jpg` from the api), `/conversations/[id]/messages/[messageId]/photo` (`id` + `messageId`), `/conversations/[id]/messages/[messageId]/photo/[file]` (`id` + `messageId` + `file` matching `{1-9}.{jpg|jpeg|png|webp}`; proxy always requests `{n}.jpg` from the api), file, and view-key); none on healthz or `/maps/key`; `/translate` takes the incoming `Request`.
 - **Returns / side effects:** `Response`. Healthz is `{ status: 'ok' }` 200; `/maps/key` is always 200 `{ key: string | null }`; `/translate` is 200 `{ available: boolean }` or 502; proxies return the upstream api response (JSON or raw photo/video bytes).
 - **Used by:** Container probes, browser/wallet same-origin calls, and `fetchTranslateAvailable` via `GET /translate`. `GET /.well-known/nostr.json` proxies NIP-05. `GET /.well-known/lnurlp/[username]` proxies LUD-16.
@@ -114,9 +121,9 @@
 
 ## Function: postMessageVideo
 
-- **Purpose:** Multipart `POST /forum/messages` with `video` + optional `poster`, optional `goalCurrency` and `goalAmount` (trimmed draft, comma stays; omitted from the form when either is missing, and on replies), and optional `placeLat` / `placeLng` / `placeLabel` (only when a pin is set; replies must not send them). Not `goalSats`.
-- **Inputs:** session token, `{ text, video, poster?, goalCurrency?, goalAmount?, place? }`.
-- **Returns / side effects:** `ForumMessage`.
+- **Purpose:** Multipart `POST /forum/messages` with `video` + optional `poster`, optional `goalCurrency` and `goalAmount` (trimmed draft, comma stays; omitted from the form when either is missing, and on replies), optional `placeLat` / `placeLng` / `placeLabel` (only when a pin is set; replies must not send them), and optional `shopUsername` (leading `@` stripped; omitted when blank). Not `goalSats`.
+- **Inputs:** session token, `{ text, video, poster?, goalCurrency?, goalAmount?, place?, shopUsername? }`.
+- **Returns / side effects:** `ForumMessage`. On 400, 404, or 429 uses the api error string when present; otherwise throws `Could not post your message`.
 - **Used by:** `ForumLoader` submit.
 
 ## Function: forumVideoSrc
@@ -164,7 +171,7 @@
 
 ## Function: StatsDashboard
 
-- **Purpose:** Renders gift KPIs (`formatBitcoin(totalSats)` plus `formatFiatDisplay` of the preferred fiat from `useFiatPreference`; a null fiat total is `—`, not `CHF 0`) and SVG diagrams (cumulative spend over time, by person, by month), plus loading/error/empty states. FiatPicker (CHF | EUR | USD | PHP) above the KPI cards **only when unsigned** (`useHydrateSession().ready && session === null`). Signed-in visitors still display and scale with the preferred code and cannot change it here. **Total spend over time** links each non-zero UTC day on the chart (not as a wrapping text list) to `/stats/{day}`. Each of **Total spend over time**, **By person**, and **By month** uses `SegmentedControl tone="gift" shell="dark"` for ₿ | {preferred FiatCode} via BarScale `'btc' | 'fiat'` (default ₿). Over time shows one cumulative series. Person and month rescale bar size while labels stay both units. Footnote is the USD daily-close sentence, or `{code} is USD at each gift's UTC-day close, converted with that day's ECB rate.` for CHF/EUR/PHP.
+- **Purpose:** Renders gift KPIs (`formatBitcoin(totalSats)` plus `formatFiatDisplay` of the preferred fiat from `useFiatPreference`; a null fiat total is `—`, not `CHF 0`) and SVG diagrams (cumulative spend over time, by person, by month), plus loading/error/empty states. FiatPicker (CHF | EUR | USD | PHP) above the KPI cards **only when unsigned** (`useHydrateSession().ready && session === null`). Signed-in visitors still display and scale with the preferred code and cannot change it here. **Total spend over time** links each non-zero UTC day on the chart (not as a wrapping text list) to `/stats/{day}`. Each of **Total spend over time**, **By person**, and **By month** uses `SegmentedControl tone="gift" shell="dark"` for ₿ | {preferred FiatCode} via BarScale `'btc' | 'fiat'` (default ₿). Over time shows one cumulative series. Person and month rescale bar size while labels stay both units. Footnote is the USD daily-close sentence, or `{code} is USD at each donation's UTC-day close, converted with that day's ECB rate.` for CHF/EUR/PHP.
 - **Inputs:** `stats`, `error`, `loading`, `onRetry`.
 - **Returns / side effects:** React element. Reads `useFiatPreference`. No network.
 - **Used by:** `StatsLoader`.
@@ -185,14 +192,14 @@
 
 ## Function: DayLoader
 
-- **Purpose:** Client loader for `/stats/[day]`. Fetches `GET /gifts?day=`, date input navigates, retry on error. FiatPicker on the loaded table **only when unsigned** (`useHydrateSession().ready && session === null`). The summary line is `{n} gift(s) · ₿ · formatFiatDisplay(total, selected fiat, numberFormat)`.
+- **Purpose:** Client loader for `/stats/[day]`. Fetches `GET /gifts?day=`, date input navigates, retry on error. FiatPicker on the loaded table **only when unsigned** (`useHydrateSession().ready && session === null`). The summary line is `{n} donation(s) · ₿ · formatFiatDisplay(total, selected fiat, numberFormat)`.
 - **Inputs:** `day` UTC `YYYY-MM-DD`.
 - **Returns / side effects:** React element. Calls `fetchGiftDay`. Reads `useFiatPreference` and `useNumberFormat` and passes both into `GiftDayTable`.
 - **Used by:** `GiftDayPage`.
 
 ## Function: GiftDayTable
 
-- **Purpose:** Table of individual gifts on one UTC day (Time, Recipient, ₿, {FiatCode}), or empty copy **No gifts recorded on this day.**
+- **Purpose:** Table of individual gifts on one UTC day (Time, Recipient, ₿, {FiatCode}), or empty copy **No donations recorded on this day.**
 - **Inputs:** `day: GiftDay`, `fiat: FiatCode`, and required `numberFormat` (`ch` / `us` / `de`) for ₿ and fiat cells.
 - **Returns / side effects:** React element. Fourth column header is the selected code; cells use `formatBitcoin` and `formatFiatDisplay` with `numberFormat`. No network.
 - **Used by:** `DayLoader`.
@@ -227,16 +234,16 @@
 
 ## Function: Home
 
-- **Purpose:** Next.js page for `/`. Marketing landing: pitch, how it works, why, project donate (`#project`, address `21gifts@walletofsatoshi.com` for running 21.gifts itself — distinct from `/donate` forum gifts), FAQ, CTAs to `/login` (**Ask for help**) and `/donate` (**Send help**), plus `PwaInstall` (`tone="dark"` `placement="hero"`) after Send help, all via `translate` for the negotiated locale.
+- **Purpose:** Next.js page for `/`, `/en`, `/de`, `/es`, and `/fil`. Marketing landing: pitch, how it works, discovery cards, why, the `HappylandSection` place portrait, project donate (`#project`, address `21gifts@walletofsatoshi.com` for running 21.gifts itself — distinct from forum gifts), FAQ, CTAs to `/login` (**Ask for help**) and `/{locale}/donate` (**Send help**), plus `PwaInstall` (`tone="dark"` `placement="hero"`) after Send help, all via `translate` for the negotiated locale.
 - **Inputs:** None. Calls `getRequestLocale()`.
-- **Returns / side effects:** The home screen element.
-- **Used by:** Route `/`.
+- **Returns / side effects:** The home screen element. The donate action points at `/{locale}/donate`.
+- **Used by:** Routes `/`, `/en`, `/de`, `/es`, and `/fil`.
 
 ## Function: LanguageSwitcher
 
-- **Purpose:** Custom language listbox (not a native `<select>`) that persists the visitor's override in a `locale` cookie and refreshes the App Router tree. Public / unsigned chrome only (Globe pill + absolute popover). Signed-in language lives on Profile.
+- **Purpose:** Custom language listbox (not a native `<select>`) that persists the visitor's override in a `locale` cookie, stores it on the account when signed in, and either opens the localized public URL or refreshes the App Router tree. Public / unsigned chrome only (Globe pill + absolute popover). Signed-in language lives on Profile.
 - **Inputs:** `tone` (`dark` for marketing chrome, `light` for login, donate, unsigned `/rules`, unsigned `/messages/[id]`, and `/view/[viewKey]`). Reads current locale via `useTranslations` and an optional session token from storage. No `embedded` prop.
-- **Returns / side effects:** Combobox + absolute popover listbox with endonym labels. A same-locale click is a no-op. With a session token, a new locale first calls `bumpLocaleGeneration()`, then `setAccountLocale(token, next, false)`; failure, a stale generation, or a response for a different account writes no cookie and does not refresh, while success merges only `locale` onto the current same-id account before writing the cookie and refreshing. Without a token it does not bump or POST and writes `locale=<code>; Path=/; Max-Age=31536000; SameSite=Lax` plus `; Secure` on HTTPS before `router.refresh()`, as before. Never set on first visit.
+- **Returns / side effects:** Combobox + absolute popover listbox with endonym labels (English/Deutsch/Español/Filipino). With a session token, a new locale first calls `bumpLocaleGeneration()`, then `setAccountLocale(token, next, false)`; failure, a stale generation, or a response for a different account writes no cookie and does not navigate, while success merges only `locale` onto the current same-id account. It then writes `locale=<code>; Path=/; Max-Age=31536000; SameSite=Lax` plus `; Secure` on HTTPS. Public Home, About, Donate, and Rules choices fully load the corresponding `/{locale}` URL so the page, shared navigation, and footer all use the new language; other unsigned app routes call `router.refresh()`. Choosing the current language on an already localized URL is a no-op; choosing it on a legacy URL opens its stable URL. The switcher never sets the cookie on a first visit; a public language URL sets it in `middleware`.
 - **Used by:** `MarketingHeader` (always visible), `/login`, `/donate`, unsigned `/rules`, unsigned `/messages/[id]`, `/view/[viewKey]`.
 
 ## Function: LanguagePreferenceSwitcher
@@ -265,7 +272,7 @@
 - **Purpose:** Logged-in profile row to set, edit, or clear a free-text location. Icon-only actions (pencil / check / X / trash). Empty after trim is a valid save and clears. Not an onboarding step and has no Skip.
 - **Inputs:** Reads `useAuthStore`. Optional `startEditing` opens the field on mount. User input: location string. Visitor-facing copy via `useTranslations` (`location.*`). Request failures use `location.errorRequest`.
 - **Returns / side effects:** React element or `null` when logged out. POST `/me/location` on save or clear. Merges only `location` so a concurrent name or address write is not overwritten.
-- **Used by:** `ProfileScreen` on `/profile`, `FundingApplyScreen` on `/grants/apply`.
+- **Used by:** `ProfileScreen` on `/profile`. `FundingApplyScreen` renders it in the apply walk, which is shown while applications are paused only for a verified account named `joey-rosima`, `vincent`, or `jewel-bacolbas` with status `none` or `rejected`, and, when the switch is off, for a verified account with status `none` or `rejected`.
 
 ## Function: LightningAddressForm
 
@@ -367,9 +374,9 @@
 
 ## Function: LoginCard
 
-- **Purpose:** Login UI: one **Log in** button (authenticate-first), an account-choice card after browser `NotAllowedError` (**Log in with existing account** / **Open a new account**), an unknown-passkey card after authenticate finish `Unknown credential` (heading `login.unknownHeading`, muted `login.unknownBody`, **Open a new account** and secondary **Try again** that calls `passkey.login`; dismissing the Try again login prompt stays on this card and does not open the account-choice card), preparing, error, or an in-app browser escape card via `InAppBrowserView` (**Open in browser** + **Copy link**, no passkey ceremony). After success, `OnboardingGate` leaves `/login`. A new account is created only after **Open a new account** and a completed create ceremony. Error uses `login.error` plus **Try again**, except a wrong-account 403 (`wrongAccount` or passkey error equal to that api string) which uses `login.wrongAccount` with the same layout. **Try again** on that hint calls `clearWrongAccount` then `passkey.login` (never `retry`, so it cannot create another account). Generic errors still call `passkey.retry`. When the mounted user agent is iOS below 18, Start, Choice, and Unknown show a muted `login.iosVersion` line (installed version and minimum iOS 18). That same sentence is the alert when `passkey.error` is `login.iosVersion`. Other errors keep their own copy and still show the muted line. The line is absent until after mount. Desktop pictures omit it. Phone pictures include it, because those baselines use an iPhone user agent below iOS 18.
-- **Inputs:** Uses `usePasskeyLogin`, `useAuthStore`, `isInAppBrowser`, `iosPasskeyBlock`, and `InAppBrowserView`.
-- **Returns / side effects:** React element covering idle/choice/unknown/starting/error/wrong-account/in-app. A signed-in account shows the preparing spinner until redirect. Detects in-app browsers after mount; never starts WebAuthn from the in-app card.
+- **Purpose:** Login UI: one **Log in** button (authenticate-first), an account-choice card after browser `NotAllowedError` (**Log in with existing account** / **Open a new account**), an unknown-passkey card after authenticate finish `Unknown credential` (heading `login.unknownHeading`, muted `login.unknownBody`, **Open a new account** and secondary **Try again** that calls `passkey.login`; dismissing the Try again login prompt stays on this card and does not open the account-choice card), preparing, error, or an in-app browser escape card via `InAppBrowserView` (**Open in browser** + **Copy link**, no passkey ceremony). After success, `OnboardingGate` leaves `/login`. **Open a new account** opens the name form. Passkey and account exist only after a valid name is submitted and the create ceremony is finished. Error uses `login.error` plus **Try again**, except a wrong-account 403 (`wrongAccount` or passkey error equal to that api string) which uses `login.wrongAccount` with the same layout. **Try again** on that hint calls `clearWrongAccount` then `passkey.login` (never `retry`, so it cannot create another account). Generic errors still call `passkey.retry`. When the mounted user agent is iOS below 18, Start, Choice, and Unknown show a muted `login.iosVersion` line (installed version and minimum iOS 18). When the mounted user agent is Android below 9, Start, Choice, and Unknown show a muted `login.androidVersion` line (installed version and minimum Android 9). iOS is chosen when both would match. The alert is that same sentence when `passkey.error` is `login.iosVersion` or `login.androidVersion`, and the muted line is then hidden. Other errors keep their own copy and still show the muted line. The line is absent until after mount. Desktop pictures omit it. Phone pictures include it, because those baselines use an iPhone user agent below iOS 18.
+- **Inputs:** Uses `usePasskeyLogin`, `useAuthStore`, `isInAppBrowser`, `iosPasskeyBlock`, `androidPasskeyBlock`, and `InAppBrowserView`.
+- **Returns / side effects:** React element covering idle/choice/unknown/name/starting/error/wrong-account/in-app. A signed-in account shows the preparing spinner until redirect. Detects in-app browsers after mount; never starts WebAuthn from the in-app card.
 - **Used by:** Screen `/login`.
 
 ## Function: LoginPage
@@ -381,9 +388,9 @@
 
 ## Function: DonatePage
 
-- **Purpose:** Next.js page for `/donate`. Guest-visible Send help explainer: pick a forum message, then send Bitcoin; CTA to `/welcome`. No address/amount form and no QR.
+- **Purpose:** Next.js page for `/donate`. Guest-visible donation explainer: read a forum post, write a reaction under it with an amount, then pay from your wallet; CTA to `/welcome`. No address/amount form and no QR.
 - **Inputs:** None. Calls `getRequestLocale()` for localized copy.
-- **Returns / side effects:** `AppShell` with `ProfileChromeLeft` (wordmark `HomeWordmark`: `/` unsigned, `/welcome` when a session is hydrated) and `LanguageSwitcher` top-right; heading, lead, **Open the forum** `ButtonLink`. The arrow returns to the previous in-app view, or `/welcome` when this tab has none. No OnboardingGate.
+- **Returns / side effects:** `AppShell` with `ProfileChromeLeft` (wordmark `HomeWordmark`: `localizedPublicPath(locale, '/')` when unsigned, `/welcome` when a session is hydrated) and `LanguageSwitcher` top-right; heading, lead, **Open the forum** `ButtonLink`. The arrow returns to the previous in-app view, or `/welcome` when this tab has none. No OnboardingGate.
 - **Used by:**
   - **Route `/donate`**
   - **Home CTA `home.ctaSend`**
@@ -471,14 +478,21 @@
 - **Purpose:** Hydrates the session and sends the visitor to the matching post-login screen (or keeps a complete account on `/profile`, `/wallet`, and `/members/[accountId]`).
 - **Inputs:** `screen` (`login` / `wallet` / `name` / `username` / `address` / `rules` / `welcome` / `profile`), `children`, and optional `allowGuest`. Members use `screen="profile"`. `/wallet` uses `screen="wallet"`. `/welcome` passes `allowGuest`.
 - **Returns / side effects:** Children on the correct screen, otherwise a spinner. Follows `nextOnboardingPath`. The recovery phrase is not a setup step and does not replace the opened page; `nextOnboardingPath` never returns `/wallet`. `/wallet` itself stays on screen when `setup` is `'wallet'` or the next step is `/welcome`. `allowGuest` on `/welcome` renders the children with no session instead of `/login`. Profile and members stay only when the next step is `/welcome`. Name, username, address, and rules still redirect when that is the next step. Other `router.replace` targets are `/login`, `/setup/name`, `/setup/username`, `/setup/address`, `/setup/rules`, or `/welcome` (`nextOnboardingPath` never returns `/profile`).
-- **Used by:** Screens `/login`, `/wallet`, `/setup/name`, `/setup/username`, `/setup/address`, `/setup/rules`, `/welcome`, `/profile`, `/pos`, `/members/[accountId]`, `/contact`, `/messages`, `/notifications`, `/moderate`, `/moderate/hidden`, `/moderate/proposals`, `/grants`, `/grants/apply`, `/grants/applications`, `/grants/applications/[accountId]`, `/trust-chain`, `/shops`.
+- **Used by:** Screens `/login`, `/wallet`, `/setup/name`, `/setup/username`, `/setup/address`, `/setup/rules`, `/welcome`, `/profile`, `/pos`, `/members/[accountId]`, `/contact`, `/messages`, `/notifications`, `/moderate`, `/moderate/hidden`, `/moderate/proposals`, `/grants`, `/grants/apply`, `/grants/applications`, `/grants/applications/[accountId]`, `/trust-chain`, `/shops`, `/statistics`.
+
+## Function: WelcomeTopRight
+
+- **Purpose:** Top-right chrome slot of `/welcome`. Signed-in visitors get the full `SignedInChrome` menu; signed-out guests, who reach the welcome screen through the guest gate, get a plain log-in link instead. Keeps `/welcome` itself a server component so the page can declare `robots: noindex` metadata.
+- **Inputs:** Reads `session` from `useAuthStore` and the active catalog via `useTranslations` (`nav.login`). No props.
+- **Returns / side effects:** `SignedInChrome` when a session exists, otherwise an underlined `Link` to `/login` labelled `nav.login`. No I/O, no storage writes.
+- **Used by:** `WelcomePage`.
 
 ## Function: SignedInChrome
 
-- **Purpose:** Top-right signed-in chrome: one **Menu** control; open it for icon+label dropdown rows (Home `/welcome` lucide `Home` `nav.home` — when the path is already `/welcome`, Home `preventDefault`s and dispatches `FORUM_HOME_EVENT` instead of a no-op navigation; **Shops** (`/shops`, lucide `Store`, `nav.shops`); **Point of sale** (`/pos`, lucide `Banknote`, `pos.nav`); User Profile (`/profile`, lucide `User`, `profile.title`) with no given or received amounts; **Grants** (`/grants`, lucide `HandCoins`, `nav.grants`) for every signed-in member; **Wallet** (`/wallet`); ScrollText Living room rules `/rules`; **Trust Chain**; **Moderation** (`/moderate`, lucide `Shield`, `nav.moderate`) only when `roleAtLeast(account?.role, 'moderator')` — `aria-label` `nav.moderateUnread` with `{ count }` when `moderationUnreadCount` > 0 (staff-room unread plus open-proposal count) else `nav.moderate`; visible `nav.moderate` plus `ml-auto` tabular-nums count when > 0; **Notifications** (`/notifications`, lucide `Bell`, `nav.notifications`, unread count `ml-auto` only when `unreadCount` > 0, `aria-label` `nav.notificationsUnread` then); Messages `/messages` (`nav.inbox`, unread count `ml-auto` only when inbox unread > 0, `aria-label` `nav.inboxUnread` then); MessageCircle Contact `/contact`; optional Download **Install app** via `PwaInstall` `placement="menu"` when install is offered; LogOut log out; then a quiet Version line (`app.version`, `getAppVersion()`)). On mount with a session, calls `resyncPushSubscription`. Clicking Notifications asks for OS permission via `enablePush` when it is not already granted and Service Worker plus `PushManager` exist (otherwise resync, which no-ops without those APIs). When `account.setup` is null and `account.hasPosted` is false, also mounts `IntroduceYourselfOverlay` (Close dismisses this mount only; **Write an introduction** calls `requestForumCompose` so a remount after `router.push('/welcome')` stays hidden).
+- **Purpose:** Top-right signed-in chrome: one **Menu** control; open it for icon+label dropdown rows (Home `/welcome` lucide `Home` `nav.home` — when the path is already `/welcome`, Home `preventDefault`s and dispatches `FORUM_HOME_EVENT` instead of a no-op navigation; **Shops** (`/shops`, lucide `Store`, `nav.shops`); **Point of sale** (`/pos`, lucide `Banknote`, `pos.nav`); User Profile (`/profile`, lucide `User`, `profile.title`) with no given or received amounts; **Grants** (`/grants`, lucide `HandCoins`, `nav.grants`) for every signed-in member; **Wallet** (`/wallet`); ScrollText Living room rules `/rules`; **Habit-Tracker** (`/habit-tracker`, lucide `ListChecks`, `nav.habitTracker`); **Trust Chain**; **Statistics** (`/statistics`, lucide `BarChart3`, `nav.statistics`) for every signed-in account, immediately after Trust Chain, with no unread count; **Moderation** (`/moderate`, lucide `Shield`, `nav.moderate`) only when `roleAtLeast(account?.role, 'moderator')` — `aria-label` `nav.moderateUnread` with `{ count }` when `moderationUnreadCount` > 0 (staff-room unread plus open-proposal count) else `nav.moderate`; visible `nav.moderate` plus `ml-auto` tabular-nums count when > 0; **Notifications** (`/notifications`, lucide `Bell`, `nav.notifications`, unread count `ml-auto` only when `unreadCount` > 0, `aria-label` `nav.notificationsUnread` then); Messages `/messages` (`nav.inbox`, unread count `ml-auto` only when inbox unread > 0, `aria-label` `nav.inboxUnread` then); MessageCircle Contact `/contact`; optional Download **Install app** via `PwaInstall` `placement="menu"` when install is offered; LogOut log out; then a quiet Version line (`app.version`, `getAppVersion()`)). On mount with a session, calls `resyncPushSubscription`. Clicking Notifications asks for OS permission via `enablePush` when it is not already granted and Service Worker plus `PushManager` exist (otherwise resync, which no-ops without those APIs). When `account.setup` is null and `account.hasPosted` is false, also mounts `IntroduceYourselfOverlay` (Close dismisses this mount only; **Write an introduction** calls `requestForumCompose` so a remount after `router.push('/welcome')` stays hidden).
 - **Inputs:** Session `account` and `session` from `useAuthStore` (introduce overlay gate and push resync). Composes `useUnreadCount(open)` (default write-badge: writes the home-screen badge), `PwaInstall` (`placement="menu"`, closes Menu via `onMenuAction`), and `LogoutButton` inside the Menu dropdown.
-- **Returns / side effects:** Relative **Menu** button (`aria-expanded`, `aria-controls`) in the AppShell page-frame header (`[data-app-chrome]`). The panel stays mounted. Wide (frame content box at least 576px; until `frameWidth` is measured, `matchMedia('(max-width: 36rem)')`, and a missing `matchMedia` counts as wide): it portals to the trigger parent as `absolute right-0 z-50 mt-2 w-72` (18rem, not a percentage, because a percentage would resolve against the trigger). The scrim `#signed-in-menu-scrim` portals to `[data-menu-scrim-host]` inside `[data-app-frame]` as `absolute inset-0 z-40 rounded-3xl` (the radius is set on the scrim; the host is `display: contents`, so `inherit` would be 0). Narrow (content box under 576px): it portals to `[data-menu-sheet-host]` (`px-8`, the same horizontal inset as `[data-scroll-page]`) inside the one scrollport as `w-full` and stays in that host while closed (`hidden`), reads the scrollport `scrollTop` before it sets `html[data-menu-sheet='1']` (which hides `[data-scroll-page]`), sets that scroll position to 0, and writes the saved position back after the page is shown again. Not a body portal. `PwaInstall` stays mounted via the `hidden` class when closed. When open, icon+label rows: **Home** (`/welcome`, lucide `Home`, `nav.home`), **Shops** (`/shops`, lucide `Store`, `nav.shops`), **Point of sale** (`/pos`, lucide `Banknote`, `pos.nav`), Profile link (`/profile`, lucide `User`, `profile.title`) with no given or received amounts, **Grants** (`/grants`, lucide `HandCoins`, `nav.grants`) for every signed-in member, **Wallet** (`/wallet`, lucide `Wallet`, `wallet.title`), **Living room rules** (`/rules`), **Trust Chain** (`/trust-chain`), **Moderation** (`/moderate`, lucide `Shield`, `nav.moderate`) only when `roleAtLeast(account?.role, 'moderator')` — `aria-label` `nav.moderateUnread` with `{ count }` when `moderationUnreadCount` > 0 (staff-room unread plus open-proposal count) else `nav.moderate`; visible `nav.moderate` plus `ml-auto` tabular-nums count when > 0, **Notifications** (`/notifications`, lucide `Bell`, `nav.notifications`, unread count on the right when greater than zero), **Messages** (`/messages`, `nav.inbox`, inbox unread count on the right when greater than zero), **Contact** (`/contact`), optional **Install app**, and log out, then a quiet Version line (`app.version`, `getAppVersion()`). Escape always closes Menu and restores focus to Menu. Local `useState` dismissed flag for `IntroduceYourselfOverlay` (initialized from `consumeSkipIntroduceOverlay`); does not write `forumLawsDismissed` or any account field.
-- **Used by:** `NameSetupPage`, `UsernameSetupPage`, `AddressSetupPage`, `RulesSetupPage`, `WelcomePage`, `ShopsPage`, `PosPage`, `ProfilePage`, `GrantsPage`, `FundingApplyPage`, `WalletPage`, `MemberProfilePage`, `ContactPage`, `MessagesPage`, `NotificationsPage`, `ModeratePage`, `HiddenNotesPage`, `ProposalsPage`, `FundingApplicationsPage`, `FundingApplicationDetailPage`, `TrustChainPage`, `RulesPageChrome`, `PublicMessageChrome`.
+- **Returns / side effects:** Relative **Menu** button (`aria-expanded`, `aria-controls`) in the AppShell page-frame header (`[data-app-chrome]`). The panel stays mounted. Wide (frame content box at least 576px; until `frameWidth` is measured, `matchMedia('(max-width: 36rem)')`, and a missing `matchMedia` counts as wide): it portals to the trigger parent as `absolute right-0 z-50 mt-2 w-72` (18rem, not a percentage, because a percentage would resolve against the trigger). When that wide panel's bottom would pass the window, the same panel uses `mt-0`, `px-2 py-0`, and the version line uses `py-0`. Rows stay `min-h-11`. If that compact panel still passes the window and a non-negative lift keeps the bottom inside, it is a `fixed` overlay. Its `style` sets the measured `top`, `left`, and `width` so the bottom sits on the window and the top is never less than 0. That `left` is the trigger parent's right edge minus the panel width, so a horizontal move of the frame does not keep the last inline left. It does not scroll, and it does not shorten a row. When that lift would still leave the bottom outside, the wide menu uses the same sheet as a narrow frame (`w-full`, `html[data-menu-sheet='1']`, no scroll) and does not use a negative top. The Menu button is `relative z-[60]` only while that fixed overlay is up, so a click on Menu still closes it when the panel covers the button, and a dialog in the same header still covers Menu. A window resize or a later change in the panel's own size measures again. The panel returns to `mt-2` and `p-2` only when the compact box still has 48px of room under the window, so the two layouts do not alternate. The scrim `#signed-in-menu-scrim` portals to `[data-menu-scrim-host]` inside `[data-app-frame]` as `absolute inset-0 z-40 rounded-3xl` (the radius is set on the scrim; the host is `display: contents`, so `inherit` would be 0). Narrow (content box under 576px): it portals to `[data-menu-sheet-host]` (`px-8`, the same horizontal inset as `[data-scroll-page]`) inside the one scrollport as `w-full` and stays in that host while closed (`hidden`), reads the scrollport `scrollTop` before it sets `html[data-menu-sheet='1']` (which hides `[data-scroll-page]`), sets that scroll position to 0, and writes the saved position back after the page is shown again. Not a body portal. `PwaInstall` stays mounted via the `hidden` class when closed. When open, icon+label rows: **Home** (`/welcome`, lucide `Home`, `nav.home`), **Shops** (`/shops`, lucide `Store`, `nav.shops`), **Point of sale** (`/pos`, lucide `Banknote`, `pos.nav`), Profile link (`/profile`, lucide `User`, `profile.title`) with no given or received amounts, **Grants** (`/grants`, lucide `HandCoins`, `nav.grants`) for every signed-in member, **Wallet** (`/wallet`, lucide `Wallet`, `wallet.title`), **Living room rules** (`/rules`), **Habit-Tracker** (`/habit-tracker`, lucide `ListChecks`, `nav.habitTracker`), **Trust Chain** (`/trust-chain`), **Statistics** (`/statistics`, lucide `BarChart3`, `nav.statistics`) for every signed-in account, immediately after Trust Chain, with no unread count, **Moderation** (`/moderate`, lucide `Shield`, `nav.moderate`) only when `roleAtLeast(account?.role, 'moderator')` — `aria-label` `nav.moderateUnread` with `{ count }` when `moderationUnreadCount` > 0 (staff-room unread plus open-proposal count) else `nav.moderate`; visible `nav.moderate` plus `ml-auto` tabular-nums count when > 0, **Notifications** (`/notifications`, lucide `Bell`, `nav.notifications`, unread count on the right when greater than zero), **Messages** (`/messages`, `nav.inbox`, inbox unread count on the right when greater than zero), **Contact** (`/contact`), optional **Install app**, and log out, then a quiet Version line (`app.version`, `getAppVersion()`). Escape always closes Menu and restores focus to Menu. Local `useState` dismissed flag for `IntroduceYourselfOverlay` (initialized from `consumeSkipIntroduceOverlay`); does not write `forumLawsDismissed` or any account field.
+- **Used by:** `NameSetupPage`, `UsernameSetupPage`, `AddressSetupPage`, `RulesSetupPage`, `WelcomePage`, `ShopsPage`, `PosPage`, `ProfilePage`, `GrantsPage`, `FundingApplyPage`, `WalletPage`, `MemberProfilePage`, `ContactPage`, `MessagesPage`, `NotificationsPage`, `ModeratePage`, `HiddenNotesPage`, `ProposalsPage`, `FundingApplicationsPage`, `FundingApplicationDetailPage`, `TrustChainPage`, `StatisticsPage`, `HabitTrackerPage`, `RulesPageChrome`, `PublicMessageChrome`.
 
 ## Function: ProfilePage
 
@@ -489,7 +503,7 @@
 
 ## Function: ProfileChromeLeft
 
-- **Purpose:** Shared top-left chrome: one icon-only arrow (44px, ArrowLeft) plus a wordmark. The arrow returns to the previous in-app view in this tab, or `/welcome` when this tab has none. One arrow. The wordmark is not that control. An ask-wizard override replaces the history link with a button. Optional `onBackClick` runs on an unmodified click (wallet hides the words or closes Advanced functions before leaving). Optional `wordmark` replaces the default wordmark. Optional `wordmarkHref` defaults to `/welcome` and is ignored when `wordmark` is set. `tone="dark"` is the ink marketing header. `hideWithoutHistory` omits the arrow only when this tab has no earlier view and no wizard override.
+- **Purpose:** Shared top-left chrome: one icon-only arrow (44px, ArrowLeft) plus a wordmark. The arrow returns to the previous in-app view in this tab, or `/welcome` when this tab has none. One arrow. The wordmark is not that control. An ask-wizard or shop-wizard override replaces the history link with a button. Optional `onBackClick` runs on an unmodified click (wallet hides the words or closes Advanced functions before leaving). Optional `wordmark` replaces the default wordmark. Optional `wordmarkHref` defaults to `/welcome` and is ignored when `wordmark` is set. `tone="dark"` is the ink marketing header. `hideWithoutHistory` omits the arrow only when this tab has no earlier view and no wizard override.
 - **Inputs:** Optional `onBackClick`, `wordmark`, `wordmarkHref`, `tone`, and `hideWithoutHistory`; catalog via `useTranslations`; previous path via `previousViewPath`.
 - **Returns / side effects:** A link (`profile.back` when this tab has no earlier view, otherwise `nav.back`), the override button, or no arrow when `hideWithoutHistory` has neither history nor an override, plus the wordmark. The first client render matches SSR (`/welcome`, `profile.back`) unless `hideWithoutHistory` hides that arrow. An unmodified primary click calls `onBackClick` or `goToPreviousView` and does not follow the href. Modified clicks follow the href. No network.
 - **Used by:** `ProfilePage`, `WelcomePage`, `MarketingHeader`, `LoginPage`, `DonatePage`, `PayLinkScreen`, `ViewProfilePage`, `NameSetupPage`, `UsernameSetupPage`, `AddressSetupPage`, `WalletChromeLeft`, `WalletScreenView` (the visible `/wallet` Back, via `AppShellTopLeft`), `ShopsPage`, `GrantsPage`, `FundingApplyPage`, `MemberProfilePage` (`/members/[accountId]`), `ContactPage`, `MessagesPage` (via `MessagesChromeLeft`), `MessagesChromeLeft`, `NotificationsPage`, `ModeratePage`, `HiddenNotesPage`, `ProposalsPage`, `FundingApplicationsPage`, `FundingApplicationDetailPage`, `ModeratorGroupPage`, `TrustChainPage`, `RulesPageChrome`, `PublicMessageChrome`. `WalletPage` mounts `WalletChromeLeft` as page `topLeft`; the card's registration wins while Wallet is shown.
@@ -583,13 +597,13 @@
 - **Purpose:** Read and set the top-left arrow override for an in-page step such as the ask wizard. Without a provider, the override is null and the setter is a no-op, so a wizard render does not throw.
 - **Inputs:** None. Reads `ChromeBackProvider` context when it is present.
 - **Returns / side effects:** `{ override, setOverride }`. Does not navigate by itself. No network.
-- **Used by:** `ProfileChromeLeft`, `ForumAskWizard`, the welcome top-left chrome.
+- **Used by:** `ProfileChromeLeft`, `ForumAskWizard`, `ShopAddWizard`, the welcome top-left chrome.
 
 ## Function: ChromeBackProvider
 
-- **Purpose:** Hold the single top-left back override. When set, the chrome arrow runs that in-page step instead of the view history. Pay-sheet dismiss stays Close (`X`), not this control.
+- **Purpose:** Hold the top-left back overrides, one slot per caller. The chrome arrow runs the latest in-page step instead of the view history. Pay-sheet dismiss stays Close (`X`), not this control.
 - **Inputs:** `children`.
-- **Returns / side effects:** Context provider. One override at a time. No network.
+- **Returns / side effects:** Context provider. Each caller has its own slot. The arrow shows the last set override. Clearing or unmounting a caller restores the previous. No network.
 - **Used by:** `ViewHistoryRoot`.
 
 ## Function: ProfileScreen
@@ -604,7 +618,7 @@
 - **Purpose:** Profile-card About me block: heading plus filled text and/or photo (the note photo shows the whole picture (`object-contain`, `max-h-80`) and is not cropped, not the profile photo or the wide image), or the owner empty prompt (`profile.about.empty` **Tell others who you are.** and labeled **Write your About me**). Filled means trimmed `aboutMe` is a real bio (not the display name) **or** `hasPhoto` is true. Owner mode can edit (write / pencil, save, cancel) via `onSave`. The editor has three separate attaches, each its own ImagePlus and remove: the About me photo (JPEG/PNG/WebP via `prepareForumPhoto`, no video), the round profile photo, and the wide image. Each previews on its own. Choosing a wide image opens a 5:2 cropper above its preview; **Use this crop** stores that JPEG and the X (**Cancel crop**) stores nothing. Closing the editor, or a successful save, drops an unsaved crop. A whole portrait is not stored as the wide image. Optional icon-only copy-profile-link (`profile.copyLink` **Copy link to this profile**) when `profileUrl` is set; the URL is never shown as visible text. Public mode with no filled text, no photo, and no copy URL renders `null`. A filled read-only body uses `TranslatableNoteBody` when `messageId` is a non-empty string; otherwise `LinkedText`. The editor is not translatable.
 - **Inputs:** `aboutMe` (`string | null`), `mode` (`owner` | `public`), optional `name` (`string | null`) for the filled comparison (`(name ?? '').trim()`; blank name applies only the trimmed-non-empty check), optional `hasPhoto`, optional `loadPhoto` (`() => Promise<Blob>`), optional `profileUrl`, optional `messageId` (stored About me note id; omitted or blank keeps `LinkedText`), optional `onSave(text, photo?)` (`photo` omitted keeps, `null` clears, object sets), optional `loadPicture` / `onSavePicture` for the round profile photo and optional `loadBanner` / `onSaveBanner` for the wide image (neither is the About me note photo; a non-image blob stays empty), optional `startEditing` to open the owner editor on mount.
 - **Returns / side effects:** React element or `null`. Clipboard write for copy. Calls `onSave` on owner save, `onSavePicture` when the profile photo changes, and `onSaveBanner` when the wide image changes. Loads a blob URL when `hasPhoto` and `loadPhoto` are set and revokes it on unmount. Loads and revokes the profile-photo and wide-image blob URLs the same way when `loadPicture` or `loadBanner` is set.
-- **Used by:** `ProfileScreen` (owner, `name={account.name}`), `MemberProfileScreen` (public, `name={profile.name}`), `ViewProfileScreen` (public, `name={profile.name}`), `FundingApplyScreen` on `/grants/apply`.
+- **Used by:** `ProfileScreen` (owner, `name={account.name}`), `MemberProfileScreen` (public, `name={profile.name}`), `ViewProfileScreen` (public, `name={profile.name}`), and `FundingApplyScreen` (apply walk, shown while applications are paused only for a verified account named `joey-rosima`, `vincent`, or `jewel-bacolbas` with status `none` or `rejected`, and, when the switch is off, for a verified account with status `none` or `rejected`).
 
 ## Function: PushToggle
 
@@ -648,6 +662,27 @@
 - **Returns / side effects:** `Promise<void>`. Calls `setUnreadAppBadge` with the sum only when the epoch is unchanged and `loadSession() === sessionToken`. Fire-and-forget safe.
 - **Used by:** `InboxLoader` after a successful thread load and mark-read (inbox override only; fetches staff-room only when the account is at least moderator). `ModeratorGroupScreen` after opening the room (moderation override `0`).
 
+## Function: pushTagForNotification
+
+- **Purpose:** Collapse tag for one in-app notification, matching the api: `forum_post:<parentId>`, `forum_reply:<replyId>`, `forum_mention:<replyId>`, `zap:<replyId>`, `moderator_appointed:<parentId>`. Any other type, including `moderator_proposal`, is null.
+- **Inputs:** `type`, `parentId`, and `replyId`.
+- **Returns / side effects:** Tag string or `null`. No network.
+- **Used by:** `NotificationsLoader` before it closes the local banner for a row that is not a proposal, and `ForumLoader` after the welcome appointment pill's `markNotificationRead` succeeds.
+
+## Function: currentPushEndpoint
+
+- **Purpose:** Read this browser's Web Push subscription endpoint so a mark-read request can ask the api to skip this device. Calls `getRegistration()` and does not wait on `ready`.
+- **Inputs:** None. Uses `navigator.serviceWorker` when it exists.
+- **Returns / side effects:** The endpoint string, or `undefined` when Push APIs are missing, the lookup rejects, or the endpoint is empty. Never throws.
+- **Used by:** `markNotificationRead`, `markAllNotificationsRead`, `markNotificationsReadForMessage`, and `markVisibleForumNoteRead`.
+
+## Function: closeLocalPushNotifications
+
+- **Purpose:** Close shown Web Push notifications whose tag is in the list, so a note already read on this device does not stay on screen. Calls `getRegistration()` and does not wait on `ready`.
+- **Inputs:** Tag strings. An empty list is a no-op.
+- **Returns / side effects:** Nothing. Missing `serviceWorker` or `getNotifications` is a no-op. Never throws.
+- **Used by:** `markAllNotificationsRead`, `markNotificationsReadForMessage`, `markVisibleForumNoteRead`, `NotificationsLoader` when a row is opened, and `ForumLoader` after the welcome appointment pill's `markNotificationRead` succeeds.
+
 ## Function: vapidPublicKeyToBytes
 
 - **Purpose:** Decode a VAPID application server public key (url-safe base64) to bytes for `pushManager.subscribe`.
@@ -664,9 +699,9 @@
 
 ## Function: push service worker
 
-- **Purpose:** Push-only service worker at `/sw.js`. On the device's local Sunday, a push whose `type` is not exactly `conversation` does not stay on screen and does not change the badge: it calls `showNotification` with tag `sunday-quiet` and closes that note in the same `waitUntil`, so the browser does not invent its own banner. Every other push, including a private message, shows a notification (`registration.showNotification`) and, when `navigator.setAppBadge` (or `registration.setAppBadge` as fallback) exists, sets the home-screen badge: floor `payload.unreadCount` first, use it when that integer is greater than 0, otherwise `1`. `setAppBadge` rejections are swallowed so `waitUntil` still follows `showNotification`. Missing `setAppBadge` still shows the notification. A thrown weekday lookup does not pause notifications. No asset or offline cache. A notification click stores a short-lived `21gifts-push-open` entry so a reloaded page can still open the path when `postMessage` was missed.
-- **Inputs:** Push `event` with optional JSON payload (`type`, `title`, `body`, `url`, `tag`, `unreadCount`).
-- **Returns / side effects:** On a non-conversation Sunday push, `event.waitUntil` shows and closes `sunday-quiet`. Otherwise `event.waitUntil` of `showNotification` plus optional `setAppBadge` via `Promise.all`. Install skips waiting; activate claims clients. Notification click closes the note, stores the in-app path in the `21gifts-push-open` cache, then the focused same-origin window (or the first one, if none is focused) is focused and, after that, receives `{ type: '21gifts-push-open', url }` (pathname + search + hash) before `navigate` (only when that function exists and the URL differs; rejection or null still focuses). No window: `clients.openWindow` on the same-origin href. Empty, invalid, or foreign `data.url` becomes `/welcome`.
+- **Purpose:** Push-only service worker at `/sw.js`. A payload whose `type` is `dismiss` closes the named tags, shows and closes a silent `dismiss-ack`, sets the badge to `max(0, floor(unreadCount))` including 0, and returns before the Sunday check. On the device's local Sunday, a push whose `type` is not exactly `conversation` does not stay on screen and does not change the badge: it calls `showNotification` with tag `sunday-quiet` and closes that note in the same `waitUntil`, so the browser does not invent its own banner. Every other push, including a private message, shows a notification (`registration.showNotification`) and, when `navigator.setAppBadge` (or `registration.setAppBadge` as fallback) exists, sets the home-screen badge: floor `payload.unreadCount` first, use it when that integer is greater than 0, otherwise `1`. `setAppBadge` rejections are swallowed so `waitUntil` still follows `showNotification`. Missing `setAppBadge` still shows the notification. A thrown weekday lookup does not pause notifications. No asset or offline cache. A notification click stores a short-lived `21gifts-push-open` entry so a reloaded page can still open the path when `postMessage` was missed.
+- **Inputs:** Push `event` with optional JSON payload (`type`, `title`, `body`, `url`, `tag`, `tags`, `unreadCount`).
+- **Returns / side effects:** When `type` is `dismiss`, closes the named tags, shows and closes a silent `dismiss-ack`, sets the badge to `max(0, floor(unreadCount))` when `unreadCount` is finite, and returns before the Sunday check. On a non-conversation Sunday push, `event.waitUntil` shows and closes `sunday-quiet`. Otherwise `event.waitUntil` of `showNotification` plus optional `setAppBadge` via `Promise.all`. Install skips waiting; activate claims clients. Notification click closes the note, stores the in-app path in the `21gifts-push-open` cache, then the focused same-origin window (or the first one, if none is focused) is focused and, after that, receives `{ type: '21gifts-push-open', url }` (pathname + search + hash) before `navigate` (only when that function exists and the URL differs; rejection or null still focuses). No window: `clients.openWindow` on the same-origin href. Empty, invalid, or foreign `data.url` becomes `/welcome`.
 - **Used by:** Browser Web Push runtime (registered by `registerPushWorker`).
 
 ## Function: isStandaloneDisplay
@@ -689,6 +724,27 @@
 - **Inputs:** `userAgent` string (`navigator.userAgent`).
 - **Returns / side effects:** `{ installed, required }` where `required` is `18` and `installed` is `major.minor` or `major.minor.patch`, or null. No network and no DOM writes.
 - **Used by:** `LoginCard` (muted line after mount) and `usePasskeyLogin` (a new account that cannot finish fails with `login.iosVersion` and is not stored).
+
+## Function: iosInstalledVersion
+
+- **Purpose:** Read the installed iOS version from an iPhone, iPad, or iPod user agent, including iOS 18 and newer. `iosPasskeyBlock` still returns null on those newer versions.
+- **Inputs:** `userAgent` string.
+- **Returns / side effects:** Installed string (`major.minor` or `major.minor.patch`), or null when the token is missing or the browser is not iOS. No network.
+- **Used by:** `usePasskeyLogin`, which puts that version at the front of a failed login or register diagnostic.
+
+## Function: androidPasskeyBlock
+
+- **Purpose:** Android below 9 cannot finish a new-account passkey. Android 9 is the first version whose passkeys can carry the extra key. Older Android returns the installed version and the minimum. Android 9 and newer, other browsers, and an Android user agent with no version token return null.
+- **Inputs:** `userAgent` string.
+- **Returns / side effects:** `{ installed, required }` where `required` is `9` and `installed` is major, major.minor, or major.minor.patch, or null. No network.
+- **Used by:** `LoginCard` (muted line after mount) and `usePasskeyLogin` (a new account that cannot finish fails with `login.androidVersion` and is not stored).
+
+## Function: androidInstalledVersion
+
+- **Purpose:** Read the installed Android version, including Android 9 and newer. `androidPasskeyBlock` still returns null on those newer versions.
+- **Inputs:** `userAgent` string.
+- **Returns / side effects:** Installed string, or null when the token is missing. No network.
+- **Used by:** `usePasskeyLogin`, which puts that version at the front of a failed login or register diagnostic.
 
 ## Function: shouldOfferIosInstall
 
@@ -897,7 +953,7 @@
 
 ## Function: Scrollport
 
-- **Purpose:** The only layout scrollport. Renders `[data-scrollport]`. Overflow is the `globals.css` rule, not a Tailwind utility: clip until `data-scroll-active`, then `overflow: auto`. The innermost bound port scrolls. Among siblings, the most recently bound one scrolls and gets `data-scroll-active`. Every other port gets `data-scroll-locked`. `html` and `body` stay `overflow: clip`.
+- **Purpose:** The only layout scrollport. Renders `[data-scrollport]`. Overflow is the `globals.css` rule, not a Tailwind utility: clip until `data-scroll-active`, then the active port scrolls vertically only (`overflow-x: clip` and `overflow-y: auto`). The innermost bound port scrolls. Among siblings, the most recently bound one scrolls and gets `data-scroll-active`. Every other port gets `data-scroll-locked`. `html` and `body` stay `overflow: clip`.
 - **Inputs:** `children`, optional `className`, optional `scrollRef`, optional `onClick`.
 - **Returns / side effects:** A `div`. Binds on mount and releases on unmount. No network.
 - **Used by:** `AppShell`, marketing layout, `NotFound`, `HandbookLightbox`.
@@ -990,17 +1046,17 @@
 
 ## Function: HomeWordmark
 
-- **Purpose:** Session-aware header wordmark: linked `21.gifts` to `/welcome` when `useHydrateSession` is ready and `useAuthStore` has a session, otherwise `/`. Real navigation (no `preventDefault`, unlike `ForumHomeWordmark`).
-- **Inputs:** Optional `tone`, `size`, `className`, `onClick` forwarded to `Wordmark` when set. Uses `useHydrateSession` and `useAuthStore`.
+- **Purpose:** Session-aware header wordmark: linked `21.gifts` to `/welcome` when `useHydrateSession` is ready and `useAuthStore` has a session, otherwise `publicHref`. When `publicHref` is omitted, the unsigned target is `/`. Real navigation (no `preventDefault`, unlike `ForumHomeWordmark`).
+- **Inputs:** Optional `tone`, `size`, `className`, `onClick` forwarded to `Wordmark` when set. Optional `publicHref`: the target without a session; with a session the link is still `/welcome`. Uses `useHydrateSession` and `useAuthStore`.
 - **Returns / side effects:** A client `Wordmark` link. Hydrates the session; no other network of its own.
 - **Used by:** `MarketingHeader`, `LoginPage`, `DonatePage`, `ViewProfilePage`, `PayLinkScreen`.
 
 ## Function: PublicMessageChrome
 
-- **Purpose:** Client chrome wrapper for public `/messages/[id]`: when a session is hydrated (`ready && session !== null`), mounts signed-in shell (`ProfileChromeLeft` + `SignedInChrome`); otherwise `ProfileChromeLeft` with wordmark href `/` and light `LanguageSwitcher`. The arrow returns to the previous in-app view, or `/welcome` when this tab has none.
-- **Inputs:** `children` (thread body from `PublicMessagePage` — `PublicMessageLoader`). Uses `useHydrateSession` and `useAuthStore` for `session`.
+- **Purpose:** Client chrome wrapper for public `/messages/[id]`, `/messages/[id]/author`, and `/messages/[id]/repayment-list`: when a session is hydrated (`ready && session !== null`), mounts signed-in shell (`ProfileChromeLeft` + `SignedInChrome`); otherwise `ProfileChromeLeft` with wordmark href `/` and light `LanguageSwitcher`. The arrow returns to the previous in-app view, or `/welcome` when this tab has none.
+- **Inputs:** `children` (page body: `PublicMessageLoader` from `PublicMessagePage`, `ExternalAuthorProfile` from `ExternalAuthorPage`, or `CreditLedger` from `RepaymentListPage`). Uses `useHydrateSession` and `useAuthStore` for `session`.
 - **Returns / side effects:** Fill `AppShell` (`align="center"`) with the matching top-left / top-right slots around `children`. No network beyond session hydration.
-- **Used by:** `PublicMessagePage`.
+- **Used by:** `PublicMessagePage`, `ExternalAuthorPage`, `RepaymentListPage`.
 
 ## Function: PublicMessagePage
 
@@ -1032,7 +1088,7 @@
 
 ## Function: PublicMessageLoader
 
-- **Purpose:** Client loader for the public thread page: validates UUID, waits for hydrate `ready`, then fetches. Staff (`roleAtLeast(account.role, 'moderator')` + session) use `fetchForumMessage(session, routeId)` and `fetchReplies(session, root.id)` so a soft-hidden row can load; others use `fetchPublicMessage(routeId)` / `fetchPublicReplies`. If `parentId` is set, fetches that parent (`null` → missing) then replies of the parent. Ready only with root + replies (empty replies → parent only). Replies throw → error + **Try again** (whole chain). Until hydrate `ready`, only `forum.loading` (no fetch, no cards). After ready, when the loaded root or the highlighted reply has `deletedAt` / `deletedBy`, a `role="status"` `forum.hiddenNotice` line sits above the thread (permalink target). Unsigned visitors (no session or no account) keep the `PublicThreadCard` stack (no pay/copy): vertical stack parent `Card` then reply Cards with `pl-4`. Gift-only replies (empty text, sats > 0): sats line via `formatBitcoin` plus optional preferred-fiat `·` `formatFiatDisplay` of the amount stored when the payment was made (a stored string as-is, a null or missing field on a passed `stored` object uses the gift-day rate), no empty `<p>`. When the route id is a reply, that unsigned reply card (or wrapper) has `data-permalink-target="true"` and `ring-1 ring-app-fg`. Photo/video per unsigned card via `fetchPublicMessagePhoto`. Unsigned gallery is `ForumPhotoGallery` (horizontal snap row, `data-scroll-x`, 88% peek, `current/total` chip, dots); `data-photo-index` keeps the original still index when an earlier extra still fails to load. **Translate** (Languages icon) under unsigned note and reply bodies via `NoteTranslate` when the language differs from the UI locale. A `via === 'nostr'` reply or note shows a non-interactive **External** `<span>` badge next to the name (no hint state on this card) and renders its body as plain text (`TranslatableNoteBody` `plain`) instead of `ForumQuotedBody`. Each unsigned card is ₿ plus optional preferred-fiat `·` `formatFiatDisplay` of the amount stored when the payment was made (`useFiatPreference`; cookie, otherwise locale default); otherwise the gift-day rate. `fetchGiftStats` / `latestRateDay` feed the pay sheet and an unpaid invoice preview. A posted goal bar uses the stored visitor snapshot when that string exists, otherwise this gift-day rate. A top-level unsigned note with a positive `goalSats` also shows `ForumGoalBar`, and the same **Loan**, **Donation**, or **#Shop** tag as the forum beside the name. When `ready && session && account` and the root is loaded, mounts `PublicMessageThread` instead of the unsigned cards, passing `seedReply` as the highlighted hidden reply (omit the prop when none). Auth CTA once below either stack from `useHydrateSession` is **Log in** when unsigned. Signed-in visitors have no text back link under the thread. The top-left arrow returns to the previous in-app view in this tab, or `/welcome` when this tab has none.
+- **Purpose:** Client loader for the public thread page: validates UUID, waits for hydrate `ready`, then fetches. Staff (`roleAtLeast(account.role, 'moderator')` + session) use `fetchForumMessage(session, routeId)` and `fetchReplies(session, root.id)` so a soft-hidden row can load; others use `fetchPublicMessage(routeId)` / `fetchPublicReplies`. If `parentId` is set, fetches that parent (`null` → missing) then replies of the parent. Ready only with root + replies (empty replies → parent only). Replies throw → error + **Try again** (whole chain). Until hydrate `ready`, only `forum.loading` (no fetch, no cards). After ready, when the loaded root or the highlighted reply has `deletedAt` / `deletedBy`, a `role="status"` `forum.hiddenNotice` line sits above the thread (permalink target). Unsigned visitors (no session or no account) keep the `PublicThreadCard` stack (no pay/copy): vertical stack parent `Card` then reply Cards with `pl-4`. Gift-only replies (empty text, sats > 0): sats line via `formatBitcoin` plus optional preferred-fiat `·` `formatFiatDisplay` of the amount stored when the payment was made (a stored string as-is, a null or missing field on a passed `stored` object uses the gift-day rate), no empty `<p>`. When the route id is a reply, that unsigned reply card (or wrapper) has `data-permalink-target="true"` and `ring-1 ring-app-fg`. Photo/video per unsigned card via `fetchPublicMessagePhoto`. Unsigned gallery is `ForumPhotoGallery` (horizontal snap row, `data-scroll-x`, 88% peek, `current/total` chip, dots); `data-photo-index` keeps the original still index when an earlier extra still fails to load. **Translate** (Languages icon) under unsigned note and reply bodies via `NoteTranslate` when the language differs from the UI locale. A `via === 'nostr'` reply or note shows a non-interactive **External** `<span>` badge next to the name (no hint state on this card) and renders its body as plain text (`TranslatableNoteBody` `plain`) instead of `ForumQuotedBody`. Each unsigned card is ₿ plus optional preferred-fiat `·` `formatFiatDisplay` of the amount stored when the payment was made (`useFiatPreference`; cookie, otherwise locale default); otherwise the gift-day rate. On an unsigned reply with `receivedSats` greater than zero, that card uses `ReplyDirectionAmounts` instead of the single amount: sent and received stay separate lines and are not added. A top-level card keeps one amount, the collected total. `fetchGiftStats` / `latestRateDay` feed the pay sheet and an unpaid invoice preview. A posted goal bar uses the stored visitor snapshot when that string exists, otherwise this gift-day rate. A top-level unsigned note with a positive `goalSats` also shows `ForumGoalBar`, and the same **Loan**, **Donation**, or **#Shop** tag as the forum beside the name. When `ready && session && account` and the root is loaded, mounts `PublicMessageThread` instead of the unsigned cards, passing `seedReply` as the highlighted hidden reply (omit the prop when none). Auth CTA once below either stack from `useHydrateSession` is **Log in** when unsigned. Signed-in visitors have no text back link under the thread. The top-left arrow returns to the previous in-app view in this tab, or `/welcome` when this tab has none.
 - **Inputs:** `id` string from the route. Also reads `session` and `account` from the auth store and hydrate `ready`.
 - **Returns / side effects:** States loading / missing / error (with **Try again**) / ready unsigned stack or signed-in `PublicMessageThread`. Malformed UUID → missing without an api call. Photo blob URLs revoked on unmount or id change. Inline `<video>` keeps the clip aspect ratio (`max-h-80 max-w-full`, no full-width black canvas). A failed `<video>` `error` event hides the player and falls back to the photo when present. `NoteTranslate` on unsigned note and reply bodies (GET `/translate` on mount, POST on **Translate**). Unsigned stack has no pay, composer, copy, or FiatPicker. Hydrate-not-ready is only `forum.loading` (no unsigned cards). A hydrate drop after a note is loaded keeps the cards and shows `forum.loading` in the footer.
 - **Used by:** `PublicMessagePage`.
@@ -1157,6 +1213,15 @@
 - **Returns / side effects:** React element. Local scroll index only. No network. Blob `<img>` URLs from the parent.
 - **Used by:** `ForumBoard`, `PublicThreadCard` in `PublicMessageLoader`.
 
+## Function: ShopAddWizard
+
+Guided shop submission on `/shops`. Closed state is only **Add a shop**. The open steps are photos, a map place, text, an optional 21.gifts username, then a summary. **Post** on the summary is the only submit. The add photo step shows **Next** only. Edit mode shows an icon-only Close (X) on that step only. Its accessible name is Cancel, and there is no visible Cancel word. It closes the editor. From the place step on, the top-left arrow returns to the previous step. The card has no **Back** button. Photos, place, text, and the username can each be left empty; an empty summary still follows the forum rule that a note needs text or media.
+
+- **Purpose:** Replace the living-room composer on the shops feed. The shop tag is added when the note is sent, not typed in the text step. That text step lists people as soon as `@` is typed, the same way a post does. The summary shows the photo count (stills plus a video), the place name or coordinates, the text, and `@username`, or **None** when that part was skipped.
+- **Inputs:** `posting`, `draft` / `onDraftChange`, `photoDrafts`, `videoDraft`, `onPickFiles`, `onRemovePhoto`, `onClearPhoto`, `place` / `onPlaceChange`, `username` / `onUsernameChange`, `onSubmit`, optional `onCancel` (edit mode only), `resetToken` (closes the wizard after a successful send), `maxLength`. Optional `mode` (`create` default, or `edit`), `submitLabel`, `keptMedia`, `onRemoveKept`, and `imagesOnly`.
+- **Returns / side effects:** React tree. No network. File selection calls `onPickFiles`. The summary button calls `onSubmit` (**Post**, or `submitLabel` such as **Save changes**). In edit mode, the icon-only Close (X) on the photo step calls `onCancel`. Its accessible name is Cancel, and there is no visible Cancel word. From the place step on, the top-left arrow returns to the previous step and is disabled while `posting` is true. The card does not draw **Back**.
+- **Used by:** `ForumBoard` when `shopComposer` is set, and `ShopNoteEditControl` in edit mode.
+
 ## Function: ForumAskWizard
 
 Ask composer on `/welcome`. A donation is four steps and the counter reads **{step} of 4**. A credit is nine steps and the counter reads **{step} of 9**. Step 1 starts with the One-time / Daily pill and a Donation / Credit pill under it. Photos and text follow the credit confirmations. The preview shows the same pills and `ForumGoalBar` at 0 collected versus the ask. The heading and the step counter share one row (step on the right). The labeled **Post** on the preview is the only Ask submit. Switching to **Credit** on the preview returns to step 1. A shown bitcoin amount on the plan also shows the visitor's fiat when a rate exists.
@@ -1199,8 +1264,8 @@ Ask composer on `/welcome`. A donation is four steps and the counter reads **{st
 SVG progress bar for a top-level forum note. One SVG: orange fill in user units 0–100; overflow past 100% continues in green (`app-success`) from `x=100` at most another 100 units (visual max 200%). The `{percent}%` label is a sibling, so it stays readable, and is uncapped (110, 250, …). Above the track, the posted line is never one currency when a visitor figure exists. Ask label, then the defined fiat when `goalCurrency` is USD/CHF/EUR/PHP, then `formatBitcoin(goalSats)`, then the visitor's default fiat unless the ask was defined in that same fiat. That visitor figure is the frozen snapshot when the string is present, otherwise the gift-day rate when one is loaded. If neither exists, the line stays bitcoin. Joined with `·`. A legacy ask (`goalSats`, no `goalCurrency`) is bitcoin plus the visitor's fiat when that figure exists. Renders nothing when `goalSats` is missing or `<= 0`. Lengths use SVG `width` / `x` / `viewBox` attributes, not React `style`.
 
 - **Purpose:** Show collected-versus-goal progress on a top-level note that has a positive `goalSats`. BTC and legacy use `forumGoalPercent(sats, goalSats)`; a fiat Ask uses `forumFiatGoalPercent` of the payment snapshot (`null` collected is 0%, not sats). Orange through 100%, green overflow, uncapped label. The amount line pairs currencies when a visitor figure exists: defined fiat plus bitcoin when the ask is in the visitor's fiat; otherwise bitcoin plus the visitor's fiat (snapshot, or the gift-day rate when the snapshot is missing and a rate is loaded). If neither a snapshot string nor a loaded rate exists, a bitcoin ask stays bitcoin. A third fiat is shown only when the definition currency is a different fiat. A repayable ask shows a **Loan** tag beside the author. Any other ask shows a **Donation** tag. Pressing the tag explains it. The bar does not repeat that sentence. A shop note keeps the **#Shop** link.
-- **Inputs:** `sats` (collected), `goalSats` (whole-sat counterpart), optional `goalCurrency` / `goalAmount` / goal snapshots / payment snapshots, optional `rateDay`, optional `preview`, optional `goalRepayable`, optional `goalTermDays`, optional `messageId` (posted credit; omitted in the wizard), optional `ledgerCollapsed` (feed and profile keep the ledger behind a control; the open note leaves it false). Non-positive or non-finite `goalSats` yields `null`.
-- **Returns / side effects:** The bar, or `null`. A posted credit with `messageId` loads the public ledger (`CreditLedger`), which fetches `GET /messages/:id/repayment`. When `ledgerCollapsed` is true that fetch waits until the visitor opens the control. No other network.
+- **Inputs:** `sats` (collected), `goalSats` (whole-sat counterpart), optional `goalCurrency` / `goalAmount` / goal snapshots / payment snapshots, optional `rateDay`, optional `preview`, optional `goalRepayable`, optional `goalTermDays`, optional `messageId` (posted credit; omitted in the wizard), optional `ledgerCollapsed` (feed and profile show a **Repayment list** link to `/messages/<id>/repayment-list` and do not mount `CreditLedger`; the open note leaves it false and renders `CreditLedger` with `list="summary"`). Non-positive or non-finite `goalSats` yields `null`.
+- **Returns / side effects:** The bar, or `null`. A posted credit with `messageId` and `ledgerCollapsed` false loads the public ledger (`CreditLedger` summary), which fetches `GET /messages/:id/repayment`. When `ledgerCollapsed` is true the bar shows only the **Repayment list** link and does not fetch. No other network.
 - **Used by:** `ForumBoard` (top-level notes only), `PublicMessageLoader`, and `ForumAskWizard` (preview at 0 collected).
 
 ## Function: forumGoalPercent
@@ -1260,23 +1325,37 @@ Defined Ask amount for the goal line. Prefix `$` for USD and `₱` for PHP, othe
 
 ## Function: ForumVideo
 
-- **Purpose:** Playable note video. Keeps `controls` and `playsInline`, sets `controlsList="nofullscreen"`, and draws one fullscreen button (Maximize / Minimize) on the picture. Click calls `requestFullscreen`, or `webkitEnterFullscreen` when that API is missing. Composer and ask previews do not use it.
-- **Inputs:** Native video attributes.
-- **Returns / side effects:** The video and the button. No network.
+- **Purpose:** Playable note video. No native controls; one play button while paused; a click on the playing video pauses it; the fullscreen button sits in an absolutely positioned wrapper because the small icon button stays relative; the frame is `mx-auto w-fit` so the picture stays centered and both controls sit on it. The fullscreen button calls `requestFullscreen` on that frame, or `webkitEnterFullscreen` when that API is missing. Composer and ask previews do not use it.
+- **Inputs:** Native video attributes except controls, controlsList, and playsInline.
+- **Returns / side effects:** The video, play button, and fullscreen button. No network.
 - **Used by:** `ForumBoard` feed video, `PublicMessageLoader` public note video.
 
 ## Function: ForumBoard
 
-- **Purpose:** Presentational public forum: each post card body without the action row is the expand/collapse control (`forum.expand` / `forum.collapse`, `role="button"` wrapping header, media, and body text, not an `IconButton`; the footer ₿ amount button and the reply-count button (when shown) also call `onToggleExpand`; React on every top-level note (`forum.react`, lucide Reply; expands the reply composer; omitted when `deletedAt` is set), **Pay today's repayment** for the signed-in author of a top-level repayable note when `sats >= goalSats` and the note is not deleted (disabled while `payBusy` or while `payInvoice.messageId` is this note; a `repayNotice` error renders `role="alert"` (`rateLimit`, `authorWallet`, or `request`)), **Translate** (Languages icon, `controlSlotId` on `TranslatableNoteBody` in this row), a copy-link `IconButton` on every note and every reply, optional Gift on a payable reply, and optional delete sit outside that control as sibling `IconButton`s that `stopPropagation`; when `shopPlaceEdit` is set, a compact place control (**Add a place** or **Edit place**) sits in that footer after copy and before delete; when `shopAccountEdit` is set, a compact account control (**Add an account** or **Edit account**) sits after the place control; Gift/Delete/reply composer also omit when `deletedAt` is set). Optional dismissible living-room laws hint box (X control; two laws plus links to `/rules` and `/contact`) when `lawsVisible`, Active/No gifts yet/All/Most popular `ForumModeSelect` (closed dropdown; selected label and chevron on the trigger; unpaid count chip on the closed trigger when `unpaidNewCount` > 0 and unpaid is not selected), list of posts (name, the author row uses `MessageKindTags` (Loan and Donation buttons that show a sentence, `#Shop` stays a link), optional Founder / Moderator / Initiator / Verified role pill on notes **and replies** when `role` is one of those four (`basis` has no pill), top-level shop notes show a `#Shop` link to `/shops` and hide `#21GiftsShop`, timestamp, optional inline photo from blob URLs (single still when `photoCount` ≤ 1; a horizontal snap row (`ForumPhotoGallery`, `data-scroll-x`, 88% peek) when `photoCount > 1` — sideways only, `current/total` chip, dots of loaded blob URLs keyed `${id}:${index}`) then caption text below the photo, a link to `/map?pin=<id>` (the label, or coordinates when the label is null) on a top-level note that has a place, an `@username` link to `/members/{id}` on a top-level note that has a shop account, optional inline `<video>` playback for notes with video (player keeps the clip aspect ratio with `max-h-80 max-w-full`, no full-width black canvas), remaining body text through `ForumQuotedBody` / `ForumNoteText` (280-character preview plus `forum.showMore` only when the body is longer than 560 on the feed; signed-in `/messages/[id]` passes `truncate={false}` so the original stays full), **Translate** (Languages icon) / Show original / Show translation in the footer icon row via `TranslatableNoteBody` (`controlSlotId`), which portals `NoteTranslate` with `placement="row"` when the board has that row, a reply or note with `via === 'nostr'` (a Nostr zapper with no 21.gifts account) renders an **External** button in place of a role pill, sharing the same per-message hint toggle state as the role pill's hint, and renders its body via `TranslatableNoteBody` `plain` (no quoted-note unfurl, URLs stay visible text) instead of `ForumQuotedBody`, ₿ amount plus optional preferred-fiat `·` `formatFiatDisplay` of the amount stored when the payment was made (a stored string as-is; a null or missing field on a passed payment uses the gift-day rate) with a Gift pay icon only when the card is a payable reply (`parentId` set); the card's copy control is labelled `forum.copyReplyLink` when the card is a reply and `forum.copyLink` otherwise, and always copies the card's own origin `/l/<8 hex>` (first UUID group) when that id is a UUID, otherwise origin `/messages/<id>`) or empty/loading/error, messenger-style composer (**Send a post** / **Ask for money** pill; Post is **Add a photo or video** ImagePlus, then **Add a place** (MapPin, `PlaceField`) when `onPlaceDraftChange` is set, left of the textarea, **Post** Send icon to the right; Ask is `ForumAskWizard` (the amount step and the preview open with the One-time / Daily pill; the photo and text steps do not); when `allowAsk` is false the Post/Ask pill and wizard are omitted and only the post composer shows), optional photo draft preview (**Selected photo**) when `photoDrafts.length === 1` with **Remove photo** X, composer gallery when `photoDrafts.length > 1` (`ul` of **Selected photo** alts + per-index **Remove photo**), optional video draft preview with **Remove video** X — icon-only, catalog `aria-label`s, `maxLength` from optional `composerMaxLength` (default 8000)), in-card reply composer (amount row first: `AmountEntry` `layout="inline"` `id="forum-reply-amount"` with the bitcoin/fiat switch on that same line, then one text line and Post aligned beside it), and a pay sheet on a payable reply or, when `payHost` is `composer`, on the top-level composer: amount form with a live equivalent in the preferred fiat only when the conversion is non-null (no picker; after mint the equivalent uses the invoice amount, not an empty draft's 21-sat default), then every user-agent amount CTA is **Continue** (`forum.payContinue`) and only requests the invoice; after mint every user-agent shows the same invoice card (confirm sentence, wallet `Button` that sets `window.location.href` to the Android Intent or `walletofsatoshi:`); the card mounts `QrCode` only when the user-agent is not a smartphone (`isSmartphoneUserAgent`, not viewport); wallet `Button` uses `forum.payOpenWallet` / aria `forum.payOpenWalletAria` (no custom-scheme `<a>`); Close (`X`) dismisses the sheet and stays on the page. That control is not Back. Gift-only replies show **send ₿…** (`forum.giftReply`) plus the same optional preferred-fiat `·` as notes; a reply with text and sats shows both. Clicking a role pill toggles a short explanation under that card header (one open at a time). Selector stays visible in every board state unless `modeSelector` is false or `composerHidden` is true. When `modeSelector` is false the list is every loaded row (mode all), including zero-sat basis notes; an empty loaded list still uses `emptyKey`, not `forum.emptyPaid`. Uses optional `emptyKey` (`forum.empty` default, `shops.empty` on shops) when the loaded list is empty, `forum.emptyPaid` when Active or Most popular hide every loaded row (Most popular remains paid-only; Active also keeps unpaid moderator notes and top-level notes with `goalSats` > 0), and `forum.emptyUnpaid` for No gifts yet when that filter hides all loaded rows. Props `messages` are newest-first (API window); Active, No gifts yet, and All keep that order (newest at the top). Most popular stays sats-descending. The composer sits under the mode selector / filters, above the newest-first list; replies remain oldest-first. When `onRefresh` is passed, pull-to-refresh from the top of the AppShell inner scroller (`useAppShellScroller`) calls it; while `refreshing` (or a pull that reached the arm threshold) a visually hidden (`sr-only`) `role="status"` with `forum.refreshing` is mounted for assistive tech only — idle markup has no status node so welcome screenshots stay unchanged. When `newPostsAvailable` is true, a labeled primary `Button` (`forum.newPosts`, decorative lucide `ArrowUp`) is `sticky top-2` in the scroller; the node is omitted when the flag is false. When `moderatorAppointedAvailable` is true, a labeled primary `Button` (`forum.moderatorAppointed`, size `sm` with `shadow-lg`, decorative lucide `ArrowUp`) in the same visual language as New posts is `sticky top-2` when it is the only pill and calls `onShowModeratorAppointed`; the node is omitted when the flag is falsy. When both this and `newPostsAvailable` are true, the appointment pill stays `sticky top-2` and New posts is `sticky top-14`. Listens for `FORUM_COMPOSE_EVENT` / `requestForumCompose`: focuses the new-post textarea with `preventScroll` and then `revealInScrollport` when the shell scroller exists and consumes pending compose only when that textarea exists (`composerHidden` boards keep the flag). `/messages/<uuid>` and `http(s)://<host>/l/<8 hex>` HTTP(S) URLs in a body unfurl into a nested post and the URL is removed from the visible text once that note loads.
-- **Inputs:** `ForumBoardProps` — `messages`, optional `readOnly` (signed-out living room: no composer, pay, delete, or @mention links; an author name with a non-empty `accountId` is still the profile button, including when `readOnly` is true; Enter or Space on that button opens the profile and does not toggle the card, because the card key handler ignores a descendant target; the mode selector stays), `error` (boolean load-failure flag), `loading`, optional `refreshing` / `onRefresh` (omit `onRefresh` to disable pull-to-refresh), optional `newPostsAvailable` / `onShowNewPosts` (pill omitted when the flag is falsy), optional `moderatorAppointedAvailable` / `onShowModeratorAppointed` (pill omitted when the flag is falsy), `posting`, `draft`, `onDraftChange`, `askDraft` / `onAskDraftChange`, optional `allowAsk` (default true; false omits the Post/Ask pill and the wizard) / optional `composeIntent` / `onComposeIntentChange` / `askStep` / `onAskStepChange` / `askCadence` (`'once'` | `'daily'`, default once) / `onAskCadenceChange` / `authorName`, `onPost`, `onRetry`, `formError` (`empty` / `tooLong` / `ask` / `request` / `rateLimit` / `unsupported` / `tooLarge` / `tooMany`; `ForumFormError = 'empty' | 'tooLong' | 'ask' | 'request' | 'rateLimit' | 'unsupported' | 'tooLarge' | 'tooMany' | null`), controlled `mode` / `onModeChange`, optional `modeSelector` (default true), optional `nearEndRef` (callback ref on the visible note about eight rows from the end so `ForumLoader` can prefetch the next page), optional `unpaidNewCount` (default 0), required `lawsVisible` / `onDismissLaws`, `photoDrafts` (`ForumPhotoPayload[]`), `placeDraft` (`ForumPlacePin | null`), optional `onPlaceDraftChange` (omit it and the place control is absent, so replies have none), `videoDraft`, `onPickFiles(files: File[])`, `onRemovePhoto(index: number)`, `onClearPhoto`, `photoUrls`, `videoUrls`, optional `composerHidden` (hides the new-post composer; the textarea is absent so compose-pending is not consumed), optional `composerMaxLength` (default `FORUM_MESSAGE_MAX_LENGTH`; shops pass 7986 so the `#21GiftsShop` suffix fits), optional `emptyKey` (`forum.empty` default, `shops.empty` on shops), plus pay sheet props (`payMessageId`, optional `payHost` (`composer` keeps the sheet on the top-level composer; `card` binds to the matching parent or reply; omit/`null` infers from the list), `payDraft`, `payBusy`, `payError` (`amount` / `request` / `rateLimit` / `authorWallet` / `deleted`), `payInvoice`, optional `replyPayPreview` (`string | null`, default `null`; when set with a matching card invoice, `ForumReplyPayPage` replaces the reply composer), `payWaiting`, optional `rateDay` (`FiatRateDay | null`; omit or `null` leaves unsent previews bitcoin-only because no rate is loaded; a present `rateDay` is the gift-day rate when no stored string exists; a stored string stays visible), `onPayOpen`, optional `viewerAccountId`, optional `onRepay`, optional `repayNotice` (`rateLimit` / `authorWallet` / `request` as `role="alert"` on that card), `onPayDraftChange`, `onPaySubmit`, `onPayCancel`), expand/replies (`expandedId`, `onToggleExpand`, `replies`, `repliesLoading`, `repliesError`, `onRetryReplies`, reply composer with optional `replyAmountDraft` / `onReplyAmountDraftChange`, `replyFormError` including `amount` for a non-numeric or overflowing paid-reply sats field and `deleted` when that note is missing or was deleted), optional `shopPlaceEdit` (true on shops; the footer place control is absent when omitted) and `onShopPlaceUpdated` (applies a saved or cleared pin to that row), optional `shopAccountEdit` (true on shops; the footer account control is absent when omitted) and `onShopAccountUpdated` (applies a saved or cleared shop account to that row), and optional `onDeleted` (moderator `DeletePostControl` on the parent footer and on nested replies with `kind="reply"`), optional `permalinkTargetId` (nested reply ring only: `data-permalink-target="true"` and `ring-1 ring-app-fg`; parent notes are not ringed), and optional `truncate` (default true; `PublicMessageThread` passes false). Gift-only replies (`text === ''` and `sats > 0`) render `forum.giftReply` with `formatBitcoin` plus the same optional preferred-fiat `·` `formatFiatDisplay` suffix as notes (the gift-day rate when the stored field is null or missing); text plus a gift shows that formatted amount under the text. The video-draft X still calls `onClearPhoto`; each photo-draft X calls `onRemovePhoto(index)`.
-- **Returns / side effects:** React tree. Copy-link always copies origin `/l/<8 hex>` (first UUID group) when the id is a UUID, otherwise origin `/messages/{id}` — a note copies its own id, a reply copies its own id (no parent resolution). Filters via `visibleForumMessages`. Load error copy is `forum.error` via `t()`, never `Error.message`. Formats timestamps via `formatForumTime`. Hides empty text paragraphs; never points `<img src>` at `/messages/.../photo` without a blob URL. Feed video is `ForumVideo` (one fullscreen button, `controlsList="nofullscreen"`). Inline feed `<video>` keeps the clip aspect ratio (`max-h-80 max-w-full`, no full-width black canvas). A failed `<video>` `error` event hides that player (photo fallback when a blob URL exists). Clicking a role pill toggles a short explanation under that card header (one open at a time). Dismiss control calls `onDismissLaws` only; persistence is owned by `ForumLoader`. ForumBoard itself does not fetch; nested `NoteTranslate` GETs `/translate` on mount and POSTs on **Translate**. No mode state of its own. After `onPaySubmit` resolves to an invoice, ForumBoard does not `window.location.assign`; every user-agent shows the same invoice card; the wallet `Button` sets `window.location.href` to the Android Intent or `walletofsatoshi:`; `QrCode` is mounted only when the user-agent is not a smartphone. A `FORUM_COMPOSE_EVENT` focuses the new-post composer when it is mounted; a `composerHidden` board leaves pending compose set for a later visible board. While a pay sheet is open, `revealPaySheet` runs instead of `revealReplyForm`. The scroll position from before the sheet opened is restored, so inserting the sheet does not scroll the note away, and a sheet that starts below the fold is not pulled to the top. The reply composer on that note is disabled while its invoice card is open and no reaction preview is set. A paid reaction replaces the reply composer with ForumReplyPayPage and the typed sentence is the preview. Gift-on-reply and composer-hosted sheets stay ForumPaySheet. The close control sits in an absolutely positioned wrapper at the sheet's top left, because the small icon button itself stays `relative`.
+- **Purpose:** Presentational public forum: each post card body without the action row is the expand/collapse control (`forum.expand` / `forum.collapse`, `role="button"` wrapping header, media, and body text, not an `IconButton`; the footer ₿ amount button and the reply-count button (when shown) also call `onToggleExpand`; React on every top-level note (`forum.react`, lucide Reply; expands the reply composer; omitted when `deletedAt` is set), **Pay today's repayment** for the signed-in author of a top-level repayable note when `sats >= goalSats` and the note is not deleted (disabled while `payBusy` or while `payInvoice.messageId` is this note; a `repayNotice` error renders `role="alert"` (`rateLimit`, `authorWallet`, or `request`)), **Translate** (Languages icon, `controlSlotId` on `TranslatableNoteBody` in this row), a copy-link `IconButton` on every note and every reply, optional Gift on a payable reply, and optional delete sit outside that control as sibling `IconButton`s that `stopPropagation`; when `shopNoteEdit` is set, the shop pencil sits in that right-hand footer after copy and before the place control, and the reply count stays in the left group; when `shopPlaceEdit` is set, a compact place control (**Add a place** or **Edit place**) sits in that footer after the pencil and before the account control; when `shopAccountEdit` is set, a compact account control (**Add an account** or **Edit account**) sits after the place control; Gift/Delete/reply composer also omit when `deletedAt` is set). Optional dismissible living-room laws hint box (X control; two laws plus links to `/rules` and `/contact`) when `lawsVisible`, Active/No gifts yet/All/Most popular `ForumModeSelect` (closed dropdown; selected label and chevron on the trigger; unpaid count chip on the closed trigger when `unpaidNewCount` > 0 and unpaid is not selected), list of posts (name, the author row uses `MessageKindTags` (Loan and Donation buttons that show a sentence, `#Shop` stays a link), optional Founder / Moderator / Initiator / Verified role pill on notes **and replies** when `role` is one of those four (`basis` has no pill), top-level shop notes show a `#Shop` link to `/shops` and hide `#21GiftsShop`, timestamp, optional inline photo from blob URLs (single still when `photoCount` ≤ 1; a horizontal snap row (`ForumPhotoGallery`, `data-scroll-x`, 88% peek) when `photoCount > 1` — sideways only, `current/total` chip, dots of loaded blob URLs keyed `${id}:${index}`) then caption text below the photo, a link to `/map?pin=<id>` (the label, or coordinates when the label is null) on a top-level note that has a place, an `@username` link to `/members/{id}` on a top-level note that has a shop account, optional inline `<video>` playback for notes with video (player keeps the clip aspect ratio with `max-h-80 max-w-full`, no full-width black canvas), remaining body text through `ForumQuotedBody` / `ForumNoteText` (280-character preview plus `forum.showMore` only when the body is longer than 560 on the feed; signed-in `/messages/[id]` passes `truncate={false}` so the original stays full), **Translate** (Languages icon) / Show original / Show translation in the footer icon row via `TranslatableNoteBody` (`controlSlotId`), which portals `NoteTranslate` with `placement="row"` when the board has that row, a reply or note with `via === 'nostr'` (a Nostr zapper with no 21.gifts account) renders an **External** button in place of a role pill, sharing the same per-message hint toggle state as the role pill's hint, and renders its body via `TranslatableNoteBody` `plain` (no quoted-note unfurl, URLs stay visible text) instead of `ForumQuotedBody`, ₿ amount plus optional preferred-fiat `·` `formatFiatDisplay` of the amount stored when the payment was made (a stored string as-is; a null or missing field on a passed payment uses the gift-day rate) with a Gift pay icon only when the card is a payable reply (`parentId` set); the card's copy control is labelled `forum.copyReplyLink` when the card is a reply and `forum.copyLink` otherwise, and always copies the card's own origin `/l/<8 hex>` (first UUID group) when that id is a UUID, otherwise origin `/messages/<id>`) or empty/loading/error, messenger-style composer (**Send a post** / **Ask for money** pill; Post is **Add a photo or video** ImagePlus, then **Add a place** (MapPin, `PlaceField`) when `onPlaceDraftChange` is set, left of the textarea, **Post** Send icon to the right; Ask is `ForumAskWizard` (the amount step and the preview open with the One-time / Daily pill; the photo and text steps do not); when `allowAsk` is false the Post/Ask pill and Ask wizard are omitted; `shopComposer` shows `ShopAddWizard` instead of the post composer), optional photo draft preview (**Selected photo**) when `photoDrafts.length === 1` with **Remove photo** X, composer gallery when `photoDrafts.length > 1` (`ul` of **Selected photo** alts + per-index **Remove photo**), optional video draft preview with **Remove video** X — icon-only, catalog `aria-label`s, `maxLength` from optional `composerMaxLength` (default 8000)), in-card reply composer (amount row first: `AmountEntry` `layout="inline"` `id="forum-reply-amount"` with the bitcoin/fiat switch on that same line, then one text line and Post aligned beside it), and a pay sheet on a payable reply or, when `payHost` is `composer`, on the top-level composer: amount form with a live equivalent in the preferred fiat only when the conversion is non-null (no picker; after mint the equivalent uses the invoice amount, not an empty draft's 21-sat default), then every user-agent amount CTA is **Continue** (`forum.payContinue`) and only requests the invoice; after mint every user-agent shows the same invoice card (confirm sentence, wallet `Button` that sets `window.location.href` to the Android Intent or `walletofsatoshi:`); the card mounts `QrCode` only when the user-agent is not a smartphone (`isSmartphoneUserAgent`, not viewport); wallet `Button` uses `forum.payOpenWallet` / aria `forum.payOpenWalletAria` (no custom-scheme `<a>`); Close (`X`) dismisses the sheet and stays on the page. That control is not Back. Gift-only replies show **send ₿…** (`forum.giftReply`) plus the same optional preferred-fiat `·` as notes; a reply with text and sats shows that formatted amount under the text. When `receivedSats` is greater than zero, `forum.receivedOnReply` is a separate line and is not added to `sats`. A text reply that has both uses `forum.sentOnReply` for the sent line, and the two lines share a left rule. Clicking a role pill toggles a short explanation under that card header (one open at a time). Selector stays visible in every board state unless `modeSelector` is false or `composerHidden` is true. When `modeSelector` is false the list is every loaded row (mode all), including zero-sat basis notes; an empty loaded list still uses `emptyKey`, not `forum.emptyPaid`. Uses optional `emptyKey` (`forum.empty` default, `shops.empty` on shops) when the loaded list is empty, `forum.emptyPaid` when Active or Most popular hide every loaded row (Most popular remains paid-only; Active also keeps unpaid moderator notes; a top-level note with `goalSats` > 0 and zero sats is not Active), and `forum.emptyUnpaid` for No gifts yet when that filter hides all loaded rows. Props `messages` are newest-first (API window); Active, No gifts yet, and All keep that order (newest at the top). Most popular stays sats-descending. The composer sits under the mode selector / filters, above the newest-first list; replies remain oldest-first. When `onRefresh` is passed, pull-to-refresh from the top of the AppShell inner scroller (`useAppShellScroller`) calls it; while `refreshing` (or a pull that reached the arm threshold) a visually hidden (`sr-only`) `role="status"` with `forum.refreshing` is mounted for assistive tech only — idle markup has no status node so welcome screenshots stay unchanged. When `newPostsAvailable` is true, a labeled primary `Button` (`forum.newPosts`, decorative lucide `ArrowUp`) is `sticky top-2` in the scroller; the node is omitted when the flag is false. When `moderatorAppointedAvailable` is true, a labeled primary `Button` (`forum.moderatorAppointed`, size `sm` with `shadow-lg`, decorative lucide `ArrowUp`) in the same visual language as New posts is `sticky top-2` when it is the only pill and calls `onShowModeratorAppointed`; the node is omitted when the flag is falsy. When both this and `newPostsAvailable` are true, the appointment pill stays `sticky top-2` and New posts is `sticky top-14`. Listens for `FORUM_COMPOSE_EVENT` / `requestForumCompose`: focuses the new-post textarea with `preventScroll` and then `revealInScrollport` when the shell scroller exists and consumes pending compose only when that textarea exists (`composerHidden` boards keep the flag). `/messages/<uuid>` and `http(s)://<host>/l/<8 hex>` HTTP(S) URLs in a body unfurl into a nested post and the URL is removed from the visible text once that note loads.
+- **Inputs:** `ForumBoardProps` — `messages`, optional `readOnly` (signed-out living room: no composer, pay, delete, or @mention links; an author name with a non-empty `accountId` is still the profile button, including when `readOnly` is true; Enter or Space on that button opens the profile and does not toggle the card, because the card key handler ignores a descendant target; the mode selector stays), `error` (boolean load-failure flag), `loading`, optional `refreshing` / `onRefresh` (omit `onRefresh` to disable pull-to-refresh), optional `newPostsAvailable` / `onShowNewPosts` (pill omitted when the flag is falsy), optional `moderatorAppointedAvailable` / `onShowModeratorAppointed` (pill omitted when the flag is falsy), `posting`, `draft`, `onDraftChange`, `askDraft` / `onAskDraftChange`, optional `allowAsk` (default true; false omits the Post/Ask pill and the wizard) / optional `composeIntent` / `onComposeIntentChange` / `askStep` / `onAskStepChange` / `askCadence` (`'once'` | `'daily'`, default once) / `onAskCadenceChange` / `authorName`, `onPost`, `onRetry`, `formError` (`empty` / `tooLong` / `ask` / `request` / `rateLimit` / `unsupported` / `tooLarge` / `tooMany`; `ForumFormError = 'empty' | 'tooLong' | 'ask' | 'request' | 'rateLimit' | 'unsupported' | 'tooLarge' | 'tooMany' | null`), controlled `mode` / `onModeChange`, optional `modeSelector` (default true), optional `nearEndRef` (callback ref on the visible note about eight rows from the end so `ForumLoader` can prefetch the next page), optional `unpaidNewCount` (default 0), required `lawsVisible` / `onDismissLaws`, `photoDrafts` (`ForumPhotoPayload[]`), `placeDraft` (`ForumPlacePin | null`), optional `onPlaceDraftChange` (omit it and the place control is absent, so replies have none), `videoDraft`, `onPickFiles(files: File[])`, `onRemovePhoto(index: number)`, `onClearPhoto`, `photoUrls`, `videoUrls`, optional `composerHidden` (hides the new-post composer; the textarea is absent so compose-pending is not consumed), optional `composerMaxLength` (default `FORUM_MESSAGE_MAX_LENGTH`; shops pass 7986 so the `#21GiftsShop` suffix fits), optional `emptyKey` (`forum.empty` default, `shops.empty` on shops), plus pay sheet props (`payMessageId`, optional `payHost` (`composer` keeps the sheet on the top-level composer; `card` binds to the matching parent or reply; omit/`null` infers from the list), `payDraft`, `payBusy`, `payError` (`amount` / `request` / `rateLimit` / `authorWallet` / `deleted`), `payInvoice`, optional `replyPayPreview` (`string | null`, default `null`; when set with a matching card invoice, `ForumReplyPayPage` replaces the reply composer), `payWaiting`, optional `rateDay` (`FiatRateDay | null`; omit or `null` leaves unsent previews bitcoin-only because no rate is loaded; a present `rateDay` is the gift-day rate when no stored string exists; a stored string stays visible), `onPayOpen`, optional `viewerAccountId`, optional `onRepay`, optional `repayNotice` (`rateLimit` / `authorWallet` / `request` as `role="alert"` on that card), `onPayDraftChange`, `onPaySubmit`, `onPayCancel`), expand/replies (`expandedId`, `onToggleExpand`, `replies`, `repliesLoading`, `repliesError`, `onRetryReplies`, reply composer with optional `replyAmountDraft` / `onReplyAmountDraftChange`, `replyFormError` including `amount` for a non-numeric or overflowing paid-reply sats field and `deleted` when that note is missing or was deleted), optional `shopComposer` (shops; `ShopAddWizard` instead of the post composer), `shopUsername` / `onShopUsernameChange` / `shopResetToken`, optional `shopNoteEdit` / `onShopNoteUpdated` (moderator pencil on a top-level shop note), optional `shopPlaceEdit` (true on shops; the footer place control is absent when omitted) and `onShopPlaceUpdated` (applies a saved or cleared pin to that row), optional `shopAccountEdit` (true on shops; the footer account control is absent when omitted) and `onShopAccountUpdated` (applies a saved or cleared shop account to that row), and optional `onDeleted` (moderator `DeletePostControl` on the parent footer and on nested replies with `kind="reply"`), optional `permalinkTargetId` (nested reply ring only: `data-permalink-target="true"` and `ring-1 ring-app-fg`; parent notes are not ringed), and optional `truncate` (default true; `PublicMessageThread` passes false). Gift-only replies (`text === ''` and `sats > 0`) render `forum.giftReply` with `formatBitcoin` plus the same optional preferred-fiat `·` `formatFiatDisplay` suffix as notes (the gift-day rate when the stored field is null or missing); text plus a gift shows that formatted amount under the text. `receivedSats` greater than zero adds `forum.receivedOnReply` with the received fiat fields, not a sum. A text reply with both amounts labels the sent line `forum.sentOnReply`. The video-draft X still calls `onClearPhoto`; each photo-draft X calls `onRemovePhoto(index)`.
+- **Returns / side effects:** React tree. Copy-link always copies origin `/l/<8 hex>` (first UUID group) when the id is a UUID, otherwise origin `/messages/{id}` — a note copies its own id, a reply copies its own id (no parent resolution). Filters via `visibleForumMessages`. Load error copy is `forum.error` via `t()`, never `Error.message`. Formats timestamps via `formatForumTime`. Hides empty text paragraphs; never points `<img src>` at `/messages/.../photo` without a blob URL. Feed video is `ForumVideo` (no native controls; one play button while paused; one fullscreen button on the picture). Inline feed `<video>` keeps the clip aspect ratio (`max-h-80 max-w-full`, no full-width black canvas). A failed `<video>` `error` event hides that player (photo fallback when a blob URL exists). Clicking a role pill toggles a short explanation under that card header (one open at a time). Dismiss control calls `onDismissLaws` only; persistence is owned by `ForumLoader`. ForumBoard itself does not fetch; nested `NoteTranslate` GETs `/translate` on mount and POSTs on **Translate**. No mode state of its own. After `onPaySubmit` resolves to an invoice, ForumBoard does not `window.location.assign`; every user-agent shows the same invoice card; the wallet `Button` sets `window.location.href` to the Android Intent or `walletofsatoshi:`; `QrCode` is mounted only when the user-agent is not a smartphone. A `FORUM_COMPOSE_EVENT` focuses the new-post composer when it is mounted; a `composerHidden` board leaves pending compose set for a later visible board. While a pay sheet is open, `revealPaySheet` runs instead of `revealReplyForm`. The scroll position from before the sheet opened is restored, so inserting the sheet does not scroll the note away, and a sheet that starts below the fold is not pulled to the top. The reply composer on that note is disabled while its invoice card is open and no reaction preview is set. A paid reaction replaces the reply composer with ForumReplyPayPage and the typed sentence is the preview. Gift-on-reply and composer-hosted sheets stay ForumPaySheet. The close control sits in an absolutely positioned wrapper at the sheet's top left, because the small icon button itself stays `relative`.
 - **Used by:** `ForumLoader`, `MemberProfileScreen`, `PublicMessageThread`.
+
+## Function: ReplyDirectionAmounts
+
+- **Purpose:** Money on a reply. What the author sent and what later arrived stay two lines and are never added. A gift-only reply (`text === ''` and `sats > 0`) is `forum.giftReply`. A reply with text and sats, and no later receipt, is the bare formatted amount under the body. When `receivedSats` is greater than zero, that receipt is `forum.receivedOnReply` on its own line. A text reply that also sent sats labels that line `forum.sentOnReply`, and the two lines share a left rule. Zero or a missing receipt draws no received line. Nothing to show returns null.
+- **Inputs:** `text`, `sats`, optional `receivedSats`, `rateDay`, `fiat`, `numberFormat`, optional `sent` fiat fields for `sats`, optional `received` fiat fields for `receivedSats`.
+- **Returns / side effects:** React element, or null when both amounts are absent. No network. Bitcoin via `formatBitcoin`. Fiat via `preferredFiatSuffix` (stored string, otherwise the gift-day rate).
+- **Used by:** `ForumBoard` on every nested reply, and `PublicThreadCard` in `PublicMessageLoader` when the unsigned card is a reply with `receivedSats` greater than zero.
+
+## Function: ForumPaySheet
+
+- **Purpose:** The amount form and invoice card already used for a payable forum reply. A habit comment uses this same sheet: Amount, Continue, then the confirmation, the desktop QR, and Pay with Wallet of Satoshi. It does not show the raw invoice. Close stays on the page.
+- **Inputs:** `messageId`, the pay draft, busy, error, invoice, waiting flag, draft and unit callbacks, submit, cancel, the gift-day rate, optional `ratePending` (default false; Continue does not submit while it is true), whether to show the QR, and a click handler so the sheet does not toggle the card under it.
+- **Returns / side effects:** The in-card sheet (`data-pay-sheet`). Continue calls `onPaySubmit` only when it is not busy and `ratePending` is false. The wallet button sets `window.location.href` to the Android Intent or `walletofsatoshi:`. No network of its own.
+- **Used by:** `ForumBoard` and `HabitComments`.
 
 ## Function: ForumReplyPayPage
 
 - **Purpose:** Replaces the reply composer after a paid reaction is sent: it is a component in that same slot, not a new URL, and shows only a read-only preview of the submitted reply, the **Pay ₿…** amount line with the preferred-fiat suffix, the pay control (desktop QR plus Wallet of Satoshi button; smartphone: button only), and **Waiting for payment…** while polling.
 - **Inputs:** `preview` (raw submitted text; a trimmed-empty string omits the paragraph), `amountSats`, `pr`, `payWaiting`, `payBusy`, `showPaymentQr`, `rateDay`, `onCancel`.
-- **Returns / side effects:** React element with `data-reply-pay-page` and `data-pay-sheet`. Close (`X`) calls `onCancel` and stays on this view. It is not the top-left back arrow. The wallet button sets `window.location.href` to the Android Intent or `walletofsatoshi:` href. An empty trimmed preview omits the paragraph.
+- **Returns / side effects:** React element with `data-reply-pay-page` and `data-pay-sheet`. Close (`X`) calls `onCancel` and stays on this view. It is not the top-left back arrow. The wallet button sets `window.location.href` to the Android Intent or `walletofsatoshi:` href. An empty trimmed preview omits the paragraph. The preview paragraph uses `pl-12` so the close control, including its hit slop, does not cover the first glyphs.
 - **Used by:** `ForumBoard`.
 
 ## Function: ContactLoader
@@ -1302,14 +1381,14 @@ Defined Ask amount for the goal line. Prefix `$` for USD and `₱` for PHP, othe
 
 ## Function: middleware
 
-- **Purpose:** Send an old `/map` address to the shops map. There is no map page.
-- **Inputs:** The incoming request whose path is `/map`.
-- **Returns / side effects:** Redirect to `/shops#map`. A query string such as `?pin=` is kept (`/shops?pin=#map`).
-- **Used by:** Route `/map`.
+- **Purpose:** Serve the stable language URLs of the public pages and send an old `/map` address to the shops map. There is no map page.
+- **Inputs:** The incoming request. Language URLs are `/en`, `/de`, `/es`, and `/fil`, alone or followed by `/about`, `/donate`, or `/rules`. Every other path under a language prefix, such as `/de/login`, is not one of them.
+- **Returns / side effects:** A language URL is rewritten onto the existing page. The language goes down as the `x-21gifts-public-locale` request header, so the page renders in it even against another cookie. The response sets the `locale` cookie to that language (`Path=/`, `Max-Age=31536000`, `SameSite=Lax`, `Secure` when the request URL or the first `x-forwarded-proto` value is https) when the browser opens the language URL as a page (`sec-fetch-dest` is `document`, or that header is absent), including a prerender (`purpose` or `sec-purpose` contains `prerender`, any case). A prefetch that is not a prerender does not set it (`purpose` or `sec-purpose` contains `prefetch` and not `prerender`, any case), and neither do in-app navigations (`sec-fetch-dest` is present and is not `document`). The rewrite and `x-21gifts-public-locale` stay the same in every case. Later pages without a language prefix, including `/login`, `/stats`, `/handbook`, and `/legal`, therefore stay in that language for a signed-out visitor; for a signed-in account with a stored language, `AccountPreferenceSync` writes that language back after hydration. `/map` redirects to `/shops#map` and keeps a query string such as `?pin=` (`/shops?pin=#map`). Other paths continue to normal routing and set no cookie.
+- **Used by:** Routes `/map`, `/{locale}`, and `/{locale}/{about,donate,rules}`.
 
 ## Function: PlacesMapScreen
 
-- **Purpose:** Presentational map card: heading **Map**, then every live forum pin from `fetchPlaces`. Without a Google key the pins are links. With a key the same pins are also markers. A 21.gifts author name links to `/members/:accountId`; an external name stays text. `embedded` returns that body without the heading or card.
+- **Purpose:** Presentational map card: heading **Map**, then every live forum pin from `fetchPlaces`. Without a Google key the pins are links. With a key the same pins are also markers. A 21.gifts author name links to `/members/:accountId`; an external name stays text. A moderator sees the shop pencil on a pin with `shop: true`; it loads that note and opens the same steps as editing a shop post. A failed load shows `forum.editShopNoteLoadFailed`, not the save-failure sentence. `embedded` returns that body without the heading or card. A long pin name or label wraps inside the row. With a key, one pin, or a `?pin=` that matches a pin, centers that pin at zoom 14. Several pins and no matching `?pin=` frame every pin (`fitBounds`, padding 32). A fitted zoom above 14 is set back to 14.
 - **Inputs:** Optional `embedded` (default false). Catalog via `useTranslations`. Session from `useAuthStore`. Optional `?pin=` id.
 - **Returns / side effects:** `Card maxWidth="xl"` `surface={false}`, or only the body when `embedded`. Fetches places and `/maps/key`.
 - **Used by:** `ShopsScreen`.
@@ -1318,7 +1397,7 @@ Defined Ask amount for the goal line. Prefix `$` for USD and `₱` for PHP, othe
 
 - **Purpose:** Load every live top-level forum pin for the signed-in session.
 - **Inputs:** `sessionToken` bearer.
-- **Returns / side effects:** `ForumPlaceRow[]` from `GET /forum/messages/places`. Throws the visitor-facing load error on a non-2xx status, a network failure, or a body that fails the schema.
+- **Returns / side effects:** `ForumPlaceRow[]` from `GET /forum/messages/places`. A row may include `shop: true` when the note is a shop. Throws the visitor-facing load error on a non-2xx status, a network failure, or a body that fails the schema.
 - **Used by:** `PlacesMapScreen`.
 
 ## Function: proxyMessagesPlacesGet
@@ -1330,10 +1409,24 @@ Defined Ask amount for the goal line. Prefix `$` for USD and `₱` for PHP, othe
 
 ## Function: PlaceField
 
-- **Purpose:** Optional place control on the top-level forum composer, and the compact editor a moderator uses on a shop note. Opens a map when `/maps/key` returns a key. Confirm stores `{ lat, lng, label }`. No key shows the unavailable sentence and does not confirm a pin.
+- **Purpose:** Optional place control on the top-level forum composer, and the compact editor a moderator uses on a shop note. Opens a map when `/maps/key` returns a key. Confirm stores `{ lat, lng, label }`. No key shows the unavailable sentence and does not confirm a pin. On the device's local Sunday neither the preview nor the map panel is rendered; the pin stays inside the Sunday writing gate. Otherwise, once the frame box is measured, the preview and the map panel are fixed to the window and kept inside the app frame, and are not sized from the viewport (`vw`). Until that box is measured they sit under the pin as an absolute anchor. The map shrinks so the confirm control stays inside the window, and the page still has one scroller.
 - **Inputs:** `place`, `disabled`, `onChange`. Optional `buttonSize` (`lg` default, or `sm`), `buttonVariant` (`secondary` default, or `ghost`), `showPreview` (default true), `ariaLabel` (default **Add a place**), and `onCommit`. Without `onCommit`, Done and Remove call `onChange` and close. With `onCommit`, those buttons wait; a rejection keeps the panel open and shows the save error; a success closes without calling `onChange`. When preview is hidden and a pin is already set, Remove stays inside the open panel, including when the map is unavailable.
 - **Returns / side effects:** Attach button, optional preview, and panel. Fetches `/maps/key` when opened.
 - **Used by:** `ForumBoard` (top-level composer) and `ShopPlaceControl`.
+
+## Function: fitBoxInFrame
+
+- **Purpose:** Places one popover inside the app frame. The width is the preferred width when it fits, otherwise the room between the insets. The left edge stays on the anchor unless that would cross an inset. Vertically it opens downward when that side has at least 280px and at least as much room as above, otherwise upward, otherwise from the top inset across the whole frame height. It returns null when the frame has no positive room or the preferred width is not positive.
+- **Inputs:** Frame left, right, top, and bottom, anchor left, top, and bottom, gap, preferred width, inset, and viewport height, all in pixels.
+- **Returns / side effects:** `{ left, width, maxHeight, top, bottom }` with exactly one of top or bottom set, or null. No DOM writes and no network.
+- **Used by:** `PlaceField` for the place preview and the map panel.
+
+## Function: pageFrameProblems
+
+- **Purpose:** Reads the live document and lists sideways scroll of the document, sideways scroll of the active page scroller, and boxes whose border box leaves the window by more than one pixel on the left, right, top, or bottom. Content inside `[data-scrollport]` may sit past the top or bottom of the window unless it is position:fixed. A position:fixed box is still reported. A box inside `[data-scroll-x]` is ignored for the horizontal check unless it is position:fixed and its border box already crosses the left or right edge of the window. The sideways row itself is not ignored.
+- **Inputs:** None. Uses the open document, `window.innerWidth`, and `window.innerHeight`.
+- **Returns / side effects:** A string array. Empty means the page stays in the window. No DOM writes and no network.
+- **Used by:** `shotScreen` in `e2e/visual.spec.ts`, before every screenshot, and the behavior test `Function: pageFrameProblems`.
 
 ## Function: ShopPlaceControl
 
@@ -1342,11 +1435,18 @@ Defined Ask amount for the goal line. Prefix `$` for USD and `₱` for PHP, othe
 - **Returns / side effects:** Compact `PlaceField` (`showPreview` false, small ghost **Add a place** / **Edit place**). `onCommit` calls `setMessagePlace`; a failed save keeps the panel open and shows `forum.placeSaveFailed`.
 - **Used by:** `ForumBoard` when `shopPlaceEdit` and `onShopPlaceUpdated` are set (`ForumLoader` `feed="shops"`).
 
+## Function: ShopNoteEditControl
+
+- **Purpose:** Moderator-only pencil on a listed shop note. Opens the same five steps as adding a shop, already filled in, plus the edit history. Hidden on replies, hidden notes, non-shop text, unsigned sessions, and ranks below moderator.
+- **Inputs:** `message` (top-level shop note), `onUpdated` (the saved note), optional `existingPhotos`, optional `existingVideoUrl`, and optional `startOpen`.
+- **Returns / side effects:** Small ghost pencil (**Edit shop note**). The summary button is **Save changes**. It writes only the text, place, account, or stills that changed. A video stays. Already-shown stills are copied onto addresses this editor owns before the steps open, so a partial save can revoke the feed addresses without blanking the open editor. A failed copy opens the steps with `forum.editShopNoteFailed` and no stills, and does not revoke the feed addresses. Stills are not replaced unless every current still loaded. A failed save keeps the panel open and shows `forum.editShopNoteFailed`. History rows show who, when, and the field (text, place, or account). A failed history load shows `forum.editHistoryFailed`.
+- **Used by:** `ForumBoard` when `shopNoteEdit` and `onShopNoteUpdated` are set (`ForumLoader` for a moderator on every feed), `ShopTable`, and `PlacesMapScreen` for a pin with `shop: true`.
+
 ## Function: ShopAccountControl
 
 - **Purpose:** Moderator-only shop-account editor on a listed shop note. Hidden on replies, hidden notes, non-shop text, unsigned sessions, and ranks below moderator.
 - **Inputs:** `message` (top-level shop note) and `onUpdated` (message id plus the saved `{ id, username, name }`, or `null` when cleared).
-- **Returns / side effects:** Small ghost **Add an account** / **Edit account** (User icon). Open panel: username field, **Save account**, optional **Remove account**. Empty or unknown username shows `forum.shopAccountMissing` and keeps the panel open; other failures show `forum.shopAccountSaveFailed`. Success calls `setMessageShopAccount` then `onUpdated` and closes.
+- **Returns / side effects:** Small ghost **Add an account** / **Edit account** (User icon). The open field starts at `@`, or `@username` when an account is already attached, and the same People list as a forum post is visible immediately. Choosing a row fills `@username`. A space or any other non-username hides the list. The panel is fixed to the window so the page does not scroll sideways. A typed prefix immediately drops usernames that do not start with it. It shows at most eight people and does not scroll on its own. Rows drop until the box fits under the app chrome, and the list hides rather than covering that chrome. **Save account** strips one leading `@`. Optional **Remove account**. Empty or unknown username shows `forum.shopAccountMissing` and keeps the panel open; other failures show `forum.shopAccountSaveFailed`. Success calls `setMessageShopAccount` then `onUpdated` and closes.
 - **Used by:** `ForumBoard` when `shopAccountEdit` and `onShopAccountUpdated` are set (`ForumLoader` `feed="shops"`).
 
 ## Function: ShopsPage
@@ -1372,7 +1472,7 @@ Defined Ask amount for the goal line. Prefix `$` for USD and `₱` for PHP, othe
 
 ## Function: ShopTable
 
-- **Purpose:** Table of shop notes with name, place, and operator.
+- **Purpose:** Table of shop notes with name, place, and operator. A moderator sees the same shop pencil on each row.
 - **Inputs:** Session from `useAuthStore`. Catalog via `useTranslations`.
 - **Returns / side effects:** Loads `GET /messages?hashtag=21GiftsShop&mode=all`. Name is the first note line. Place links to `/map?pin={id}` (label, or coordinates). Operator links to `/members/{id}` as `@username`. A missing place or operator is an em dash (shops.missing). **Show more** loads the next page. If a page has no shop rows and another page exists, **Show more** stays and the empty sentence does not. If that page fails, the rows already shown stay, with the forum error and **Try again**, which reloads the same page. A failed first page replaces the table with that error. A missing-requirements response opens `/setup/rules` instead. Null without a session.
 - **Used by:** `ShopsScreen`.
@@ -1435,9 +1535,9 @@ Defined Ask amount for the goal line. Prefix `$` for USD and `₱` for PHP, othe
 
 ## Function: ForumLoader
 
-- **Purpose:** Client loader for the public forum on `/welcome` and `/shops` with `feed="shops"` (filter `#21GiftsShop`, hide laws, append hashtag on compose, `emptyKey` `shops.empty`, pass `shopPlaceEdit` and `onShopPlaceUpdated` so a moderator can set, replace, or clear the pin on an existing shop note, and `shopAccountEdit` and `onShopAccountUpdated` so a moderator can set, replace, or clear the shop account). Session and account from `useAuthStore`; shops return null without a session, and the living room loads the public active page instead. The laws hint stays hidden without a session. Living-room default remains Active (first paint `{ mode: 'active', limit: 20 }`, no hashtag). Shops always requests `mode: 'all'` with `hashtag: '21GiftsShop'` and does not mount the mode selector, the Post/Ask pill, or `ForumAskWizard` (`allowAsk: false`), and does not apply active/unpaid/popular. A mode switch resets the loaded pages and refetches page 1 of the new mode without blanking the current list. An `IntersectionObserver` sentinel about eight notes from the visible end prefetches the next page when `nextCursor` is present. An empty shops page shows `shops.empty` immediately. The 30-second visible-tab poll, `visibilitychange`, persisted `pageshow`, and pull-to-refresh fetch page 1 only, without a cursor; applying page 1 does not replace already-loaded older pages. Fetches via `fetchMessages`, loads photos via `fetchMessagePhoto` into blob URLs (effect keyed on `photoIdsKey` so payable-poll list refreshes do not cancel in-flight photo fetches), loads `rateDay` via the shared `useLatestRateDay()` hook on mount (failure leaves `rateDay` null), posts via `fetchComposeTarget` then `postMessageInvoice` (1 sat to 21.gifts, `payHost: composer`) for anyone below verified, otherwise `postMessage` with a `photos` array so `postMessage` dual-sends `{ photo, photos }` (non-empty `photos` wins; max 10) or `postMessageVideo` (multipart clip); composer submit is ignored while a note POST is in flight (sync `notePostInFlightRef`, not only the `posting` prop); prepares picks via `prepareForumPhoto` / `isForumVideoFile` / `prepareForumVideo`; owns `photoDrafts` (plural, not `photoDraft`), `placeDraft`, and `videoDraft` / `videoUrls`; `onPickFiles` appends stills and sets `formError` `tooMany` when the selected `File` list (not successful prepares) would exceed 10, preparing only the first `remaining` slots; video xor stills; video-only posts are allowed. Pay invoices via `postMessageInvoice` (optional `text` when the reply composer pays) and waits on `fetchPublicMessage` with `sinceSats` while the pay sheet is open (no attempt cap; aborts in-flight wait on Close / clear); after a paid reply's `sats` increase, merges that row into loaded `replies`/`messages` (no thread refetch). Today's repayment uses `postRepaymentInvoice` (`POST /messages/:id/repayment`) and `repayNotice`; success opens the invoice card on the note; failure sets `repayNotice` with `rateLimit` / `authorWallet` / `request`; the alert sits on the card. Owns Active/No gifts yet/All/Most popular feed mode (default Active) and the No gifts yet last-visit stamp (`21gifts.forum-unpaid-seen`): hydrates it on mount, stamps on entering unpaid and while unpaid as the list refreshes, and passes `unpaidNewCount` to `ForumBoard` (0 while unpaid is selected or messages are still null). After a successful living-room post with `created.sats === 0`, switches mode to All so the author sees the note, except a positive `goalSats` Ask stays on Active (and switches from Most popular to Active, because popular is paid-only). If All is already selected, loaded pages and `nextCursor` stay. Shops already lists with `mode: 'all'` and does not switch. The sheet clears when the pay target is no longer in the visible parent list and not in loaded `replies` (mode change, collapse, or delete), not when Active merely hides the parent note. Also polls `GET /forum/messages` until the merged list is payable (8 attempts, 2s; local extras kept until GET echoes), cancelled-flag fetch like `StatsLoader`. Silently re-fetches on `visibilitychange` (hidden→visible), on `pageshow` when `persisted` is true, on a `FORUM_LIST_POLL_MS` visible-tab interval, on `FORUM_HOME_EVENT` (wordmark / Menu Home while already on `/welcome`), and when the board pull-to-refresh calls `onRefresh` — shared load path with mount/retry; silent refresh does not flip the board to the loading copy when a list already exists, keeps the list when a silent refresh fails, and does not auto-scroll the newest note when a newer note arrives from refresh. When not at top (`shellScrollTop(scroller) < 8` is at-top; `window.scrollY` is only the no-shell fallback) and `hasUnseenForumPosts` is true, the fetch is held and `ForumBoard` shows **New posts**; at the top the list is applied. With a session, fetches `GET /forum/notifications` via existing `fetchNotifications` (cancelled-flag fetch like other ForumLoader loads) and, when an unread `moderator_appointed` row exists (`readAt === null`), drives the ForumBoard pill (`moderatorAppointedAvailable` / `onShowModeratorAppointed`); click marks that row read via `markNotificationRead` and clears the flag, staying on `/welcome` without auto-scroll; a fetch error leaves the banner hidden; a mark-read failure leaves the banner (does not crash). The payable poll updates sats, payable, and the four payment snapshots (`amountUsd`, `amountChf`, `amountEur`, `amountPhp`) on already-listed ids only and does not insert unseen ids. Owns the living-room laws hint visibility from `account.forumLawsDismissed` and persists dismiss via `dismissForumLaws` (optimistic; applies the response or restores the previous flag only when the session token is unchanged and an account is still present). Owns expand/replies (`fetchReplies`, retry, moderator nested-reply hide via `onDeleted` / `deleteMessage` without removing the parent, reply composer: empty reply text and an empty amount invoices 21 sats even for verified; unpaid `postMessage` with `inReplyTo` only when there is text and the amount is empty, and only for verified; below verified invoices 1 sat to 21.gifts via the compose-target note (`payHost: composer`); expand is ignored while a reply posts). After a failed media POST following compose-pay, the pay sheet is cleared (`payWaiting` / `payInvoice` / `payMessageId` / `payHost`) so a later compose invoices 21.gifts again. Uses `nextPostRequirement` so a missing name, username, Lightning Address, or rules agreement opens `RequirementsOverlay` (no Skip) before a post or reply retries. After a successful top-level post or reply, sets `hasPosted: true` on the session account when the session token is unchanged and an account is still present (no persist-flag / Skip-forever POST).
+- **Purpose:** Client loader for the public forum on `/welcome` and `/shops` with `feed="shops"` (filter `#21GiftsShop`, hide laws, append hashtag on compose, `emptyKey` `shops.empty`, pass `shopPlaceEdit` and `onShopPlaceUpdated` so a moderator can set, replace, or clear the pin on an existing shop note, and `shopAccountEdit` and `onShopAccountUpdated` so a moderator can set, replace, or clear the shop account). Session and account from `useAuthStore`; shops return null without a session, and the living room loads the public active page instead. The laws hint stays hidden without a session. Living-room default remains Active (first paint `{ mode: 'active', limit: 20 }`, no hashtag). Shops always requests `mode: 'all'` with `hashtag: '21GiftsShop'` and does not mount the mode selector, the Post/Ask pill, or `ForumAskWizard` (`allowAsk: false`); it mounts `ShopAddWizard` through `shopComposer` and does not apply active/unpaid/popular. A moderator session passes `shopNoteEdit` on every feed, not only shops. A mode switch resets the loaded pages and refetches page 1 of the new mode without blanking the current list. An `IntersectionObserver` sentinel about eight notes from the visible end prefetches the next page when `nextCursor` is present. An empty shops page shows `shops.empty` immediately. The 30-second visible-tab poll, `visibilitychange`, persisted `pageshow`, and pull-to-refresh fetch page 1 only, without a cursor; applying page 1 does not replace already-loaded older pages. Fetches via `fetchMessages`, loads photos via `fetchMessagePhoto` into blob URLs (effect keyed on `photoIdsKey` so payable-poll list refreshes do not cancel in-flight photo fetches), loads `rateDay` via the shared `useLatestRateDay()` hook on mount (failure leaves `rateDay` null), posts via `fetchComposeTarget` then `postMessageInvoice` (1 sat to 21.gifts, `payHost: composer`) for anyone below verified, otherwise `postMessage` with a `photos` array so `postMessage` dual-sends `{ photo, photos }` (non-empty `photos` wins; max 10) or `postMessageVideo` (multipart clip); composer submit is ignored while a note POST is in flight (sync `notePostInFlightRef`, not only the `posting` prop); prepares picks via `prepareForumPhoto` / `isForumVideoFile` / `prepareForumVideo`; owns `photoDrafts` (plural, not `photoDraft`), `placeDraft`, and `videoDraft` / `videoUrls`; `onPickFiles` appends stills and sets `formError` `tooMany` when the selected `File` list (not successful prepares) would exceed 10, preparing only the first `remaining` slots; video xor stills; video-only posts are allowed. Pay invoices via `postMessageInvoice` (optional `text` when the reply composer pays) and waits on `fetchPublicMessage` while the pay sheet is open (no attempt cap; aborts in-flight wait on Close / clear). A top-level note passes `sinceSats` and closes when `sats` rises. An existing reply passes `sinceReceivedSats` and closes when `receivedSats` rises. After that rise, the row is merged into loaded `replies`/`messages` (no thread refetch). Today's repayment uses `postRepaymentInvoice` (`POST /messages/:id/repayment`) and `repayNotice`; success opens the invoice card on the note; failure sets `repayNotice` with `rateLimit` / `authorWallet` / `request`; the alert sits on the card. Owns Active/No gifts yet/All/Most popular feed mode (default Active) and the No gifts yet last-visit stamp (`21gifts.forum-unpaid-seen`): hydrates it on mount, stamps on entering unpaid and while unpaid as the list refreshes, and passes `unpaidNewCount` to `ForumBoard` (0 while unpaid is selected or messages are still null). After a successful living-room post with `created.sats === 0`, switches mode to All so the author sees the note, including a positive `goalSats` Ask, because Active and Most popular hide a note that has not received sats. If All is already selected, loaded pages and `nextCursor` stay. Shops already lists with `mode: 'all'` and does not switch. The sheet clears when the pay target is no longer in the visible parent list and not in loaded `replies` (mode change, collapse, or delete), not when Active merely hides the parent note. Also polls `GET /forum/messages` until the merged list is payable (8 attempts, 2s; local extras kept until GET echoes), cancelled-flag fetch like `StatsLoader`. Silently re-fetches on `visibilitychange` (hidden→visible), on `pageshow` when `persisted` is true, on a `FORUM_LIST_POLL_MS` visible-tab interval, on `FORUM_HOME_EVENT` (wordmark / Menu Home while already on `/welcome`), and when the board pull-to-refresh calls `onRefresh` — shared load path with mount/retry; silent refresh does not flip the board to the loading copy when a list already exists, keeps the list when a silent refresh fails, and does not auto-scroll the newest note when a newer note arrives from refresh. When not at top (`shellScrollTop(scroller) < 8` is at-top; `window.scrollY` is only the no-shell fallback) and `hasUnseenForumPosts` is true, the fetch is held and `ForumBoard` shows **New posts**; at the top the list is applied. With a session, fetches `GET /forum/notifications` via existing `fetchNotifications` (cancelled-flag fetch like other ForumLoader loads) and, when an unread `moderator_appointed` row exists (`readAt === null`), drives the ForumBoard pill (`moderatorAppointedAvailable` / `onShowModeratorAppointed`); click marks that row read via `markNotificationRead` and clears the flag, staying on `/welcome` without auto-scroll; a fetch error leaves the banner hidden; a mark-read failure leaves the banner (does not crash). The payable poll updates sats, payable, and the four payment snapshots (`amountUsd`, `amountChf`, `amountEur`, `amountPhp`) on already-listed ids only and does not insert unseen ids. Owns the living-room laws hint visibility from `account.forumLawsDismissed` and persists dismiss via `dismissForumLaws` (optimistic; applies the response or restores the previous flag only when the session token is unchanged and an account is still present). Owns expand/replies (`fetchReplies`, retry, moderator nested-reply hide via `onDeleted` / `deleteMessage` without removing the parent, reply composer: empty reply text and an empty amount invoices 21 sats even for verified; unpaid `postMessage` with `inReplyTo` only when there is text and the amount is empty, and only for verified; below verified invoices 1 sat to 21.gifts via the compose-target note (`payHost: composer`); expand is ignored while a reply posts). A signed-in note card fully inside the shell scrollport calls `markVisibleForumNoteRead`; expanding still calls `markNotificationsReadForMessage`. After a failed media POST following compose-pay, the pay sheet is cleared (`payWaiting` / `payInvoice` / `payMessageId` / `payHost`) so a later compose invoices 21.gifts again. Uses `nextPostRequirement` so a missing name, username, Lightning Address, or rules agreement opens `RequirementsOverlay` (no Skip) before a post or reply retries. After a successful top-level post or reply, sets `hasPosted: true` on the session account when the session token is unchanged and an account is still present (no persist-flag / Skip-forever POST).
 - **Inputs:** Optional `feed` (`'living-room'` default, `'shops'`). Reads session and account from the auth store.
-- **Returns / side effects:** React element wrapping `ForumBoard`, or `null`. Owns draft/`askDraft`/`composeIntent`/`askStep`/`askCadence`/`placeDraft`/photoDrafts/videoDraft/photoUrls/videoUrls/posting/formError/feedMode/loaded-pages/`nextCursor`/pay/expand/replies/`refreshing`/`rateDay` state, the No gifts yet last-visit stamp, and retry attempts. `askCadence` defaults to once and returns to once after the visitor's own compose is paid (`postAfterPay` or `switchToAll` in the pay poll) and in `applyCreatedNote`. A gift or a reply does not clear it. Empty text without photos and without a video sets `empty`; trimmed text longer than 8000 characters sets `tooLong` and does not call `postMessage` / `postMessageVideo`. Photo-only and video-only posts are allowed. Empty reply text with an empty amount invoices 21 sats (pay-sheet default) and does not set `empty`, including when the parent omits `accountId`. A non-exempt reply with text and an empty amount still invoices 1 sat instead of setting `amount`. `0` is billed as 1 sat. Non-digits and overflowing amounts still set `amount` (`forum.errorReplyPayment`). When the parent omits `accountId`, an unpaid `postMessage` is attempted only for a reply that has text and an empty amount, and a payment 403 starts a 1-sat invoice. Fetch failure sets the error flag without clearing an already-posted list; the board still shows **Try again**. A failed silent refresh with an existing list does not set the error flag. A late GET merges locally posted rows that the response does not yet contain; a POST whose id is already in the list is not prepended again. An empty or whitespace-only pay amount requests 21 sats and does not fill `payDraft`. Invoice 400 author's-wallet copy maps to `authorWallet`; a missing or deleted note (`NoteDeletedError`, HTTP 404) maps to `deleted` on the pay sheet and on a paid reply; a 404 on the platform compose-target invoice stays `request`; other invoice failures stay `request`; rate limit stays `rateLimit`. Revokes photo and video blob URLs on unmount. May POST `/me/forum-laws-dismissed`. After a successful top-level post or reply, writes `hasPosted: true` on the session account only when the session token is unchanged and an account is still present (no persist-flag POST). On shops, passes `shopPlaceEdit` / `onShopPlaceUpdated` so a saved or cleared pin updates that row, and `shopAccountEdit` / `onShopAccountUpdated` so a saved or cleared shop account updates that row. Passes `lawsVisible` / `onDismissLaws`, `mode` / `onModeChange`, `nearEndRef`, `unpaidNewCount`, `refreshing` / `onRefresh`, `newPostsAvailable` / `onShowNewPosts`, `moderatorAppointedAvailable` / `onShowModeratorAppointed`, and `rateDay` to `ForumBoard`. Stamps last visit on unpaid; mode is not persisted. Does not pass `Error.message` to the board. A paid reaction replaces the reply composer with ForumReplyPayPage and the typed sentence is the preview; the draft and amount stay until payment is observed, then both clear together with the preview; Close clears the preview and leaves the draft and amount in the composer. Gift-on-reply and composer-hosted sheets stay as they are.
+- **Returns / side effects:** React element wrapping `ForumBoard`, or `null`. Owns draft/`askDraft`/`composeIntent`/`askStep`/`askCadence`/`placeDraft`/photoDrafts/videoDraft/photoUrls/videoUrls/posting/formError/feedMode/loaded-pages/`nextCursor`/pay/expand/replies/`refreshing`/`rateDay` state, the No gifts yet last-visit stamp, and retry attempts. `askCadence` defaults to once and returns to once after the visitor's own compose is paid (`postAfterPay` or `switchToAll` in the pay poll) and in `applyCreatedNote`. A gift or a reply does not clear it. Empty text without photos and without a video sets `empty`; trimmed text longer than 8000 characters sets `tooLong` and does not call `postMessage` / `postMessageVideo`. Photo-only and video-only posts are allowed. Empty reply text with an empty amount invoices 21 sats (pay-sheet default) and does not set `empty`, including when the parent omits `accountId`. A non-exempt reply with text and an empty amount still invoices 1 sat instead of setting `amount`. `0` is billed as 1 sat. Non-digits and overflowing amounts still set `amount` (`forum.errorReplyPayment`). When the parent omits `accountId`, an unpaid `postMessage` is attempted only for a reply that has text and an empty amount, and a payment 403 starts a 1-sat invoice. Fetch failure sets the error flag without clearing an already-posted list; the board still shows **Try again**. A failed silent refresh with an existing list does not set the error flag. A late GET merges locally posted rows that the response does not yet contain; a POST whose id is already in the list is not prepended again. An empty or whitespace-only pay amount requests 21 sats and does not fill `payDraft`. Invoice 400 author's-wallet copy maps to `authorWallet`; a missing or deleted note (`NoteDeletedError`, HTTP 404) maps to `deleted` on the pay sheet and on a paid reply; a 404 on the platform compose-target invoice stays `request`; other invoice failures stay `request`; rate limit stays `rateLimit`. Revokes photo and video blob URLs on unmount. May POST `/me/forum-laws-dismissed`. After a successful top-level post or reply, writes `hasPosted: true` on the session account only when the session token is unchanged and an account is still present (no persist-flag POST). On shops, passes `shopComposer` so the board mounts `ShopAddWizard`, `shopPlaceEdit` / `onShopPlaceUpdated` so a saved or cleared pin updates that row, and `shopAccountEdit` / `onShopAccountUpdated` so a saved or cleared shop account updates that row. For a moderator on every feed, including the living room, passes `shopNoteEdit` / `onShopNoteUpdated`. Passes `lawsVisible` / `onDismissLaws`, `mode` / `onModeChange`, `nearEndRef`, `unpaidNewCount`, `refreshing` / `onRefresh`, `newPostsAvailable` / `onShowNewPosts`, `moderatorAppointedAvailable` / `onShowModeratorAppointed`, and `rateDay` to `ForumBoard`. Stamps last visit on unpaid; mode is not persisted. Does not pass `Error.message` to the board. A paid reaction replaces the reply composer with ForumReplyPayPage and the typed sentence is the preview; the draft and amount stay until payment is observed, then both clear together with the preview; Close clears the preview and leaves the draft and amount in the composer. Gift-on-reply and composer-hosted sheets stay as they are.
 - **Used by:** `WelcomeScreen`, `ShopsScreen`.
 
 ## Function: hasDisplayName
@@ -1659,10 +1759,10 @@ Defined Ask amount for the goal line. Prefix `$` for USD and `₱` for PHP, othe
 
 ## Function: postTrustVerify
 
-- **Purpose:** POST `/trust/verify` with `{ accountId }` so a moderator verifies a basis member.
-- **Inputs:** Bearer `sessionToken`, subject `accountId`.
+- **Purpose:** POST `/trust/verify` with `{ accountId, confirmedName }` so a moderator verifies a basis member.
+- **Inputs:** Bearer `sessionToken`, subject `accountId`, `confirmedName`.
 - **Returns / side effects:** `{ id, name, role }`. Throws visitor copy on any failure.
-- **Used by:** `MemberTrustActions`.
+- **Used by:** `MemberVerifyScreen`.
 
 ## Function: postTrustPropose
 
@@ -1704,7 +1804,7 @@ Defined Ask amount for the goal line. Prefix `$` for USD and `₱` for PHP, othe
 - **Purpose:** POST `/funding/apply` (Bearer) and parse `{ funding }` via `fundingApplyResponseSchema`. Role `basis` is 403. 400 `About me is required` / `About me photo is required` / `Location is required` are rethrown; other failures use visitor copy `Could not submit your application. Please try again.`
 - **Inputs:** Bearer `sessionToken`.
 - **Returns / side effects:** Updated `OwnerFunding`. Throws the 400 api string, or visitor copy on 401/403/409/503, other non-2xx, network failure, or a body that fails the schema.
-- **Used by:** `FundingApplyScreen`.
+- **Used by:** `FundingApplyScreen`. While applications are paused, a verified account named `joey-rosima`, `vincent`, or `jewel-bacolbas` with status `none` or `rejected` sees the walk and calls `postFundingApply`. The pause card, which does not call it, is only for a username outside those three whose status is not pending, trial, or admitted. A basis account on the open card sees **You are not verified yet.** and does not call it, including when the status is pending, trial, or admitted. A verified account with one of those statuses sees that copy and does not call it. When `grantApplicationsPaused` is false, the walk also calls it.
 
 ## Function: fetchFundingPayoutDays
 
@@ -1726,6 +1826,48 @@ Defined Ask amount for the goal line. Prefix `$` for USD and `₱` for PHP, othe
 - **Inputs:** Bearer `sessionToken`, subject `accountId`.
 - **Returns / side effects:** Account, grant, and living-room posts. Throws visitor copy `Could not load this application. Please try again.` on 401/403/404/503, other non-2xx, network failure, or a body that fails the schema.
 - **Used by:** `FundingApplicationDetailScreen`.
+
+## Function: fetchDailyRoster
+
+- **Purpose:** GET `/funding/daily-roster` (same-origin Bearer proxy of api `GET /funding/daily-roster`) and parse `dailyRosterSchema`. Next.js forbids a `route.ts` beside `/grants/payments/comment` and `/grants/payments/amounts`, so the proxy lives at this path. The body is `{ comment, paymentsEnabled, defaultAmountUsd, recipients }` with `{ address, amountUsd, accountId, name }` rows. `address` stays in the JSON and is not rendered. `defaultAmountUsd` is a finite number.
+- **Inputs:** Bearer `session`.
+- **Returns / side effects:** Parsed roster. Throws `funding.daily.forbidden` on api `Forbidden`. Throws visitor copy `Could not load daily payments. Please try again.` on 401, other 403, 503, other non-2xx, network failure, or a body that fails the schema.
+- **Used by:** `DailyPaymentCommentScreen`, `DailyPaymentAmountsScreen`.
+
+## Function: saveDailyRosterComment
+
+- **Purpose:** POST `/funding/daily-roster/comment` with `{ comment }` and parse the returned roster.
+- **Inputs:** Bearer `session`, comment text.
+- **Returns / side effects:** Updated roster. Throws a `funding.daily.*` catalog key. Maps api `Invalid comment` to `funding.daily.invalidComment`. Any other failure is `funding.daily.saveError`.
+- **Used by:** `DailyPaymentCommentScreen`.
+
+## Function: saveDailyRosterPayments
+
+- **Purpose:** POST `/funding/daily-roster/payments` with `{ enabled }` and parse the returned roster. `enabled` is a boolean.
+- **Inputs:** Bearer `session`, `enabled`.
+- **Returns / side effects:** Updated roster. Throws a `funding.daily.*` catalog key. Maps api `Invalid payments switch` to `funding.daily.invalidSwitch`. Any other failure is `funding.daily.saveError`.
+- **Used by:** `DailyPaymentAmountsScreen`.
+
+## Function: addDailyRosterRecipient
+
+- **Purpose:** POST `/funding/daily-roster/recipients` with `{ accountId, amountUsd }` and parse the returned roster. `amountUsd` is a real number, not a numeric string.
+- **Inputs:** Bearer `session`, account id, USD amount.
+- **Returns / side effects:** Updated roster. Throws a `funding.daily.*` catalog key. Maps `Invalid person or amount`, `Unknown person`, `Person has no Lightning address`, and `Address already listed`. Any other failure is `funding.daily.saveError`.
+- **Used by:** `DailyPaymentAmountsScreen`.
+
+## Function: updateDailyRosterRecipient
+
+- **Purpose:** POST `/funding/daily-roster/recipients/update` with `{ address, amountUsd }` and parse the returned roster.
+- **Inputs:** Bearer `session`, stored address, new USD amount.
+- **Returns / side effects:** Updated roster. Throws a `funding.daily.*` catalog key. Maps `Invalid address or amount` and `Unknown address`. Any other failure is `funding.daily.saveError`.
+- **Used by:** `DailyPaymentAmountsScreen`.
+
+## Function: deleteDailyRosterRecipient
+
+- **Purpose:** POST `/funding/daily-roster/recipients/delete` with `{ address }` and parse the returned roster.
+- **Inputs:** Bearer `session`, stored address.
+- **Returns / side effects:** Updated roster. Throws a `funding.daily.*` catalog key. Maps `Unknown address`. Any other failure is `funding.daily.saveError`.
+- **Used by:** `DailyPaymentAmountsScreen`.
 
 ## Function: postFundingAdmit
 
@@ -1785,17 +1927,31 @@ Defined Ask amount for the goal line. Prefix `$` for USD and `₱` for PHP, othe
 
 ## Function: StaffFunctions
 
-- **Purpose:** Closed disclosure for moderator and founder actions on a member card. The summary is `staff.functions`. Same `details` / `summary` as wallet **Advanced functions**. Children mount only while it is open.
+- **Purpose:** Closed disclosure for moderator and founder actions. On a member card the children are the verify, propose, confirm, and appoint controls. On `/statistics` the only child is the payout link, and `StatisticsScreen` mounts the disclosure only for a moderator when yesterday's person count is a number. The summary is `staff.functions`. Same `details` / `summary` as wallet **Advanced functions**. Children mount only while it is open.
 - **Inputs:** `children`.
 - **Returns / side effects:** `data-testid="staff-functions"`. `open` while expanded. Clicking the summary toggles. Clicks do not propagate.
-- **Used by:** `MemberTrustActions`.
+- **Used by:** `MemberTrustActions`, `StatisticsScreen`.
 
 ## Function: MemberTrustActions
 
-- **Purpose:** Staff-only Verify / Propose / Confirm / Appoint controls on another member's identity card. The controls are children of the closed `StaffFunctions` disclosure; they are not painted until it is opened.
+- **Purpose:** Staff-only Trust Chain controls on another member's identity card. **Verify** is a `ButtonLink` to `/members/[accountId]/verify` and does not post from this card. Propose, Confirm, and Appoint stay one-click buttons that post from the card. The controls are children of the closed `StaffFunctions` disclosure; they are not painted until it is opened.
 - **Inputs:** `profile`, optional `onUpdated`. Hidden unless the signed-in account is a moderator and not the subject.
-- **Returns / side effects:** POST then re-fetch member; `data-testid="state-members-staff-verify"` when shown. The action buttons mount only after the disclosure is opened.
+- **Returns / side effects:** Propose / Confirm / Appoint POST then re-fetch member; `data-testid="state-members-staff-verify"` when shown. The Verify link and the remaining action buttons mount only after the disclosure is opened.
 - **Used by:** `MemberProfileScreen`.
+
+## Function: MemberVerifyPage
+
+- **Purpose:** Next.js page for `/members/[accountId]/verify`. Fill `AppShell` (`align="center"`) with `ProfileChromeLeft` top-left (the only back control: the arrow returns to the previous in-app view in this tab, or `/welcome` when this tab has none; the wordmark is not that control), `SignedInChrome` top-right, and `OnboardingGate screen="profile"` around `MemberVerifyScreen`. The card has no back control. There is no `route.ts` beside this page.
+- **Inputs:** Dynamic `accountId`.
+- **Returns / side effects:** The stored-name check inside fill AppShell. Member HTTP stays on the existing `fetchMember` client.
+- **Used by:** Route `/members/[accountId]/verify`.
+
+## Function: MemberVerifyScreen
+
+- **Purpose:** Client stored-name check. Heading **Verify**. Renders `null` without a session and does not fetch. An id that is not a UUID shows **This profile could not be found.** and does not fetch. A viewer below moderator sees **You cannot verify this member.** and does not fetch. Otherwise `fetchMember` runs. A moderator who is not the subject, and a basis member with a stored name that is not only whitespace, sees that exact name as an underlined link to the member card, the question under it, then **Yes** and **No**. **Yes** is the only control that posts. **No** opens the member card and does not post. Both buttons are the only children of `SundayWritingGate`; Sunday hides both. There is no Cancel. Chrome back does not post.
+- **Inputs:** Route `accountId`; session and account from `useAuthStore`; catalog via `useTranslations`.
+- **Returns / side effects:** React element or `null` without a session. `postTrustVerify(session, profile.id, identifyingName)` only from **Yes**, with the untrimmed stored name, then `router.push` to `/members/${profile.id}`. **No** only `router.push` to `/members/${profile.id}` and does not post. A thrown write stays on this page with **Could not update this member. Please try again.**
+- **Used by:** `MemberVerifyPage`.
 
 ## Function: fetchPostStats
 
@@ -1809,7 +1965,7 @@ Defined Ask amount for the goal line. Prefix `$` for USD and `₱` for PHP, othe
 - **Purpose:** GET `/gifts/stats` (optionally `?recipient=`) and parse the public gift totals payload.
 - **Inputs:** Optional `recipient` handle; appended as a query param when non-empty after trim (URL-encoded).
 - **Returns / side effects:** `GiftStats`. Throws visitor copy when the api is down or the body is invalid.
-- **Used by:** `StatsLoader`, `useLatestRateDay`, `PublicMessageLoader`, `MemberProfileScreen`, `ModerateScreen`.
+- **Used by:** `StatsLoader`, `useLatestRateDay`, `PublicMessageLoader`, `MemberProfileScreen`, `ModerateScreen`, `StatisticsScreen`.
 
 ## Function: fetchAccountActivity
 
@@ -1860,10 +2016,31 @@ Defined Ask amount for the goal line. Prefix `$` for USD and `₱` for PHP, othe
 - **Returns / side effects:** `ForumFeedPage` with `nextCursor: null` when the response omits it. Throws visitor copy (`Could not load messages. Please try again.`) on failure.
 - **Used by:** `ForumLoader`.
 
+## Function: fetchExternalAuthorProfile
+
+- **Purpose:** GET `/public-messages/:id/external-profile` with no Authorization and parse `externalAuthorProfileSchema`.
+- **Inputs:** Forum message `id`.
+- **Returns / side effects:** `{ name, npub, nip05?, lud16? }`, plus optional `postCount` and `replyCount`, or `null` on 404, any other non-OK response, network failure, JSON failure, or schema mismatch. Does not throw.
+- **Used by:** `ExternalAuthorProfile`.
+
+## Function: fetchExternalAuthorPosts
+
+- **Purpose:** GET `/public-messages/:id/external-posts` with no Authorization. After HTTP OK, require `{ messages: array }`, `safeParse` each item with `forumMessageSchema`, skip invalid items.
+- **Inputs:** Forum message `id`.
+- **Returns / side effects:** `ForumMessage[]` (empty if none survive or the list is empty). Throws visitor copy (`Could not load messages. Please try again.`) on non-OK including 404, network, non-JSON, or a body that is not `{ messages: array }`. Does not throw `MissingRequirementsError`. No Bearer.
+- **Used by:** `ExternalAuthorProfile`.
+
+## Function: fetchExternalAuthorReplies
+
+- **Purpose:** GET `/public-messages/:id/external-replies` with no Authorization. After HTTP OK, require `{ messages: array }`, `safeParse` each item with `forumMessageSchema`, skip invalid items.
+- **Inputs:** Forum message `id`.
+- **Returns / side effects:** `ForumMessage[]` (empty if none survive or the list is empty). Throws visitor copy (`Could not load messages. Please try again.`) on non-OK including 404, network, non-JSON, or a body that is not `{ messages: array }`. Does not throw `MissingRequirementsError`. No Bearer.
+- **Used by:** `ExternalAuthorProfile`.
+
 ## Function: fetchPublicMessage
 
-- **Purpose:** GET `/public-messages/:id` without a session, parse `forumMessageSchema`, and return one public forum note for the HTML note page. Optional `sinceSats` appends `?sinceSats=` so the api can wait until the note has more sats (pay poll).
-- **Inputs:** Forum message `id` (UUID string). Optional `opts` with `sinceSats` (finite integer ≥ 0; omitted / NaN / Infinity / negatives / non-integers skip the query) and `signal` (`AbortSignal` passed to `fetch` when provided).
+- **Purpose:** GET `/public-messages/:id` without a session, parse `forumMessageSchema`, and return one public forum note for the HTML note page. Optional `sinceSats` appends `?sinceSats=` so the api can wait until the note has more sats (pay poll on a top-level note). Optional `sinceReceivedSats` appends `?sinceReceivedSats=` so the api can wait until a reply has more received sats. A non-integer, NaN, Infinity, or negative value is omitted for either query. When both are valid, `sinceSats` comes first.
+- **Inputs:** Forum message `id` (UUID string). Optional `opts` with `sinceSats` and `sinceReceivedSats` (each a finite integer ≥ 0; omitted / NaN / Infinity / negatives / non-integers skip that query) and `signal` (`AbortSignal` passed to `fetch` when provided).
 - **Returns / side effects:** `ForumMessage`, or `null` on 404 or abort (`AbortError` / already-aborted signal). Throws visitor copy (`Could not load messages. Please try again.`) on other non-ok, network, or zod failures.
 - **Used by:** `PublicMessageLoader`, `ForumLoader`.
 
@@ -1911,9 +2088,9 @@ Defined Ask amount for the goal line. Prefix `$` for USD and `₱` for PHP, othe
 
 ## Function: postMessage
 
-- **Purpose:** POST `/forum/messages` with bearer + `{ text, photo?, photos?, inReplyTo?, goalCurrency?, goalAmount?, place? }`, parse `forumMessageSchema`, and return the created message or reply (text and/or up to ten photos). Non-empty `photos` dual-sends `photo` as the first still plus `photos`. A non-blank string `takenAt` on a still is included; a blank or missing time is omitted. Optional `goalCurrency` and `goalAmount` go together on a top-level note, never as `goalSats`; omitted on replies and when either is missing. `goalSats` remains a field of the read note. Optional `place` is `{ lat, lng, label }` on a top-level note; omitted when unset. Replies must not send it.
-- **Inputs:** `sessionToken`, `input` with `text`, optional `{ contentType, data, takenAt? }` photo, optional `photos` array (max 10), optional `inReplyTo` parent id (thread composer only), optional `goalCurrency` and `goalAmount` (together, never `goalSats`), and optional `place` (`ForumPlacePin`, top-level only).
-- **Returns / side effects:** `ForumMessage`. Omits `inReplyTo`, `goalCurrency`/`goalAmount`, and `place` from the JSON body when absent; omits both Ask fields on replies even if passed. On 400 or 429 uses the api error string when present; otherwise throws `Could not post your message`. On 403 uses the api error string when present; otherwise throws `A reply needs a Bitcoin payment`. On 404 throws `NoteDeletedError`.
+- **Purpose:** POST `/forum/messages` with bearer + `{ text, photo?, photos?, inReplyTo?, goalCurrency?, goalAmount?, place?, shopUsername? }`, parse `forumMessageSchema`, and return the created message or reply (text and/or up to ten photos). Non-empty `photos` dual-sends `photo` as the first still plus `photos`. A non-blank string `takenAt` on a still is included; a blank or missing time is omitted. Optional `goalCurrency` and `goalAmount` go together on a top-level note, never as `goalSats`; omitted on replies and when either is missing. `goalSats` remains a field of the read note. Optional `place` is `{ lat, lng, label }` on a top-level note; omitted when unset. Replies must not send it. Optional `shopUsername` is sent only when the trimmed value without a leading `@` is non-blank.
+- **Inputs:** `sessionToken`, `input` with `text`, optional `{ contentType, data, takenAt? }` photo, optional `photos` array (max 10), optional `inReplyTo` parent id (thread composer only), optional `goalCurrency` and `goalAmount` (together, never `goalSats`), optional `place` (`ForumPlacePin`, top-level only), and optional `shopUsername` (leading `@` stripped; omitted when blank).
+- **Returns / side effects:** `ForumMessage`. Omits `inReplyTo`, `goalCurrency`/`goalAmount`, `place`, and `shopUsername` from the JSON body when absent; omits both Ask fields on replies even if passed. On 400 or 429 uses the api error string when present; otherwise throws `Could not post your message`. On 403 uses the api error string when present; otherwise throws `A reply needs a Bitcoin payment`. On 404 whose api error is exactly `No account with that username` throws that string; any other 404 throws `NoteDeletedError`.
 - **Used by:** `ForumLoader`, `MemberProfileScreen`.
 
 ## Function: postContact
@@ -2019,7 +2196,7 @@ Defined Ask amount for the goal line. Prefix `$` for USD and `₱` for PHP, othe
 - **Purpose:** Reads `documentElement.dataset.localSunday` after the head script sets it. Server render, and the client before that flag, are false, so weekday tests keep their fields.
 - **Inputs:** none.
 - **Returns / side effects:** boolean. Subscribes to attribute changes on `documentElement`.
-- **Used by:** `SundayWritingGate`, `ModeratorGroupScreen`.
+- **Used by:** `SundayWritingGate`, `ModeratorGroupScreen`, and `PlaceField`.
 
 ## Function: SundayWritingGate
 
@@ -2079,7 +2256,7 @@ Defined Ask amount for the goal line. Prefix `$` for USD and `₱` for PHP, othe
 
 ## Function: ForumQuotedBody
 
-- **Purpose:** Remaining body text plus nested post cards for resolved `/messages/<uuid>` URLs and for `http(s)://<host>/l/<8 hex>` codes that `fetchShortLink` resolves to a shown message (a member, a null lookup, the containing id, and a failed load stay in the text). Fills from knownNotes first; otherwise fetchPublicMessage (catch, never throw). 404/null leaves the URL, which `LinkedText` then autolinks as an internal `/messages/<uuid>` path. Nested card is an outer frame with one empty stretched permalink (`absolute inset-0`, aria-label `forum.quotedNote`, or `forum.quotedNoteExternal` when the quoted note has `via === 'nostr'`) that covers the card, including the caption, timestamp, role pill, optional photo, and ₿ amount, and points at `/messages/<id>`. That permalink is not an ancestor of the caption, so Show more stays outside any anchor. Card content is `pointer-events-none` with `[&_*]:pointer-events-none`, `[&_a]:pointer-events-auto`, and `[&_button]:pointer-events-auto`, so a click on caption text, photo, timestamp, role pill, or amount hits the permalink, while the author profile link, Translate, Show more, and links inside the caption keep their own targets. `[&_[role=dialog]]:pointer-events-auto` and `[&_[role=dialog]_*]:pointer-events-auto` keep the external-link confirm dialog and everything inside it clickable, because that dialog is a descendant of the card and is not portaled. The photo `img` is `draggable={false}` and is not inside the permalink. Caption rendering is unchanged (`TranslatableNoteBody` when `translate` is true, `plain` only when `via === 'nostr'`; when `translate` is false, `ForumNoteText` when truncate, else `LinkedText`; no nested unfurl). `TranslatableNoteBody` on stripped display text only (a successful translation replaces that original after the same quote/short-link strip; optional `formatTranslated` runs after that strip). Feed remaining text and nested captions go through `ForumNoteText` (280-character preview, Show more only above 560, bodies autolinked) until replaced. Permalink passes `truncate={false}` so the original stays full (`LinkedText`). Callers skip this component for `via === 'nostr'` rows (plain text and the **External** badge are handled by the caller). A nested card whose quoted note has `via === 'nostr'` shows the non-interactive **External** span in the role-pill slot (such notes carry no tagged role). Nested nostr captions use `TranslatableNoteBody` `plain` only when `translate` is true (a URL in a quoted external reply is never a link). When `translate` is false, nested cards use `ForumNoteText` / `LinkedText` and never `TranslatableNoteBody`.
+- **Purpose:** Remaining body text plus nested post cards for resolved `/messages/<uuid>` URLs and for `http(s)://<host>/l/<8 hex>` codes that `fetchShortLink` resolves to a shown message (a member, a null lookup, the containing id, and a failed load stay in the text). Fills from knownNotes first; otherwise fetchPublicMessage (catch, never throw). 404/null leaves the URL, which `LinkedText` then autolinks as an internal `/messages/<uuid>` path. Nested card is an outer frame with one empty stretched permalink (`absolute inset-0`, aria-label `forum.quotedNote`, or `forum.quotedNoteExternal` when the quoted note has `via === 'nostr'`) that covers the card, including the caption, timestamp, role pill, optional photo, and ₿ amount, and points at `/messages/<id>`. That permalink is not an ancestor of the caption, so Show more stays outside any anchor. Card content is `pointer-events-none` with `[&_*]:pointer-events-none`, `[&_a]:pointer-events-auto`, and `[&_button]:pointer-events-auto`, so a click on caption text, photo, timestamp, role pill, or amount hits the permalink, while the author profile link, Translate, Show more, and links inside the caption keep their own targets. When the quoted note has `via === 'nostr'`, the name is a link to `/messages/<id>/author`, not a dialog. `[&_[role=dialog]]:pointer-events-auto` and `[&_[role=dialog]_*]:pointer-events-auto` keep the external-link confirm dialog and everything inside it clickable, because that dialog is a descendant of the card and is not portaled. The photo `img` is `draggable={false}` and is not inside the permalink. Caption rendering is unchanged (`TranslatableNoteBody` when `translate` is true, `plain` only when `via === 'nostr'`; when `translate` is false, `ForumNoteText` when truncate, else `LinkedText`; no nested unfurl). `TranslatableNoteBody` on stripped display text only (a successful translation replaces that original after the same quote/short-link strip; optional `formatTranslated` runs after that strip). Feed remaining text and nested captions go through `ForumNoteText` (280-character preview, Show more only above 560, bodies autolinked) until replaced. Permalink passes `truncate={false}` so the original stays full (`LinkedText`). Callers skip this component for `via === 'nostr'` rows (plain text and the **External** badge are handled by the caller). A nested card whose quoted note has `via === 'nostr'` shows the non-interactive **External** span in the role-pill slot (such notes carry no tagged role). Nested nostr captions use `TranslatableNoteBody` `plain` only when `translate` is true (a URL in a quoted external reply is never a link). When `translate` is false, nested cards use `ForumNoteText` / `LinkedText` and never `TranslatableNoteBody`.
 - **Inputs:** text, knownNotes, excludeId, rateDay, fiat, optional truncate (default true), optional className (default `whitespace-pre-wrap text-sm text-app-fg`; `text-app-btn-fg` selects NoteTranslate `tone="onButton"` (via `TranslatableNoteBody`)), optional `translate` (default true; `false` renders remaining text and nested quoted cards — including `via === 'nostr'` — through `ForumNoteText` / `LinkedText` without `TranslatableNoteBody`; forwarded to nested `QuotedForumNote`), optional `conversationId` (when set, the remainder translates as that conversation message; nested cards stay forum notes), optional `formatTranslated` (applied only to the visible remainder translation, after the quote/short-link strip), optional `controlSlotId` (forwarded to `TranslatableNoteBody` for the footer icon row), optional onActivate.
 - **Returns / side effects:** React element or null when text==='' and no resolved quotes. Unknown quote ids load via `fetchForumMessage` when a session exists, otherwise `fetchPublicMessage` (catch, never throw). Optional `mentions` are passed only when the quoted author is already the member link. Each nested card has one stretched permalink to `/messages/<id>` covering the caption, photo, time, and amount; the author link, Translate, Show more, and links inside the caption stay outside that permalink.
 - **Used by:** `ForumBoard`, `PublicMessageLoader`, `InboxScreen`.
@@ -2100,10 +2277,24 @@ Defined Ask amount for the goal line. Prefix `$` for USD and `₱` for PHP, othe
 
 ## Function: LinkedText
 
-- **Purpose:** Render a note/About-me/inbox body with clickable http(s) URLs. Internal URLs are Next.js `Link`s to `pathname+search+hash` (no warning). External URLs are `<a href>` that `preventDefault` on a primary click and open `ExternalLinkWarning`. Click and Enter/Space `stopPropagation` so a forum card does not toggle; Enter/Space on an external URL opens the warning. Optional `suffix` sits in the same `<p>` after the runs (Show more). Optional `mentions` turn a resolved `@username` into the member button (`forum.authorProfile`) when that author is already a member link. Optional `plain` (default false) renders `text` as a single span with no autolinking (no `<a>` / `Link`, no `ExternalLinkWarning`), used for Nostr-zapper (`via: 'nostr'`) rows.
-- **Inputs:** `text`, `className` for the wrapping `<p>`, optional `linkClassName` (default underline, inherit colour), optional `currentOrigin`, optional `suffix`, optional `plain` (default false).
+- **Purpose:** Render a note/About-me/inbox body with clickable http(s) URLs. Internal URLs are Next.js `Link`s to `pathname+search+hash` (no warning). External URLs are `<a href>` that `preventDefault` on a primary click and open `ExternalLinkWarning`. Click and Enter/Space `stopPropagation` so a forum card does not toggle; Enter/Space on an external URL opens the warning. Optional `suffix` sits in the same `<p>` after the runs (Show more). Optional `mentions` turn a resolved `@username` into the member button (`forum.authorProfile`). A click opens `/members/<accountId>`. Optional `plain` (default false) renders `text` as a single span with no autolinking (no `<a>` / `Link`, no `ExternalLinkWarning`), used for Nostr-zapper (`via: 'nostr'`) rows.
+- **Inputs:** `text`, `className` for the wrapping `<p>`, optional `linkClassName` (default underline, inherit colour), optional `currentOrigin`, optional `suffix`, optional `plain` (default false), optional `mentions` (`{ username, accountId }[]`).
 - **Returns / side effects:** Fragment: `<p>` plus optional overlay. Confirm on `https:` calls `openInSystemBrowser`; other http uses `window.open`.
 - **Used by:** `ForumNoteText`, `ForumQuotedBody` (when `truncate` is false), `AboutMeSection`.
+
+## Function: ExternalAuthorProfile
+
+- **Purpose:** Profile card for a forum author with no 21.gifts account. Same fields and hide rules as the member card: heading `profile.title`, name with the External span, optional checked Nostr address, payment address only when it differs ignoring case, and the npub with a centered secondary IconButton copy control. It is not a dialog. Rendered by `ExternalAuthorPage` inside `PublicMessageChrome`. No image, payment, or outbound link. Copy uses the clipboard, then a hidden textarea. When both `postCount` and `replyCount` are numbers, the same count buttons as a member open a read-only feed under the card (no pay, no composer, no react). If either count is absent, no buttons.
+- **Inputs:** `messageId`, `fallbackName`. Empty `fallbackName` shows `view.unnamed` until a profile loads, and when the fetch returns null.
+- **Returns / side effects:** The card. No `onClose`. Loading and a null fetch show the title, the fallback name (or Unnamed), and the External span, and omit the address sections. No overlay, portal, hint paragraph, or close control. Count buttons and the read-only feed render when both counts are numbers; a post click opens `/messages/{id}`; a reply click opens `/messages/{parentId}`; a shorter list shows `profile.activityLatest`; loading uses `forum.loading`; failure uses `forum.error` and `view.retry`.
+- **Used by:** `ExternalAuthorPage`.
+
+## Function: ExternalAuthorPage
+
+- **Purpose:** Next.js page for `/messages/[id]/author` — the external author profile card for a forum note whose author has no 21.gifts account. Not a member page and not a dialog. Reads `params.id` and `searchParams.name` (a string or the first array entry, trimmed; blank becomes `''`). Renders `ExternalAuthorProfile` inside `PublicMessageChrome`. No `OnboardingGate`. The note id is not validated as a UUID.
+- **Inputs:** Dynamic route params (`id`) and optional `name` query (`string` or `string[]`).
+- **Returns / side effects:** `ExternalAuthorProfile` inside `PublicMessageChrome` (unsigned wordmark href `/` plus `LanguageSwitcher`, or signed-in `ProfileChromeLeft` plus `SignedInChrome`). No `generateMetadata`.
+- **Used by:** Route `/messages/[id]/author`. `ForumBoard` (name click). `QuotedForumNote` (quoted name). `PublicMessageLoader` (`PublicThreadCard` name).
 
 ## Function: ExternalLinkWarning
 
@@ -2114,16 +2305,16 @@ Defined Ask amount for the goal line. Prefix `$` for USD and `₱` for PHP, othe
 
 ## Function: ShopStickerOverlay
 
-- **Purpose:** Shop-sticker overlay on a member profile. Same overlay chrome as `ExternalLinkWarning` (`role="dialog"`, `bg-app-overlay`, icon-only **Close**) with `Card maxWidth="xl"`: title **Shop sticker**, lead **Print it for a shop window. The QR code pays {handle}.**, a preview `<img>` of `buildShopStickerSvg` (alt **Shop sticker preview for {handle}**), a neutral `SegmentedControl` **File format** PDF | PNG | JPG | SVG (PDF first), and a labeled **Download**.
-- **Inputs:** `qrValue` (the profile's `openCryptoPayQrValue`), `handle` (`giftsLightningAddress`), `onClose`.
-- **Returns / side effects:** Dialog. **Download** disables itself while `shopStickerBlob` runs, then saves the blob through a temporary `<a download>` named by `shopStickerFileName` and revokes the object URL a second later; a failure shows `role="alert"` **Could not create the file. Please try again.** until the next try. Focus moves into the dialog on open and returns to the element that opened it on close. Close and Escape call `onClose`: the dialog's own keydown handles Escape from inside it, and a `document` listener (removed on unmount) closes only on Escape from outside the dialog, so one key press never closes twice even with the app root on `document`. Dialog click and keydown `stopPropagation`.
+- **Purpose:** Shop-sticker overlay on a member profile. Same overlay chrome as `ExternalLinkWarning` (`role="dialog"`, `bg-app-overlay`, icon-only **Close**) with `Card maxWidth="xl"`: title **Shop sticker**, lead **Print it for a shop window. The QR code pays {handle}.**, a **Second language** combobox, a preview `<img>` of `buildShopStickerSvg` (alt **Shop sticker preview for {handle}**), a neutral `SegmentedControl` **File format** PDF | PNG | JPG | SVG (PDF first), and a labeled **Download**.
+- **Inputs:** `qrValue` (the profile's `openCryptoPayQrValue`), `handle` (`giftsLightningAddress`), `onClose`. The text language is not a prop. `shopStickerLangInitial` sets the first selection from the visitor's UI language (`en` → English only, `de` → German, `es` → Spanish, `fil` → Filipino), unless the page `lang` query names a sticker language. The combobox then drives the preview and the download. Choosing a language does not write the URL. Options, in order: None (English only), Spanish, German, French, Filipino, Kikamba. The closed control stays in the card flow above the preview; the list opens downward over the preview.
+- **Returns / side effects:** Dialog. **Download** disables itself while `shopStickerBlob` runs, then saves the blob through a temporary `<a download>` named by `shopStickerFileName` and revokes the object URL a second later; a failure shows `role="alert"` **Could not create the file. Please try again.** until the next try. Focus moves into the dialog on open and returns to the element that opened it on close. Close calls `onClose`. Escape closes the open language list first and leaves the dialog up; the next Escape calls `onClose`. The dialog's own keydown handles Escape from inside it, and a `document` listener (removed on unmount) closes only on Escape from outside the dialog, so one key press never closes twice even with the app root on `document`. Dialog click and keydown `stopPropagation`. A press outside the list closes the list only.
 - **Used by:** `MemberProfileScreen` — only where the profile shows its QR (username set), including on a smartphone.
 
 ## Function: visibleForumMessages
 
 - **Purpose:** Client-side filter and sort of the already-loaded forum thread for the Active / No gifts yet / All / Most popular selector. Does not call the api; ranking is among the messages the loader already holds.
 - **Inputs:** `messages` (newest-first list from the api / loader merge) and `mode` (`active` | `unpaid` | `all` | `popular`).
-- **Returns / side effects:** A new array. `all` keeps input order including unpaid (`sats === 0`) notes. `active` keeps paid notes (`sats > 0`), unpaid notes whose `role` is at least `moderator`, and top-level asks with a positive `goalSats`, newest-first. `popular` keeps only paid notes, ordered by sats descending, then `createdAt` descending, then `id` descending. Never mutates the input array.
+- **Returns / side effects:** A new array. `all` keeps input order including unpaid (`sats === 0`) notes. `active` keeps paid notes (`sats > 0`) and unpaid notes whose `role` is at least `moderator`, newest-first. A zero-sat ask is not active. `popular` keeps only paid notes, ordered by sats descending, then `createdAt` descending, then `id` descending. Never mutates the input array.
 - **Used by:** `ForumBoard`, `ForumLoader`.
 
 The No gifts yet mode keeps only loaded messages with exactly zero sats, including notes without a wallet, preserving input order. The board displays them newest first (same as Active/All). Active remains the default.
@@ -2207,19 +2398,31 @@ The No gifts yet mode keeps only loaded messages with exactly zero sats, includi
 
 ## Function: latestRateDay
 
-- **Purpose:** Picks the last `spendOverTime` day with `sats > 0` so forum notes can scale sats into fiat from gift-day totals.
+- **Purpose:** Picks the last `spendOverTime` day with `sats > 0`, even when a currency total on that day is missing. Conversion does not use this day; it uses `latestRateDayFor`.
 - **Inputs:** Oldest-first series of `{ sats, usd, chf, eur, php }`.
-- **Returns / side effects:** That day, or `null` when every day is empty.
-- **Used by:** `useLatestRateDay`, `PublicMessageLoader`, `MemberProfileScreen`.
+- **Returns / side effects:** That day, or `null` when every day is empty. No I/O.
+- **Used by:** Tests. Callers that convert use `latestRateDayFor`.
+
+## Function: latestRateDayFor
+
+- **Purpose:** Picks the newest gift day that can convert the preferred currency. A newer day with gifts but a null, non-numeric, or zero total for that currency is skipped, so one incomplete gift cannot block the till.
+- **Inputs:** Oldest-first series of `{ sats, usd, chf, eur, php }`, and a `FiatCode`.
+- **Returns / side effects:** That day, or `null` when no day can convert the currency. No I/O.
+- **Used by:** `useLatestRateDayState`, `PublicMessageLoader`, `PublicMessageThread`, `MemberProfileScreen`.
 
 ## Function: useLatestRateDay
 
-- **Purpose:** Latest gift-day totals for preferred-fiat conversion. Fetches `GET /gifts/stats`
-  once on mount via `fetchGiftStats` and resolves `latestRateDay` of `spendOverTime`; a failed
-  fetch or no day with a usable rate yet resolves `null`. Drops the response after unmount.
+- **Purpose:** Latest gift-day totals for preferred-fiat conversion. Returns the `rateDay` from `useLatestRateDayState`, which skips a newer day that cannot convert the preferred currency. A failed fetch or no usable day yet resolves `null`. Changing the preferred fiat reuses the fetched series. Drops the response after unmount.
 - **Inputs:** Optional `enabled` (default true). When false, the fetch is skipped and the value stays `null`.
-- **Returns / side effects:** `FiatRateDay | null`. Calls `fetchGiftStats` once per mount while enabled.
-- **Used by:** `ForumLoader`, `InboxLoader`, `ModeratorGroupScreen`, `PayLinkScreen`, `PosTill`, `PosAmount`.
+- **Returns / side effects:** `FiatRateDay | null`. Calls `fetchGiftStats` once per mount while enabled. Loading and a settled missing rate are both `null`.
+- **Used by:** `ForumLoader`, `InboxLoader`, `ModeratorGroupScreen`, `PayLinkScreen`.
+
+## Function: useLatestRateDayState
+
+- **Purpose:** Latest gift-day totals for the preferred fiat, and whether that `GET /gifts/stats` request has settled. A newer day whose total for that currency is missing or zero is skipped. `settled` is false while the request is in flight, so a payment screen does not treat the amount as ready. A settled `null` means the request finished with no usable rate. When `enabled` is false, the fetch is skipped and `settled` is true. Changing the preferred fiat reuses the fetched series. Drops the response after unmount.
+- **Inputs:** Optional `enabled` (default true).
+- **Returns / side effects:** `{ rateDay: FiatRateDay | null, settled: boolean }`. Calls `fetchGiftStats` once per mount while enabled.
+- **Used by:** `useLatestRateDay`, `MemberHabits`, `PayLinkScreen`, `PosTill`, `PosAmount`.
 
 ## Function: shownFiatForSats
 
@@ -2329,10 +2532,10 @@ The No gifts yet mode keeps only loaded messages with exactly zero sats, includi
 
 ## Function: getRequestLocale
 
-- **Purpose:** Resolve the UI locale for the current request without writing cookies.
-- **Inputs:** Reads the `locale` cookie and the `Accept-Language` header via `next/headers` (both async in Next 15).
-- **Returns / side effects:** A supported locale (`en`/`de`/`es`/`fil`). Valid cookie wins; invalid/missing cookie falls through to `parseAcceptLanguage`; unmatched → `en`.
-- **Used by:** `RootLayout`, `Home`, `/login`, `NotFound`, `MarketingFooter`, `HandbookPage`, `RulesPage`, and `RulesSetupPage`. Lives in `src/lib/request-locale.ts` so client components can import locale constants without `next/headers`.
+- **Purpose:** Resolve the UI locale for the current request without writing cookies. Order: header `x-21gifts-public-locale` (set by middleware for language URLs), then cookie `locale`, then Accept-Language.
+- **Inputs:** Reads `x-21gifts-public-locale`, the `locale` cookie, and the `Accept-Language` header via `next/headers` (async in Next 15).
+- **Returns / side effects:** A supported locale (`en`/`de`/`es`/`fil`). A valid public-locale header wins; otherwise a valid cookie; otherwise `parseAcceptLanguage`; unmatched → `en`.
+- **Used by:** `RootLayout`, `MarketingLayout`, `Home`, `AboutPage`, `DonatePage`, `NotFound`, `MarketingFooter`, `HandbookPage`, `HandbookScreensPage`, `HandbookFunctionsPage`, `HandbookEndpointsPage`, `RulesPage`, and `RulesSetupPage`. Lives in `src/lib/request-locale.ts` so client components can import locale constants without `next/headers`.
 
 ## Function: getRequestNumberFormat
 
@@ -2519,30 +2722,51 @@ The No gifts yet mode keeps only loaded messages with exactly zero sats, includi
 ## Function: buildShopStickerSvg
 
 - **Purpose:** Printable shop-window sticker for one member as a standalone SVG document. The fixed artwork (orange band with the Bitcoin mark, **ACCEPTED HERE** / **TINATANGGAP DITO**, the English and Filipino scan text, the sari-sari shop with the 21.gifts sign) comes from `src/lib/shop-sticker-artwork.ts`, which `scripts/build-shop-sticker-artwork.mjs` generates with every glyph converted to an outline. Only three colours: orange `#F99602`, black, white.
-- **Inputs:** `qrValue` — the member's `openCryptoPayQrValue`.
+- **Inputs:** `qrValue` — the member's `openCryptoPayQrValue`. Optional `lang` — default Filipino (English + Filipino artwork). `spanish`, `german`, `french`, and `kikamba` replace artwork indices 6–12. `english` replaces those indices with the English scan block only (no second headline).
 - **Returns / side effects:** SVG markup, `width="134.4mm"`, `viewBox="0 0 1500 918"`. The QR is error correction H in byte mode, at least version 10 (57 modules; shorter payloads are padded up so the 4-module quiet zone to the band holds), with an odd-sized centre (13 of 57 modules, 15 of 61, …) cleared for the orange Open CryptoPay mark. No I/O.
 - **Used by:** `ShopStickerOverlay` (preview `<img>` data URL), `shopStickerBlob` (SVG, PNG, JPG).
 
 ## Function: buildShopStickerPdf
 
 - **Purpose:** The same sticker as a one-page vector PDF for print, without a PDF library: the artwork paths (absolute M, L, C, Z) become PDF path operators, the QR modules become rectangles.
-- **Inputs:** `qrValue` — the member's `openCryptoPayQrValue`.
+- **Inputs:** `qrValue` — the member's `openCryptoPayQrValue`. Optional `lang` — same languages as `buildShopStickerSvg` (default Filipino).
 - **Returns / side effects:** PDF 1.4 bytes (`Uint8Array`), MediaBox 134.4 × 82.25 mm, no fonts, no images, exact xref offsets. No I/O.
 - **Used by:** `shopStickerBlob` (format `pdf`).
 
 ## Function: shopStickerBlob
 
 - **Purpose:** The shop-sticker file in the format the visitor picked.
-- **Inputs:** `qrValue`, `format` — one of `SHOP_STICKER_FORMATS` (`pdf`, `png`, `jpg`, `svg`).
+- **Inputs:** `qrValue`, `format` — one of `SHOP_STICKER_FORMATS` (`pdf`, `png`, `jpg`, `svg`). Optional `lang` — same languages as `buildShopStickerSvg` (default Filipino).
 - **Returns / side effects:** `Promise<Blob>`: `application/pdf` from `buildShopStickerPdf`; `image/svg+xml` from `buildShopStickerSvg`; PNG / JPEG drawn from that SVG on a 3000 × 1836 canvas over white (JPEG quality 0.95). Rejects when the browser cannot load the SVG image, has no 2D canvas, or cannot encode it. The object URL used for the SVG image is always revoked. Nothing is sent to the api.
 - **Used by:** `ShopStickerOverlay` (**Download**).
 
 ## Function: shopStickerFileName
 
 - **Purpose:** Download name for a member's sticker.
-- **Inputs:** `handle` (`username@domain` or a bare username), `format`.
-- **Returns / side effects:** `21gifts-shop-sticker-<username>.<format>`; the username is lowercased and reduced to `a-z 0-9 . _ -` (`member` when nothing is left). No I/O.
+- **Inputs:** `handle` (`username@domain` or a bare username), `format`. Optional `lang` — default Filipino, which keeps the historical unsuffixed name. `english`, `spanish`, `german`, `french`, and `kikamba` insert `-english`, `-spanish`, `-german`, `-french`, or `-kikamba` before the extension.
+- **Returns / side effects:** `21gifts-shop-sticker-<username>[-language].<format>`. The username is lowercased and reduced to `a-z 0-9 . _ -` (`member` when nothing is left). No I/O.
 - **Used by:** `ShopStickerOverlay`.
+
+## Function: shopStickerLangFromQuery
+
+- **Purpose:** Selects the printable shop-sticker text language from a `lang` query value.
+- **Inputs:** `value` — raw `lang` query value, or null when the parameter is absent.
+- **Returns / side effects:** Trimmed, case-insensitive. `kikamba`/`kam`; `filipino`/`fil`; Spanish `spanish`/`spanisch`/`es`/`espanol`/`español`; German `german`/`deutsch`/`de`; French `french`/`fr`/`francais`/`français`/`französisch`/`franzosisch`; English-only `english`/`en`/`none`/`keine`. Null, blank, and unknown stay `filipino`. That fallback is not the overlay default. No I/O.
+- **Used by:** `shopStickerLangFromLocation`.
+
+## Function: shopStickerLangFromLocation
+
+- **Purpose:** Selects the printable shop-sticker text language from the current page URL.
+- **Inputs:** None. Reads the current `lang` query via `shopStickerLangFromQuery`.
+- **Returns / side effects:** The language from that query (`english`, `spanish`, `german`, `french`, `filipino`, or `kikamba`), or `filipino` when the query is missing, unknown, or `window` is missing. No I/O. A missing query returning `filipino` does not select the overlay; auto-open stays Kikamba-only.
+- **Used by:** `MemberProfileScreen` (Kikamba still auto-opens the overlay).
+
+## Function: shopStickerLangInitial
+
+- **Purpose:** First sticker language for the overlay. A known `lang` query wins. Otherwise the visitor's UI language: English selects English only, Deutsch selects German, Español selects Spanish, Filipino selects Filipino. French and Kikamba are not UI languages.
+- **Inputs:** `locale` — one of `en`, `de`, `es`, `fil`. When `window` exists, also reads the current `lang` query.
+- **Returns / side effects:** A known alias (`kikamba`/`kam`, `fil`/`filipino`, Spanish, German, French, or English-only `en`/`none`/`keine`) wins over the UI language. A missing, blank, or unknown query, and a missing `window`, use the UI language (`en` → `english`, `de` → `german`, `es` → `spanish`, `fil` → `filipino`). An explicit Filipino query is not treated as missing. No I/O.
+- **Used by:** `ShopStickerOverlay` (first selection only).
 
 ## Function: decodeLnurl
 
@@ -2562,7 +2786,7 @@ The No gifts yet mode keeps only loaded messages with exactly zero sats, includi
 
 - **Purpose:** Public payment card: the person's name, an exact satoshi amount, and one BOLT11 invoice.
 - **Inputs:** `lightning` query string.
-- **Returns / side effects:** `PageChrome` with `ProfileChromeLeft` (wordmark `HomeWordmark`) and a light language switcher. The arrow returns to the previous in-app view, or `/welcome` when this tab has none. Renders the shop sticker's storefront for a real pay link, and the welcome glyph only when the link is not valid. After `GET /pay/:username`, shows the name and amount form, or that open till. **Continue** posts the amount and then shows the active payment (locked sats, the default fiat when the gift-day rate is usable, and **Pay**, no amount field). **Pay** is the width of the invoice QR plate, centered, not the page column. Desktop shows the invoice QR. A smartphone does not (`isSmartphoneUserAgent`, not viewport), before or after the payment is active. A new `lightning` value clears the previous person, including an invoice that is still being created. No forum and no auth gate.
+- **Returns / side effects:** `PageChrome` with `ProfileChromeLeft` (wordmark `HomeWordmark`) and a light language switcher. The arrow returns to the previous in-app view, or `/welcome` when this tab has none. Renders the shop sticker's storefront for a real pay link, and the welcome glyph only when the link is not valid. After `GET /pay/:username`, shows the name and amount form, or that open till. **Continue** posts the amount and then shows the active payment (locked sats, the default fiat when the gift-day rate is usable, and **Pay**, no amount field). **Pay** is the width of the invoice QR plate, centered, not the page column. Desktop shows the invoice QR. A smartphone does not (`isSmartphoneUserAgent`, not viewport), before or after the payment is active. A new `lightning` value clears the previous person, including an invoice that is still being created. A positive fiat amount before the gift-day request settles says that currency's rate is still loading. After it settles with no usable day, the alert names that currency. No forum and no auth gate.
 - **Used by:** `PayLinkPage`.
 
 ## Function: PayLinkPage
@@ -2644,14 +2868,14 @@ The No gifts yet mode keeps only loaded messages with exactly zero sats, includi
 
 ## Function: PATCH
 
-- **Purpose:** Shared App Router PATCH export name. `/forum/messages/[id]/place` re-exports `proxyMessagesPlacePatch`. `/forum/messages/[id]/shop-account` re-exports `proxyMessagesShopAccountPatch`.
-- **Inputs:** Incoming `Request`. For `/forum/messages/[id]/place` and `/forum/messages/[id]/shop-account`, also async route `params` with the message id.
+- **Purpose:** Shared App Router PATCH export name. `/forum/messages/[id]/place` re-exports `proxyMessagesPlacePatch`. `/forum/messages/[id]/shop-account` re-exports `proxyMessagesShopAccountPatch`. `/forum/messages/[id]/text` re-exports `proxyMessagesTextPatch`. `/forum/messages/[id]/photos` re-exports `proxyMessagesPhotosPatch`.
+- **Inputs:** Incoming `Request`. For `/forum/messages/[id]/place`, `/forum/messages/[id]/shop-account`, `/forum/messages/[id]/text`, and `/forum/messages/[id]/photos`, also async route `params` with the message id.
 - **Returns / side effects:** Upstream api `Response`.
-- **Used by:** Same-origin forum staff place save (`setMessagePlace`) and shop-account save (`setMessageShopAccount`).
+- **Used by:** Same-origin forum staff place save (`setMessagePlace`), shop-account save (`setMessageShopAccount`), shop-note text save (`setMessageShopText`), and shop-note photo save (`setMessageShopPhotos`).
 
 ## Function: AboutPage
 
-- **Purpose:** Next.js page for `/about`. Three convictions, Matthew 10:8, 1 John 3:18, and a CTA into `/welcome`.
+- **Purpose:** Next.js page for `/about`. What 21.gifts stands for, Matthew 10:8, 1 John 3:18, and a CTA into `/welcome`.
 - **Inputs:** None. Calls `getRequestLocale()` and reads copy from the catalog via `translate`.
 - **Returns / side effects:** The about screen with a link to `/welcome`.
 - **Used by:** Route `/about`.
@@ -2672,7 +2896,7 @@ The No gifts yet mode keeps only loaded messages with exactly zero sats, includi
 
 ## Function: MarketingHeader
 
-- **Purpose:** Sticky marketing header with one top-left arrow (`ProfileChromeLeft` `tone="dark"`) beside `HomeWordmark` (`tone="dark"`; `/` unsigned, `/welcome` when a session is hydrated). The arrow returns to the previous in-app view, or `/welcome` when this tab has none. The wordmark is not that control. Section nav (How / Happyland / Why / FAQ / About / Stats / Handbook, accent **Log in**, optional `PwaInstall` `tone="dark"` `placement="header"`), always-visible `LanguageSwitcher` (`tone="dark"`), and a mobile menu toggle. Happyland links to the existing `/#happyland` photo essay from any marketing page. ThemeSwitcher and NumberFormatSwitcher are marketing-forbidden.
+- **Purpose:** Sticky marketing header with one top-left arrow (`ProfileChromeLeft` `tone="dark"`) beside `HomeWordmark` (`tone="dark"`; `publicHref` is the language home when unsigned, `/welcome` when a session is hydrated). The arrow returns to the previous in-app view, or `/welcome` when this tab has none. The wordmark is not that control. Section nav (How / Happyland / Why / FAQ / About 21.gifts / Stats / Handbook, accent **Log in**, optional `PwaInstall` `tone="dark"` `placement="header"`), always-visible `LanguageSwitcher` (`tone="dark"`), and a mobile menu toggle. Happyland links to the existing `/{locale}#happyland` place portrait from any marketing page. ThemeSwitcher and NumberFormatSwitcher are marketing-forbidden.
 - **Inputs:** None. Internal open state. Reads copy via `useTranslations`.
 - **Returns / side effects:** Header element; toggles nav on small screens. `LanguageSwitcher` stays visible when the hamburger is closed. Install control stays `null` until after mount when an offer applies.
 - **Used by:** `MarketingLayout`, `NotFound` (no extra props).
@@ -2693,10 +2917,10 @@ The No gifts yet mode keeps only loaded messages with exactly zero sats, includi
 
 ## Function: POST
 
-- **Purpose:** Shared App Router POST export name. `/me/name` re-exports `proxyMeNamePost`; `/me/location` re-exports `proxyMeLocationPost`; `/me/forum-laws-dismissed` re-exports `proxyMeForumLawsDismissedPost`; `/me/notification-level` re-exports `proxyMeNotificationLevelPost`; `/me/rules-agreement` re-exports `proxyMeRulesAgreementPost`; `/me/lightning-address` re-exports `proxyMeLightningAddressPost`; `/me/push-subscriptions` re-exports `proxyMePushSubscriptionsPost`; `/me/wallet-backup-seen` re-exports `proxyMeWalletBackupSeenPost`; `/me/passkey-renew/report` re-exports `proxyMePasskeyRenewReportPost`; `/me/passkey-renew/ack` re-exports `proxyMePasskeyRenewAckPost`; `/auth/passkey/{register,authenticate,replace,seed}/{begin,finish}` re-export the eight passkey proxy POSTs; `/forum/messages` re-exports `proxyMessagesPost`; `/messages/[id]/invoice` re-exports `proxyMessagesInvoicePost`; `/messages/[id]/repayment` re-exports `proxyMessagesRepaymentPost`; `/conversations` re-exports `proxyConversationsPost`; `/conversations/[id]` re-exports `proxyConversationPost`; `/conversations/[id]/invoice` re-exports `proxyConversationInvoicePost`; `/conversations/[id]/read` re-exports `proxyConversationReadPost`; `/forum/notifications/read-all` re-exports `proxyNotificationsReadAllPost`; `/forum/notifications/[id]/read` re-exports `proxyNotificationReadPost`; `/contact/submit` re-exports `proxyContactPost`; `/translate` re-exports `proxyTranslateNotePost` with JSON `{ messageId, target }`; `/conversations/[id]/messages/[messageId]/translate` re-exports `proxyTranslateConversationMessagePost` with JSON `{ target }`; `/trust/verify` re-exports `proxyTrustVerifyPost`; `/trust/propose-moderator` re-exports `proxyTrustProposeModeratorPost`; `/trust/confirm-moderator` re-exports `proxyTrustConfirmModeratorPost`; `/trust/reject-moderator` re-exports `proxyTrustRejectModeratorPost`; `/trust/appoint-moderator` re-exports `proxyTrustAppointModeratorPost`; `/funding/apply` re-exports `proxyFundingApplyPost`; `/funding/trial` re-exports `proxyFundingTrialPost`; `/funding/admit` re-exports `proxyFundingAdmitPost`; `/funding/reject` re-exports `proxyFundingRejectPost`. `/pos/charge` re-exports `proxyPosPost`. HTML `/pos` is the till page, not a POST proxy. HTML `/messages` is the inbox page, not a POST proxy.
+- **Purpose:** Shared App Router POST export name. `/me/name` re-exports `proxyMeNamePost`; `/me/location` re-exports `proxyMeLocationPost`; `/me/forum-laws-dismissed` re-exports `proxyMeForumLawsDismissedPost`; `/me/notification-level` re-exports `proxyMeNotificationLevelPost`; `/me/rules-agreement` re-exports `proxyMeRulesAgreementPost`; `/me/lightning-address` re-exports `proxyMeLightningAddressPost`; `/me/push-subscriptions` re-exports `proxyMePushSubscriptionsPost`; `/me/wallet-backup-seen` re-exports `proxyMeWalletBackupSeenPost`; `/me/passkey-renew/report` re-exports `proxyMePasskeyRenewReportPost`; `/me/passkey-renew/ack` re-exports `proxyMePasskeyRenewAckPost`; `/auth/passkey/{register,authenticate,replace,seed}/{begin,finish}` re-export the eight passkey proxy POSTs; `/forum/messages` re-exports `proxyMessagesPost`; `/messages/[id]/invoice` re-exports `proxyMessagesInvoicePost`; `/messages/[id]/repayment` re-exports `proxyMessagesRepaymentPost`; `/conversations` re-exports `proxyConversationsPost`; `/conversations/[id]` re-exports `proxyConversationPost`; `/conversations/[id]/invoice` re-exports `proxyConversationInvoicePost`; `/conversations/[id]/read` re-exports `proxyConversationReadPost`; `/forum/notifications/read-all` re-exports `proxyNotificationsReadAllPost`; `/forum/notifications/read-by-message` re-exports `proxyNotificationsReadByMessagePost`; `/forum/notifications/read-visible` re-exports `proxyNotificationsReadVisiblePost`; `/forum/notifications/[id]/read` re-exports `proxyNotificationReadPost`; `/contact/submit` re-exports `proxyContactPost`; `/translate` re-exports `proxyTranslateNotePost` with JSON `{ messageId, target }`; `/conversations/[id]/messages/[messageId]/translate` re-exports `proxyTranslateConversationMessagePost` with JSON `{ target }`; `/trust/verify` re-exports `proxyTrustVerifyPost`; `/trust/propose-moderator` re-exports `proxyTrustProposeModeratorPost`; `/trust/confirm-moderator` re-exports `proxyTrustConfirmModeratorPost`; `/trust/reject-moderator` re-exports `proxyTrustRejectModeratorPost`; `/trust/appoint-moderator` re-exports `proxyTrustAppointModeratorPost`; `/funding/apply` re-exports `proxyFundingApplyPost`; `/funding/trial` re-exports `proxyFundingTrialPost`; `/funding/admit` re-exports `proxyFundingAdmitPost`; `/funding/reject` re-exports `proxyFundingRejectPost`; `/funding/daily-roster/comment` re-exports `proxyFundingDailyRosterCommentPost`; `/funding/daily-roster/payments` re-exports `proxyFundingDailyRosterPaymentsPost`; `/funding/daily-roster/recipients` re-exports `proxyFundingDailyRosterRecipientsPost`; `/funding/daily-roster/recipients/update` re-exports `proxyFundingDailyRosterRecipientsUpdatePost`; `/funding/daily-roster/recipients/delete` re-exports `proxyFundingDailyRosterRecipientsDeletePost`. `/pos/charge` re-exports `proxyPosPost`. HTML `/pos` is the till page, not a POST proxy. HTML `/messages` is the inbox page, not a POST proxy.
 - **Inputs:** Incoming `Request`.
 - **Returns / side effects:** Upstream api `Response` on api proxies; `/translate` returns `{ translatedText, cached }` or 400/404/503/502 from the 21.gifts api.
-- **Used by:** Same-origin name save, location save (`POST /me/location`), forum laws dismiss, notification-level save (`POST /me/notification-level`), living-room rules agreement (`POST /me/rules-agreement`), address link, Web Push subscribe (`POST /me/push-subscriptions`), recovery-phrase backup-seen (`POST /me/wallet-backup-seen`), renew report (`POST /me/passkey-renew/report`), renew acknowledgement (`POST /me/passkey-renew/ack`), passkey begin/finish (register, authenticate, replace, and seed), forum message create (`POST /forum/messages`), payable-reply invoice (`POST /messages/[id]/invoice`), today's repayment (`POST /messages/[id]/repayment`), inbox open (`POST /conversations`) and reply (`POST /conversations/[id]`), inbox invoice (`POST /conversations/[id]/invoice`), mark-one conversation (`POST /conversations/[id]/read`), mark-all notifications (`POST /forum/notifications/read-all`) and mark-one (`POST /forum/notifications/[id]/read`), in-app contact (`POST /contact/submit`), `translateNote` via `POST /translate`, `translateConversationMessage` via `POST /conversations/[id]/messages/[messageId]/translate`, staff Trust Chain actions (`POST /trust/verify`, `POST /trust/propose-moderator`, `POST /trust/confirm-moderator`, `POST /trust/reject-moderator`, `POST /trust/appoint-moderator`), grant apply (`POST /funding/apply`), and staff funding decisions (`POST /funding/trial`, `POST /funding/admit`, `POST /funding/reject`).
+- **Used by:** Same-origin name save, location save (`POST /me/location`), forum laws dismiss, notification-level save (`POST /me/notification-level`), living-room rules agreement (`POST /me/rules-agreement`), address link, Web Push subscribe (`POST /me/push-subscriptions`), recovery-phrase backup-seen (`POST /me/wallet-backup-seen`), renew report (`POST /me/passkey-renew/report`), renew acknowledgement (`POST /me/passkey-renew/ack`), passkey begin/finish (register, authenticate, replace, and seed), forum message create (`POST /forum/messages`), payable-reply invoice (`POST /messages/[id]/invoice`), today's repayment (`POST /messages/[id]/repayment`), inbox open (`POST /conversations`) and reply (`POST /conversations/[id]`), inbox invoice (`POST /conversations/[id]/invoice`), mark-one conversation (`POST /conversations/[id]/read`), mark-all notifications (`POST /forum/notifications/read-all`), mark-by-message (`POST /forum/notifications/read-by-message`), mark-visible (`POST /forum/notifications/read-visible`), and mark-one (`POST /forum/notifications/[id]/read`), in-app contact (`POST /contact/submit`), `translateNote` via `POST /translate`, `translateConversationMessage` via `POST /conversations/[id]/messages/[messageId]/translate`, staff Trust Chain actions (`POST /trust/verify`, `POST /trust/propose-moderator`, `POST /trust/confirm-moderator`, `POST /trust/reject-moderator`, `POST /trust/appoint-moderator`), grant apply (`POST /funding/apply`), staff funding decisions (`POST /funding/trial`, `POST /funding/admit`, `POST /funding/reject`), and daily-roster saves (`POST /funding/daily-roster/comment`, `POST /funding/daily-roster/payments`, `POST /funding/daily-roster/recipients`, `POST /funding/daily-roster/recipients/update`, `POST /funding/daily-roster/recipients/delete`).
 
 ## Function: PUT
 
@@ -2747,6 +2971,48 @@ The No gifts yet mode keeps only loaded messages with exactly zero sats, includi
 - **Returns / side effects:** Upstream `Response` via `proxyApiRequest`.
 - **Used by:** Route GET `/funding/applications`.
 
+## Function: proxyFundingDailyRosterGet
+
+- **Purpose:** Same-origin Bearer proxy helper for api `GET /funding/daily-roster`. Forwards the incoming Authorization header.
+- **Inputs:** Incoming `Request` (Bearer session).
+- **Returns / side effects:** Upstream `Response` via `proxyApiRequest`.
+- **Used by:** Route GET `/funding/daily-roster`.
+
+## Function: proxyFundingDailyRosterCommentPost
+
+- **Purpose:** Same-origin Bearer proxy helper for api `POST /funding/daily-roster/comment` with JSON `{ comment }`.
+- **Inputs:** Incoming `Request` (Bearer session and JSON body).
+- **Returns / side effects:** Upstream `Response` via `proxyApiRequest`.
+- **Used by:** Route POST `/funding/daily-roster/comment`.
+
+## Function: proxyFundingDailyRosterPaymentsPost
+
+- **Purpose:** Same-origin Bearer proxy helper for api `POST /funding/daily-roster/payments` with JSON `{ enabled }`.
+- **Inputs:** Incoming `Request` (Bearer session and JSON body).
+- **Returns / side effects:** Upstream `Response` via `proxyApiRequest`.
+- **Used by:** Route POST `/funding/daily-roster/payments`.
+
+## Function: proxyFundingDailyRosterRecipientsPost
+
+- **Purpose:** Same-origin Bearer proxy helper for api `POST /funding/daily-roster/recipients` with JSON `{ accountId, amountUsd }`.
+- **Inputs:** Incoming `Request` (Bearer session and JSON body).
+- **Returns / side effects:** Upstream `Response` via `proxyApiRequest`.
+- **Used by:** Route POST `/funding/daily-roster/recipients`.
+
+## Function: proxyFundingDailyRosterRecipientsUpdatePost
+
+- **Purpose:** Same-origin Bearer proxy helper for api `POST /funding/daily-roster/recipients/update` with JSON `{ address, amountUsd }`.
+- **Inputs:** Incoming `Request` (Bearer session and JSON body).
+- **Returns / side effects:** Upstream `Response` via `proxyApiRequest`.
+- **Used by:** Route POST `/funding/daily-roster/recipients/update`.
+
+## Function: proxyFundingDailyRosterRecipientsDeletePost
+
+- **Purpose:** Same-origin Bearer proxy helper for api `POST /funding/daily-roster/recipients/delete` with JSON `{ address }`.
+- **Inputs:** Incoming `Request` (Bearer session and JSON body).
+- **Returns / side effects:** Upstream `Response` via `proxyApiRequest`.
+- **Used by:** Route POST `/funding/daily-roster/recipients/delete`.
+
 ## Function: proxyFundingApplicationGet
 
 - **Purpose:** Same-origin Bearer proxy helper for api `GET /funding/applications/:accountId`.
@@ -2778,7 +3044,7 @@ The No gifts yet mode keeps only loaded messages with exactly zero sats, includi
 ## Function: proxyTrustVerifyPost
 
 - **Purpose:** Same-origin Bearer proxy helper for api `POST /trust/verify`.
-- **Inputs:** Incoming `Request` (JSON `{ accountId }`).
+- **Inputs:** Incoming `Request` (JSON `{ accountId, confirmedName }`).
 - **Returns / side effects:** Upstream `Response`.
 - **Used by:** Route POST `/trust/verify`.
 
@@ -3006,6 +3272,27 @@ The No gifts yet mode keeps only loaded messages with exactly zero sats, includi
 - **Returns / side effects:** Upstream `Response` via `proxyApiRequest`.
 - **Used by:** Route GET `/forum/messages/[id]/replies`.
 
+## Function: proxyExternalAuthorProfileGet
+
+- **Purpose:** Public proxy GET `/messages/:id/external-profile` to the 21.gifts api (no auth). App path is `/public-messages/[id]/external-profile`.
+- **Inputs:** Incoming `Request`, plus message `id` from the App Router segment.
+- **Returns / side effects:** Upstream `Response` via `proxyApiRequest`. Does not add a Bearer header.
+- **Used by:** Route GET `/public-messages/[id]/external-profile`.
+
+## Function: proxyExternalAuthorPostsGet
+
+- **Purpose:** Public proxy GET `/messages/:id/external-posts` to the 21.gifts api (no auth). App path is `/public-messages/[id]/external-posts`. Returns the upstream response via `proxyApiRequest`. Does not add a Bearer header.
+- **Inputs:** Incoming `Request`, plus message `id` from the App Router segment.
+- **Returns / side effects:** Upstream `Response` via `proxyApiRequest`. Does not add a Bearer header.
+- **Used by:** Route GET `/public-messages/[id]/external-posts`.
+
+## Function: proxyExternalAuthorRepliesGet
+
+- **Purpose:** Public proxy GET `/messages/:id/external-replies` to the 21.gifts api (no auth). App path is `/public-messages/[id]/external-replies`. Returns the upstream response via `proxyApiRequest`. Does not add a Bearer header.
+- **Inputs:** Incoming `Request`, plus message `id` from the App Router segment.
+- **Returns / side effects:** Upstream `Response` via `proxyApiRequest`. Does not add a Bearer header.
+- **Used by:** Route GET `/public-messages/[id]/external-replies`.
+
 ## Function: proxyPublicMessageGet
 
 - **Purpose:** Public proxy GET `/messages/:id` to the 21.gifts api (one note as JSON, no auth). App path is `/public-messages/[id]` so `/messages/[id]` can serve HTML.
@@ -3101,8 +3388,8 @@ The No gifts yet mode keeps only loaded messages with exactly zero sats, includi
 
 - **Purpose:** POST `/auth/passkey/register/finish` and parse the session.
 - **Inputs:** `challengeId` and credential JSON.
-- **Returns / side effects:** `{ token, account }` with `linkingKey` null. Throws `WrongAccountError` on 403 with the duplicate-account api string. Other non-2xx stay status fallbacks.
-- **Used by:** `usePasskeyLogin.register`.
+- **Returns / side effects:** `{ token, account }` with `linkingKey` null. Throws `WrongAccountError` on 403 with the duplicate-account api string. A 409 whose error is exactly `Username is already in use` throws `Error` with that string. Other non-2xx stay status fallbacks.
+- **Used by:** `usePasskeyLogin.submitName` for a new account, and `usePasskeyLogin.register` only with a view key.
 
 ## Function: proxyAuthPasskeyAuthenticateBeginPost
 
@@ -3250,6 +3537,20 @@ The No gifts yet mode keeps only loaded messages with exactly zero sats, includi
 - **Inputs:** None. Reads the auth store and translations. `?visual=renew-passkey` and `?visual=renew-ok` force those steps for screenshots.
 - **Returns / side effects:** No dismiss control on the explanation. **Continue** starts the ceremony. Cancelling the device prompt returns to the explanation and is not a logged failure. Success stores the account only after **OK**. A failed ceremony stores the returned account and stays on the failure step only when that account has an open failure and the session is unchanged, so a remount stays there. When that account has `passkeyRenewPrfUnsupported`, the failure step says this passkey cannot create a recovery phrase. An HTTP seed error that did not record a failure returns to the explanation. Failure **OK** stores the acknowledged account only while that same session is still current, then the dialog closes and does not start again. Null once success is confirmed, a failure was acknowledged, or `passkeyRenewClosed` is true.
 - **Used by:** `AppShell` when `walletRequired === false` and `passkeyRenewClosed` is not true.
+
+## Function: FundingPausedCopy
+
+- **Purpose:** Paused-applications sentence plus the statistics anchor. Renders no button and does not read a shop count; the pause is unconditional until a later change removes it.
+- **Inputs:** None. Uses translations.
+- **Returns / side effects:** The paused paragraph and the `https://21.gifts/statistics` anchor.
+- **Used by:** `FundingStatusCard` for `none`/`rejected`, `DailyPayoutStoppedNotice`, and `FundingApplyScreen`.
+
+## Function: DailyPayoutStoppedNotice
+
+- **Purpose:** Non-dismissible info banner for signed-in members whose owner funding JSON has `dailyPayoutStoppedNotice === true`. The title is **Daily payout stopped**. While `grantApplicationsPaused` is true, the body is `FundingPausedCopy` and Apply is not offered, except usernames `joey-rosima`, `vincent`, and `jewel-bacolbas`, of any role, who still see the stopped-daily sentence and an Apply link to `/grants/apply`. That link is not the apply walk. When that switch is false, the body is the stopped-daily sentence and an Apply link to `/grants/apply`.
+- **Inputs:** None. Reads the auth store and translations.
+- **Returns / side effects:** A `role="region"` banner, or `null` when the flag is missing, false, or funding is null. No close control, no localStorage, no extra API call. Apply is offered when applications are not paused, or when the signed-in username is `joey-rosima`, `vincent`, or `jewel-bacolbas`.
+- **Used by:** `AppShell`.
 
 ## Function: proxyMePasskeyRenewReportPost
 
@@ -3415,15 +3716,15 @@ The No gifts yet mode keeps only loaded messages with exactly zero sats, includi
 ## Function: startPasskeyRegistration
 
 - **Purpose:** POST `/auth/passkey/register/begin` and parse options.
-- **Inputs:** Optional `viewKey` string. When set (non-empty), POSTs JSON `{ viewKey }` with `Content-Type: application/json`; otherwise POSTs with no body and no Content-Type.
+- **Inputs:** Optional `viewKey` string and optional `name` string. A non-empty `viewKey` POSTs JSON `{ viewKey }` with `Content-Type: application/json` and ignores `name`. Otherwise a non-empty `name` POSTs JSON `{ name }` with `Content-Type: application/json`. Otherwise POSTs with no body and no Content-Type.
 - **Returns / side effects:** `{ challengeId, options }`. On `!ok`, throws the api `{ error }` string when present, otherwise a status fallback.
-- **Used by:** `usePasskeyLogin.register`.
+- **Used by:** `usePasskeyLogin.submitName` for a new account, and `usePasskeyLogin.register` only with a view key.
 
 ## Function: usePasskeyLogin
 
-- **Purpose:** Client hook for passkey login. `login` authenticates with an existing passkey. When authenticate returns `NotAllowedError` and `isInAppBrowser()` is false, status becomes `choice` and registration is not started. When authenticate returns `NotAllowedError` while `isInAppBrowser()` is true, status becomes `unsupported` and register is not started. From `choice`, `authenticate` never falls through to register; `register()` (no view key) starts create. After a choice was offered, user cancel (`NotAllowedError` or `AbortError`) on those ceremonies returns to `choice`; direct `authenticate` / `register(viewKey)` from `ViewProfileClaim` never sets that flag, so cancel returns to `idle`. Status `unknown` is authenticate finish `Unknown credential`: the hook calls `signalUnknownCredential` best-effort with the ceremony `rpId` and `credential.id` before showing it, and a later user-cancel returns to `unknown` while that flag is set. On iOS/iPadOS WebKit (including iPadOS desktop-site: Macintosh UA, MacIntel, maxTouchPoints > 1), `credentials.get` / `credentials.create` omit AbortSignal. `cancel` aborts an in-flight WebAuthn prompt and clears the choice flag. `register(viewKey?)` forwards an optional view key for public profile claim; `retry` after `register(viewKey)` resends the same key. `login` never sends a view key. Finish `WrongAccountError` clears the session, sets `wrongAccount`, status `error` with that message, and does not fall through to discoverable registration. `register` requires WebAuthn PRF on create; missing PRF aborts with `wallet.prfUnsupported` and does not finish. The words are discarded. `login` / `authenticate` call `clearSessionPhrase`. On iPhone, iPad, or iPod below iOS 18, `register` still does not finish the account. `NotAllowedError` or `AbortError` from create or from the extra-key read reports `client.passkey.register.ceremony` with `name`, `prfPresent: false`, the begin `challengeId`, `accountId` when the begin options name one, and message `iOS <installed> below 18 at create` or `at prf`, then the browser text when it fits the diagnostic allowlist. A missing extra key reports `client.passkey.register.prf` with `prfPresent: false`, those same ids, and message `iOS <installed> below 18 at prf.absent`. Both throw `login.iosVersion` instead of a silent cancel or `wallet.prfUnsupported`. Every failed login posts `client.passkey.login.fail` before the card changes, even when no account id exists: the browser `name`, the allowlisted `message` when that text fits, and the begin `challengeId` when it is 64 hex. That row is written when `credentials.get` throws, when the assertion is missing, and when an in-app browser stops the ceremony first (stage `login` or `authenticate`, message `in-app browser`). A dismissed register that is not the old-iOS stop posts `client.passkey.register.fail` with those fields, and `accountId` only when begin named one. Status still becomes `choice`, `idle`, or `unsupported` as before. Begin and finish failures keep their own rows and do not need an account id.
-- **Inputs:** None (reads `useAuthStore`; calls `isInAppBrowser` on authenticate `NotAllowedError` and `iosPasskeyBlock` on register).
-- **Returns / side effects:** `{ status, login, register, authenticate, retry, cancel, error }` with `status` in `idle | starting | error | unsupported | choice | unknown`. `error` is the last `Error.message` when `status === 'error'`, else `null`. `retry` repeats `login` when the visitor used the single button. After a choice button, `retry` repeats that ceremony. Calls WebAuthn and the api. Unmount still aborts the controller and clears the choice flag.
+- **Purpose:** Client hook for passkey login. `login` authenticates with an existing passkey. When authenticate returns `NotAllowedError` and `isInAppBrowser()` is false, status becomes `choice` and registration is not started. When authenticate returns `NotAllowedError` while `isInAppBrowser()` is true, status becomes `unsupported` and register is not started. From `choice`, `authenticate` never falls through to register; `register()` (no view key) sets status `name` and starts neither `startPasskeyRegistration` nor `credentials.create`. `submitName` normalizes and, when valid, calls `startPasskeyRegistration(undefined, normalized)` then the existing create ceremony. `register(viewKey)` starts the claim immediately and does not show `name`. User cancel (`NotAllowedError` or `AbortError`) after a named create returns to `name`, not `choice`. After a choice was offered, user cancel (`NotAllowedError` or `AbortError`) on those ceremonies returns to `choice`; direct `authenticate` / `register(viewKey)` from `ViewProfileClaim` never sets that flag, so cancel returns to `idle`. Status `unknown` is authenticate finish `Unknown credential`: the hook calls `signalUnknownCredential` best-effort with the ceremony `rpId` and `credential.id` before showing it, and a later user-cancel returns to `unknown` while that flag is set. On iOS/iPadOS WebKit (including iPadOS desktop-site: Macintosh UA, MacIntel, maxTouchPoints > 1), `credentials.get` / `credentials.create` omit AbortSignal. `cancel` aborts an in-flight WebAuthn prompt and clears the choice flag. `register(viewKey?)` forwards an optional view key for public profile claim; `retry` after `register(viewKey)` resends the same key. `login` never sends a view key. Finish `WrongAccountError` clears the session, sets `wrongAccount`, status `error` with that message, and does not fall through to discoverable registration. `register` requires WebAuthn PRF on create; missing PRF aborts with `wallet.prfUnsupported` and does not finish. The words are discarded. `login` / `authenticate` call `clearSessionPhrase`. On iPhone, iPad, or iPod below iOS 18, a named create still does not finish the account. `NotAllowedError` or `AbortError` from create or from the extra-key read reports `client.passkey.register.ceremony` with `name`, `prfPresent: false`, the begin `challengeId`, `accountId` when `user.id` decodes as a UUID, and message `iOS <installed> below 18 at create` or `at prf`, then the browser text when it fits the diagnostic allowlist. A missing extra key reports `client.passkey.register.prf` with `prfPresent: false`, those same ids, and message `iOS <installed> below 18 at prf.absent`. Both throw `login.iosVersion` instead of a silent cancel or `wallet.prfUnsupported`. On Android below 9, a named create does not finish the account. `NotAllowedError` or `AbortError` from create or from the extra-key read reports `client.passkey.register.ceremony` with `name`, `prfPresent: false`, the begin `challengeId`, `accountId` when `user.id` decodes as a UUID, and message `Android <installed> below 9 at create` or `at prf`, then the browser text when it fits the diagnostic allowlist. A missing extra key reports `client.passkey.register.prf` with `prfPresent: false`, those same ids, and message `Android <installed> below 9 at prf.absent`. Both throw `login.androidVersion` instead of a silent cancel or `wallet.prfUnsupported`. Every failed login posts `client.passkey.login.fail` before the card changes, even when no account id exists: the browser `name`, the allowlisted `message` when that text fits, and the begin `challengeId` when it is 64 hex. That row is written when `credentials.get` throws, when the assertion is missing, and when an in-app browser stops the ceremony first (stage `login` or `authenticate`, message `in-app browser`). A dismissed register that is not an old-iOS or old-Android stop posts `client.passkey.register.fail` with those fields, and `accountId` only when `user.id` decodes as a UUID. A failed login row and a dismissed register that is not an old-iOS or old-Android stop prefix the allowlisted message with `iOS <installed>` or `Android <installed>` when the user agent parses (iOS preferred), including versions new enough to pass the gate. Desktop and a user agent with no version token stay unprefixed. A cancelled named create stays on `name`; claim and paths before the name stay `choice`, `idle`, or `unsupported`. Begin and finish failures keep their own rows and do not need an account id.
+- **Inputs:** None (reads `useAuthStore`; calls `isInAppBrowser` on authenticate `NotAllowedError`, `iosPasskeyBlock` and `androidPasskeyBlock` on register, and `iosInstalledVersion` and `androidInstalledVersion` when a failed attempt is reported).
+- **Returns / side effects:** `{ status, login, register, submitName, authenticate, retry, cancel, error, nameError }` with `status` in `idle | starting | error | unsupported | choice | unknown | name`. `error` is the last `Error.message` when `status === 'error'`, else `null`. `nameError` is `invalid`, `taken`, or `null` while `status === 'name'`, else `null`. After a named create, `retry` returns to the name form and does not start create again. `retry` after `register(viewKey)` sends the same key again. `retry` after `authenticate` repeats authenticate. The single login button repeats login. Calls WebAuthn and the api. Unmount still aborts the controller and clears the choice flag.
 - **Used by:** `OnboardingGate`, `LoginCard`, `LogoutButton`, and `ViewProfileClaim`.
 
 ## Function: fetchComposeTarget
@@ -3442,10 +3743,17 @@ The No gifts yet mode keeps only loaded messages with exactly zero sats, includi
 
 ## Function: CreditLedger
 
-- **Purpose:** Show the givers and the repayment plan under a posted credit. Nothing renders until the ledger loads, and a failed read stays blank.
-- **Inputs:** Credit note id.
-- **Returns / side effects:** The Given and Paid back lists, or null. The chart uses day numbers (`dayIndex + 1`) until `fundedAt` is set or a day has no `dueOn`; once the credit is fully given it uses the UTC dates. A fiat chart sums only amounts in the ask currency. Fetches when the id changes; while any row is `due`, refreshes every 4 seconds; a failed or null refresh leaves the list; a response after an id change or unmount is ignored. Names stay on one line. On a narrow screen the status sits under the amount; on a wide screen it sits beside it. The list scrolls with the page.
-- **Used by:** `ForumGoalBar`.
+- **Purpose:** Show the givers and the repayment plan under a posted credit. Nothing renders until the ledger loads, and a failed read stays blank. `list="summary"` (default) shows givers, the explanation, the chart, and a **Repayment list** link to `/messages/<id>/repayment-list`. `list="page"` shows givers, the explanation, the chart, and the day-group rows, and omits that link.
+- **Inputs:** Credit note id. Optional `list`: `'summary'` | `'page'` (default `'summary'`).
+- **Returns / side effects:** The Given and Paid back lists, or null. Day-group rows (Tag 1, person, amount, Geplant/Fällig) render only when `list="page"`. The chart uses day numbers (`dayIndex + 1`) until `fundedAt` is set or a day has no `dueOn`; once the credit is fully given it uses the UTC dates. A fiat chart sums only amounts in the ask currency. Fetches when the id changes. Until that read finishes, a previous note's ledger is not shown. While any row is `due`, refreshes every 4 seconds. A failed or null refresh leaves the list for the same note. A response after an id change or unmount is ignored. Names stay on one line. On a narrow screen the status sits under the amount; on a wide screen it sits beside it. The list scrolls with the page. The summary link is shown once the ledger has loaded, even when there are no rows.
+- **Used by:** `ForumGoalBar` (`list="summary"`). `RepaymentListPage` (`list="page"`).
+
+## Function: RepaymentListPage
+
+- **Purpose:** Next.js page for `/messages/[id]/repayment-list` — the repayment list for one credit note: who gave, the chart, and every day's shares. The day rows render only here. The note, the forum, and a profile show a **Repayment list** link instead of those rows. Chrome is `PublicMessageChrome`. No `OnboardingGate`. No second back control. The note id is not validated as a UUID here.
+- **Inputs:** Dynamic route params (`id`). Loads `GET /messages/:id/repayment` through `getRepayment` (via `CreditLedger`). No session is required to view. Chrome follows the hydrated session.
+- **Returns / side effects:** `CreditLedger` with `list="page"` inside `PublicMessageChrome`. No `generateMetadata`.
+- **Used by:** Route `/messages/[id]/repayment-list`. The **Repayment list** link on a collapsed `ForumGoalBar` and on `CreditLedger` summary.
 
 ## Function: proxyMessagesRepaymentGet
 
@@ -3518,7 +3826,7 @@ The No gifts yet mode keeps only loaded messages with exactly zero sats, includi
 
 ## Function: InboxScreen
 
-- **Purpose:** Presentational inbox: incoming threads as a conversation list, or one open thread with a 8000-character composer and sats amount field (`showAmount` false hides the field; the staff room has no gifts). The message, attach, and send share one row; the amount is the next row (`AmountEntry` `layout="composer"`), indented to the message when attach is shown. An open invoice hides that amount row; the pay sheet states the amount once, as bitcoin plus the default fiat from the latest gift-day rate. Without an amount the photo and send stay vertically centered on the message. `showAttach` (default false for callers that omit it) adds the ImagePlus control, still previews, and photo-only send; InboxLoader open threads and ModeratorGroupScreen pass true. Non-empty bodies go through `ForumQuotedBody` so a pasted `https://21.gifts/messages/<uuid>` unfurls as a nested quoted-note card, using the same `rateDay` (a stored string as-is; a null or missing stored field uses the gift-day rate; omitting `stored` uses the latest gift-day rate). `photoUrls` (`${messageId}:${index}`) render attached stills. When `showFilter` is true (moderator), the list is filtered by the origin control (Direct / Contact / Damus; default Direct). Rows with `kind` `moderator_group` are never listed; the closed staff room lives on `/moderate/group`. Members (`showFilter` false) see inbound rows except `moderator_group` and no control. Each list row and the open-thread header show an origin label from `conversation.kind` (Contact / Direct / Damus / Moderators chat group). Unread inbound rows use `font-semibold` names, `text-app-fg` last text, a visible tabular-nums lining-nums unread-message count right of the name when the derived count is greater than zero (`row.unreadMessageCount`, or 1 when `unread` is true and the count is 0), and `aria-label` `inbox.threadUnread` with `{name}` and `{count}`. The word Unread is not visible text. Read inbound last text is a muted preview. When `lastFromMe` is true and `lastText` is non-empty, the list preview is `inbox.sentPreview` (`You: {text}`) in a filled chip; gift-only last messages (`lastSats > 0`, empty `lastText`) show the formatted amount . The list does not offer Translate. Thread remainders go through `ForumQuotedBody` with `conversationId` (`translateConversationMessage`); nested forum quotes stay on `translateNote`. Thread incoming messages are full-width muted note cards; `fromMe` messages render as filled `app-btn` bubbles on the right labelled `inbox.you`. Gift-only bubbles use `forum.giftReply`; text+sats shows the amount under the body. An open invoice shows the Lightning pay sheet. Close (`X`) dismisses that sheet and stays on the thread. It is not the top-left back arrow. Open-thread heading is counterpart name + origin caption (no `onBack`, no in-card back). Heading and incoming author names with `accountId` are `inbox.authorProfile` buttons to `/members/:id`; `fromMe` stays `inbox.you` text; Damus/missing id stays plain text. A staff viewer sees another staff reply as an incoming muted card with that person's `name` (profile link when `accountId` is set). `fromMe` / `inbox.you` only when this session is the actor. Settled thread sats amounts (gift-only bubble, text+sats line, and nested gift line) show a preferred-fiat suffix via `preferredFiatSuffix`: a stored string as-is, a null or missing field uses the gift-day rate, and bitcoin alone only when neither a stored string nor a usable rate exists. Unpaid invoice previews still use optional `rateDay` (latest gift-day totals). A message whose `giftFor` points at another message renders via `groupThreadGifts` as a nested `role="note"` line inside the parent's `<li>` (name, ₿ amount, fiat suffix, time; not shown as its own top-level row) instead of a separate bubble. When supplied, `nearStartRef` attaches to the eighth grouped bubble from the start, or the first bubble when fewer than eight render, only after the thread end is in view or the thread fits. A scroll event attaches it only when the end is already in view. Being within 80px of the bottom sticks the view but does not by itself attach older history. Landing again on the last pin offset sticks when that offset is within 80px of the bottom. An open thread (`openId` set, messages loaded) scrolls the page scrollport to the bottom so the first screen is the newest message and the composer. While stuck to the bottom (within 80px), prepends and stills keep the newest in view; scrolling up unsticks and prepends compensate scrollTop. A newest-id change re-sticks. Inside AppShell the pin waits for that scroller and does not fall back to `window` while the node is missing (`window` only outside AppShell); the pin runs again when an invoice pay sheet opens; list view does not pin to the bottom; leaving a thread scrolls the list to the top once.
+- **Purpose:** Presentational inbox: incoming threads as a conversation list, or one open thread with a 8000-character `MentionTextarea` and sats amount field (`showAmount` false hides the field; the staff room has no gifts). Typing `@` lists people. Choosing one inserts `@username `. The moderator room uses this same composer. The message, attach, and send share one row; the amount is the next row (`AmountEntry` `layout="composer"`), indented to the message when attach is shown. An open invoice hides that amount row; the pay sheet states the amount once, as bitcoin plus the default fiat from the latest gift-day rate. Without an amount the photo and send stay vertically centered on the message. `showAttach` (default false for callers that omit it) adds the ImagePlus control, still previews, and photo-only send; InboxLoader open threads and ModeratorGroupScreen pass true. Non-empty bodies go through `ForumQuotedBody` so a pasted `https://21.gifts/messages/<uuid>` unfurls as a nested quoted-note card, using the same `rateDay` (a stored string as-is; a null or missing stored field uses the gift-day rate; omitting `stored` uses the latest gift-day rate). A stored `mentions` list turns `@username` into a profile button for `/members/<accountId>`. That mark does not notify the person. `photoUrls` (`${messageId}:${index}`) render attached stills. When `showFilter` is true (moderator), the list is filtered by the origin control (Direct / Contact / Damus; default Direct). Rows with `kind` `moderator_group` are never listed; the closed staff room lives on `/moderate/group`. Members (`showFilter` false) see inbound rows except `moderator_group` and no control. Each list row and the open-thread header show an origin label from `conversation.kind` (Contact / Direct / Damus / Moderators chat group). Unread inbound rows use `font-semibold` names, `text-app-fg` last text, a visible tabular-nums lining-nums unread-message count right of the name when the derived count is greater than zero (`row.unreadMessageCount`, or 1 when `unread` is true and the count is 0), and `aria-label` `inbox.threadUnread` with `{name}` and `{count}`. The word Unread is not visible text. Read inbound last text is a muted preview. When `lastFromMe` is true and `lastText` is non-empty, the list preview is `inbox.sentPreview` (`You: {text}`) in a filled chip; gift-only last messages (`lastSats > 0`, empty `lastText`) show the formatted amount . The list does not offer Translate. Thread remainders go through `ForumQuotedBody` with `conversationId` (`translateConversationMessage`); nested forum quotes stay on `translateNote`. Thread incoming messages are full-width muted note cards; `fromMe` messages render as filled `app-btn` bubbles on the right labelled `inbox.you`. Gift-only bubbles use `forum.giftReply`; text+sats shows the amount under the body. An open invoice shows the Lightning pay sheet. Close (`X`) dismisses that sheet and stays on the thread. It is not the top-left back arrow. Open-thread heading is counterpart name + origin caption (no `onBack`, no in-card back). Heading and incoming author names with `accountId` are `inbox.authorProfile` buttons to `/members/:id`; `fromMe` stays `inbox.you` text; Damus/missing id stays plain text. A staff viewer sees another staff reply as an incoming muted card with that person's `name` (profile link when `accountId` is set). `fromMe` / `inbox.you` only when this session is the actor. Settled thread sats amounts (gift-only bubble, text+sats line, and nested gift line) show a preferred-fiat suffix via `preferredFiatSuffix`: a stored string as-is, a null or missing field uses the gift-day rate, and bitcoin alone only when neither a stored string nor a usable rate exists. Unpaid invoice previews still use optional `rateDay` (latest gift-day totals). A message whose `giftFor` points at another message renders via `groupThreadGifts` as a nested `role="note"` line inside the parent's `<li>` (name, ₿ amount, fiat suffix, time; not shown as its own top-level row) instead of a separate bubble. When supplied, `nearStartRef` attaches to the eighth grouped bubble from the start, or the first bubble when fewer than eight render, only after the thread end is in view or the thread fits. A scroll event attaches it only when the end is already in view. Being within 80px of the bottom sticks the view but does not by itself attach older history. Landing again on the last pin offset sticks when that offset is within 80px of the bottom. An open thread (`openId` set, messages loaded) scrolls the page scrollport to the bottom so the first screen is the newest message and the composer. While stuck to the bottom (within 80px), prepends and stills keep the newest in view; scrolling up unsticks and prepends compensate scrollTop. A newest-id change re-sticks. Inside AppShell the pin waits for that scroller and does not fall back to `window` while the node is missing (`window` only outside AppShell); the pin runs again when an invoice pay sheet opens; list view does not pin to the bottom; leaving a thread scrolls the list to the top once.
 - **Inputs:** List/thread/composer state from `InboxLoader` or `ModeratorGroupScreen`.
 - **Returns / side effects:** React element. InboxScreen itself does not fetch; `ForumQuotedBody` may call `fetchPublicMessage` for pasted `/messages/<uuid>` URLs.
 - **Used by:** `InboxLoader`, `ModeratorGroupScreen`.
@@ -3639,12 +3947,12 @@ The No gifts yet mode keeps only loaded messages with exactly zero sats, includi
 
 - **Purpose:** Client loader for `/notifications`. Fetches `GET /forum/notifications` (posts, replies, payments, moderator appointment, and moderator proposal). After a successful list fetch, `bumpUnreadAppBadgeEpoch` then set the badge to remaining inbox unread plus staff-room unread (`0` or `1`; notifications treated as 0; visiting `/notifications` does not force badge 0 when inbox or staff-room unread remains). Repeats after `markAllNotificationsRead` if the session is unchanged. Fetches conversations (`fetchConversations`) and, when `roleAtLeast(account?.role, 'moderator')`, the staff room (`fetchModeratorGroup`) for those counts; below moderator, remaining badge is inbox unread only (staff-room contributes 0, no request). A side that fails contributes 0. Opening a `moderator_proposal` row goes to `/moderate/proposals` without `markNotificationRead`. Opening a `moderator_appointed` row waits for `markNotificationRead` then goes to `/welcome` (still navigates if that POST fails; skips navigation if the session changed). A `forum_reply` or `forum_mention` goes to `/messages/{replyId}` without waiting. A `forum_post` or `zap` goes to `/messages/{parentId}` without waiting. Ids are URI-encoded.
 - **Inputs:** None (session from the auth store).
-- **Returns / side effects:** React element or `null` without a session. No composer. After a non-cancelled successful list fetch, marks all read fire-and-forget, then `bumpUnreadAppBadgeEpoch` and sets the home-screen badge to remaining inbox unread plus staff-room unread (`0` or `1`; notifications treated as 0). Repeats after `markAllNotificationsRead` if the session is unchanged. Fetches conversations (`fetchConversations`) and, when `roleAtLeast(account?.role, 'moderator')`, the staff room (`fetchModeratorGroup`) for those counts; below moderator, remaining badge is inbox unread only (staff-room contributes 0, no request). A side that fails contributes 0. Does not clear remaining inbox or staff-room unread on error, cancel, or missing session.
+- **Returns / side effects:** React element or `null` without a session. No composer. After a non-cancelled successful list fetch, marks all read fire-and-forget, then `bumpUnreadAppBadgeEpoch` and sets the home-screen badge to remaining inbox unread plus staff-room unread (`0` or `1`; notifications treated as 0). Repeats after `markAllNotificationsRead` if the session is unchanged. Fetches conversations (`fetchConversations`) and, when `roleAtLeast(account?.role, 'moderator')`, the staff room (`fetchModeratorGroup`) for those counts; below moderator, remaining badge is inbox unread only (staff-room contributes 0, no request). A side that fails contributes 0. Does not clear remaining inbox or staff-room unread on error, cancel, or missing session. Every fetched row is rendered, including those with `readAt` set, in API order; read rows are not discarded.
 - **Used by:** `NotificationsPage`.
 
 ## Function: NotificationsScreen
 
-- **Purpose:** Presentational notifications list of living-room posts, replies, payments, moderator appointment, and moderator proposal (actor `{name} posted` / `{name} replied` / `{name} sent bitcoin` / `{name} proposed a moderator`; `moderator_appointed` title uses `notifications.moderatorAppointed` with no `{name}` placeholder; post text or **Photo**, except a `forum_post` whose `text` equals `name` omits the body (profile-note leftover); reply text or **Photo reaction**, zap amount as stored, moderator appointment or proposal body only when `text` is non-empty — empty `text` omits the body line and does not use `notifications.photoPost` / `photoOnly`; time; unread semibold). `onOpen` receives the row object. No composer, no thread view, and no filter.
+- **Purpose:** Presentational notifications list of living-room posts, replies, payments, moderator appointment, and moderator proposal (actor `{name} posted` / `{name} replied` / `{name} sent bitcoin` / `{name} proposed a moderator`; `moderator_appointed` title uses `notifications.moderatorAppointed` with no `{name}` placeholder; post text or **Photo**, except a `forum_post` whose `text` equals `name` omits the body (profile-note leftover); reply text or **Photo reaction**, zap amount as stored, moderator appointment or proposal body only when `text` is non-empty — empty `text` omits the body line and does not use `notifications.photoPost` / `photoOnly`; time; unread semibold). `onOpen` receives the row object. No composer, no thread view, and no filter. Unread rows (`readAt === null`) are a section above rows that already have `readAt`, each section keeping API order; an empty section is omitted.
 - **Inputs:** List state from `NotificationsLoader` (`notifications`, `error`, `loading`, `onRetry`, `onOpen`).
 - **Returns / side effects:** React element. No network.
 - **Used by:** `NotificationsLoader`.
@@ -3658,17 +3966,38 @@ The No gifts yet mode keeps only loaded messages with exactly zero sats, includi
 
 ## Function: markNotificationRead
 
-- **Purpose:** POST `/forum/notifications/:id/read` with Bearer and parse one notification.
+- **Purpose:** POST `/forum/notifications/:id/read` with Bearer and optional JSON `{ endpoint }` when this browser has a push subscription. `currentPushEndpoint()` is sent only when it is a non-empty string. Parses one notification.
 - **Inputs:** Session token and notification id (encoded in the path).
 - **Returns / side effects:** Updated notification, or throws visitor copy.
 - **Used by:** `NotificationsLoader` on row click; `ForumLoader` when the welcome appointment pill is clicked.
 
 ## Function: markAllNotificationsRead
 
-- **Purpose:** POST `/forum/notifications/read-all` with Bearer. Non-ok throws; success may ignore body.
+- **Purpose:** POST `/forum/notifications/read-all` with Bearer and optional JSON `{ endpoint }` when this browser has a push subscription. Non-ok throws. When the body has a `tags` array, those local notifications are closed. A body without `tags` closes nothing.
 - **Inputs:** Session token.
 - **Returns / side effects:** void.
 - **Used by:** `NotificationsLoader` fire-and-forget after a successful list fetch.
+
+## Function: markNotificationsReadForMessage
+
+- **Purpose:** POST `/forum/notifications/read-by-message` with Bearer and JSON `{ messageId, endpoint? }`. `endpoint` is sent only when the current push endpoint is a non-empty string. Non-ok throws visitor copy `Could not mark notification as read`. On success, closes local notifications for string `tags`; a missing `tags` field is `[]`.
+- **Inputs:** Session token and forum message id.
+- **Returns / side effects:** `{ ok: true, tags: string[] }`.
+- **Used by:** `ForumLoader` when a note becomes expanded, `NoteTranslate` when Translate is requested for a forum note while a session is present (not for a conversation message), `PublicMessageLoader` when a signed-in message page is ready, `MemberProfileScreen` when a profile note becomes expanded, and `PublicMessageThread` when a thread note becomes expanded.
+
+## Function: markVisibleForumNoteRead
+
+- **Purpose:** POST `/forum/notifications/read-visible` with Bearer and JSON `{ messageId, endpoint? }`. `endpoint` is sent only when the current push endpoint is a non-empty string. Non-ok throws visitor copy `Could not mark notification as read`. On success, closes local notifications for string `tags`; a missing `tags` field is `[]`.
+- **Inputs:** Session token and forum message id.
+- **Returns / side effects:** `{ ok: true, tags: string[] }`.
+- **Used by:** `ForumLoader` when a signed-in note card is fully inside the AppShell scrollport.
+
+## Function: isForumCardFullyVisible
+
+- **Purpose:** True only when a forum note card sits fully inside the AppShell scrollport within `epsilonPx` (default 1). A zero-size card is false. A card taller than the root by more than `epsilonPx` is false. A card 2px past the root is false. A card exactly 1px past is true.
+- **Inputs:** Card and root `DOMRectReadOnly` picks (`top`, `bottom`, `left`, `right`, `width`, `height`), and optional `epsilonPx` (default 1).
+- **Returns / side effects:** Boolean. No side effects.
+- **Used by:** `ForumLoader` when measuring `li[data-message-id]` inside the shell scroller.
 
 ## Function: activeMention
 
@@ -3689,14 +4018,14 @@ The No gifts yet mode keeps only loaded messages with exactly zero sats, includi
 - **Purpose:** Forum text field that lists people as soon as `@` is typed. The field stays mounted when the list opens. The first page is prefetched for the signed-in session. More letters narrow the list to usernames that start that way in the same update, even when a previous server page is still stored. Choosing a row inserts `@username ` and closes the list. A space already after the token stays a single space. A choice that would pass the length limit is not inserted. Keys during text composition stay with the input method. The caret sits after that space even when the text was already that handle. Escape or Tab, even while the first page is still loading, or a click outside the open list, keeps each such `@` closed until that character is gone, and a different `@` does not inherit the closure when text shifts. Choosing does not remember that `@` as closed. The list sits under the field, and above it only when this list would not fit underneath and there is more room above. No session, or a disabled field, is a plain textarea.
 - **Inputs:** Controlled value, `onChange`, disabled, wrapper and textarea classes, accessible name, and optional placeholder, max length, rows, and textarea ref.
 - **Returns / side effects:** The textarea. When a token is active and at least one person matches, a `People` listbox. Inserts the chosen handle through `onChange`.
-- **Used by:** The post composer and reply composer in `ForumBoard`, and the ask-for-money text step in `ForumAskWizard`.
+- **Used by:** The post composer and reply composer in `ForumBoard`, the ask-for-money text step in `ForumAskWizard`, the shop text step in `ShopAddWizard`, and `InboxScreen` (inbox and the moderator room).
 
 ## Function: searchMentionAccounts
 
 - **Purpose:** Load username suggestions for an `@` token. Calls same-origin GET `/forum/mentions`, adding `q` only when the prefix is non-empty.
 - **Inputs:** Bearer session and a lowercase prefix (`""` for the first page).
 - **Returns / side effects:** `{ id, username, name }[]`. Throws when the response is not 200 or the body is not that list.
-- **Used by:** `MentionTextarea`.
+- **Used by:** `MentionTextarea`, `ShopAccountControl`, and `DailyPaymentAmountsScreen`.
 
 ## Function: proxyForumMentionsGet
 
@@ -3719,12 +4048,33 @@ The No gifts yet mode keeps only loaded messages with exactly zero sats, includi
 - **Returns / side effects:** Forwards to the api.
 - **Used by:** `src/app/forum/notifications/read-all/route.ts`.
 
+## Function: proxyNotificationsReadByMessagePost
+
+- **Purpose:** Same-origin proxy for api POST `/notifications/read-by-message`. App route is POST `/forum/notifications/read-by-message`.
+- **Inputs:** App Router `Request`.
+- **Returns / side effects:** Forwards to the api.
+- **Used by:** `src/app/forum/notifications/read-by-message/route.ts`.
+
+## Function: proxyNotificationsReadVisiblePost
+
+- **Purpose:** Same-origin proxy for api POST `/notifications/read-visible`. App route is POST `/forum/notifications/read-visible`.
+- **Inputs:** App Router `Request`.
+- **Returns / side effects:** Forwards to the api.
+- **Used by:** `src/app/forum/notifications/read-visible/route.ts`.
+
 ## Function: proxyNotificationReadPost
 
 - **Purpose:** Same-origin proxy for api POST `/notifications/:id/read`. App route is POST `/forum/notifications/[id]/read`.
 - **Inputs:** App Router `Request` and notification id.
 - **Returns / side effects:** Forwards to the api (id encoded).
 - **Used by:** `src/app/forum/notifications/[id]/read/route.ts`.
+
+## Function: StatisticsPage
+
+- **Purpose:** Next.js page for `/statistics` (public measured people and shop charts, not a funding goal). Top-right is **Log in** without a session and `SignedInChrome` with one. `OnboardingGate screen="welcome"` `allowGuest`. HTML `/statistics` is the page, not a GET proxy. Fill `AppShell` (`align="center"`) with `ProfileChromeLeft` top-left and `OnboardingGate screen="welcome"` `allowGuest` around `StatisticsScreen`. No `route.ts` beside this page. Gift totals stay on public `/stats`.
+- **Inputs:** None.
+- **Returns / side effects:** The statistics screen inside fill AppShell.
+- **Used by:** Route `/statistics`.
 
 ## Function: ModeratePage
 
@@ -3747,6 +4097,13 @@ The No gifts yet mode keeps only loaded messages with exactly zero sats, includi
 - **Returns / side effects:** Boolean. Pure, no side effects; delegates to `roleRank`.
 - **Used by:** `ModerateScreen`, `ModeratorGroupScreen`, `InboxLoader`, `HiddenNotesScreen`, `ProposalsScreen`, `FundingApplicationsScreen`, `FundingApplicationDetailScreen`, `FundingStatusCard`, `DeletePostControl`, `ForumLoader`, `MemberProfileScreen`, `MemberTrustActions`, `SignedInChrome`, `useUnreadCount`, `isReplyPaymentExempt`.
 
+## Function: canEditDailyPayoutRoster
+
+- **Purpose:** True only for `initiator` and `founder`. This is not `roleAtLeast`: initiator and moderator share rank 2, and the daily payout roster stays closed to moderators. `null` and `undefined` are false.
+- **Inputs:** `role` — live account role, or `null`/`undefined` when the account snapshot is absent.
+- **Returns / side effects:** Boolean. Pure, no side effects.
+- **Used by:** `GrantsScreen`, `DailyPaymentCommentScreen`, `DailyPaymentAmountsScreen`.
+
 ## Function: isReplyPaymentExempt
 
 - **Purpose:** True when the signed-in account may reply without paying: anyone at least verified is exempt. Basis, including the parent note's author, is not exempt.
@@ -3754,11 +4111,102 @@ The No gifts yet mode keeps only loaded messages with exactly zero sats, includi
 - **Returns / side effects:** Boolean. Pure, no side effects; delegates to `roleAtLeast`.
 - **Used by:** `ForumLoader`, `MemberProfileScreen`, `PublicMessageThread`.
 
+## Function: utcDayFromMs
+
+- **Purpose:** UTC calendar day `YYYY-MM-DD` of an instant, taken from `toISOString` (the first ten characters of the ISO timestamp).
+- **Inputs:** `ms` — epoch milliseconds of that instant.
+- **Returns / side effects:** UTC day string. Pure; no I/O.
+- **Used by:** `previousUtcDay`, `chartRows`, `StatisticsScreen`, `ModerateScreen`.
+
+## Function: previousUtcDay
+
+- **Purpose:** UTC calendar day immediately before `day`, so staff screens can name yesterday against the clock.
+- **Inputs:** `day` — UTC `YYYY-MM-DD`.
+- **Returns / side effects:** Previous UTC day string. Pure; no I/O. Delegates to `utcDayFromMs`.
+- **Used by:** `StatisticsScreen` and `ModerateScreen` to pick yesterday.
+
+## Function: countOnDay
+
+- **Purpose:** Person count on `yesterday` from `officialCount`. First matching day wins.
+- **Inputs:** `series` — `spendOverTime` oldest-first; `yesterday` — UTC day to look up.
+- **Returns / side effects:** That day's `officialCount`, `0` when the day is missing, or `null` when any point omits `officialCount`. Pure; no I/O.
+- **Used by:** `StatisticsScreen`.
+
+## Function: chartRows
+
+- **Purpose:** Last 30 UTC days ending on `today`, oldest first, with person counts from `officialCount`.
+- **Inputs:** `series` — `spendOverTime` oldest-first; `today` — UTC day of the clock.
+- **Returns / side effects:** Oldest-first `{ day, count }` rows. Last write wins when a day appears twice; a missing day is 0. Pure; no I/O.
+- **Used by:** `StatisticsScreen`.
+
+## Function: formatUtcDate
+
+- **Purpose:** Formats a UTC calendar day as numeric day plus long month in `locale` for the yesterday sentence.
+- **Inputs:** `day` — UTC `YYYY-MM-DD`; `locale` — active UI locale.
+- **Returns / side effects:** Locale date string in the UTC zone. Pure; no I/O.
+- **Used by:** `StatisticsScreen` in the yesterday sentence.
+
+## Function: chartDayLabel
+
+- **Purpose:** Axis tick label for a UTC day as numeric day and month in `locale`.
+- **Inputs:** `day` — UTC `YYYY-MM-DD`; `locale` — active UI locale.
+- **Returns / side effects:** Short numeric day-month label in the UTC zone. Pure; no I/O.
+- **Used by:** `ShopActivityChart` and `PeopleCountChart` for the first, middle, and last axis labels.
+
+## Function: fetchShopActivity
+
+- **Purpose:** Loads public shop-use counts from same-origin `GET /shops/activity` with no Authorization. StatisticsScreen calls it with or without a session. The body must be 30 unique contiguous UTC days, oldest first; otherwise this throws and the shop panel shows its error state.
+- **Inputs:** None. `fetch('/shops/activity')` with no Authorization.
+- **Returns / side effects:** `ShopActivityDay[]` (`day`, `shopCount`). Network via `fetch`. Does not require the last day to be the browser's today.
+- **Used by:** `StatisticsScreen` shop panel.
+
+## Function: proxyShopActivityGet
+
+- **Purpose:** Same-origin proxy for api `GET /shops/activity`. App route is `export const GET = proxyShopActivityGet` on `/shops/activity`. No bearer is required. Forwards the incoming request unchanged.
+- **Inputs:** App Router `Request`.
+- **Returns / side effects:** Upstream response from `proxyApiRequest(request, '/shops/activity')`.
+- **Used by:** `src/app/shops/activity/route.ts`.
+
+## Function: fetchGrantContinuation
+
+- **Purpose:** Loads the signed-in grant goal from same-origin `GET /funding/goal` with `Authorization: Bearer`. GrantGoalsScreen calls it only when a session exists. The body must be 7 unique contiguous UTC days, oldest first, plus a nonnegative `qualifyingShops`; otherwise this throws and the goals page shows its error state. Does not call `fetchShopActivity`.
+- **Inputs:** `sessionToken` — bearer session. `fetch('/funding/goal')` sends that token and does not invent one.
+- **Returns / side effects:** `GrantContinuation` (`days`, `qualifyingShops`). Network via `fetch`. Does not require the last day to be the browser's today.
+- **Used by:** `GrantGoalsScreen`.
+
+## Function: proxyFundingGoalGet
+
+- **Purpose:** Same-origin proxy for api `GET /funding/goal`. App route is `export const GET = proxyFundingGoalGet` on `/funding/goal`. Forwards the incoming Authorization header and does not add one. This is not the public shop-activity proxy.
+- **Inputs:** App Router `Request`.
+- **Returns / side effects:** Upstream response from `proxyApiRequest(request, '/funding/goal')`.
+- **Used by:** `src/app/funding/goal/route.ts`.
+
+## Function: ShopActivityChart
+
+- **Purpose:** Draws the shop-count SVG (`role="img"`) for the UTC days it is given. Scale is the max count (at least 1). Ticks are 0, that scale, and the rounded midpoint when it differs. Today's bar is `fill-app-subtle`; other bars are `fill-app-accent`. Bars only when count > 0. `data-testid="shop-activity-chart-bar"`. No goal line.
+- **Inputs:** `rows` (`{ day, count }[]`), `today` (UTC day drawn lighter), `locale`, and `ariaLabel`.
+- **Returns / side effects:** SVG figure. No network.
+- **Used by:** `StatisticsScreen` (30 days) and `GrantGoalsScreen` (the last 7 days).
+
+## Function: PeopleCountChart
+
+- **Purpose:** Draws the people-count SVG (`role="img"`) for 30 UTC days. Scale is the max count (at least 1). Ticks are 0, that scale, and the rounded midpoint when it differs. Today's bar is `fill-app-subtle`; other bars are `fill-app-accent`. Bars only when count > 0. `data-testid="people-count-chart-bar"`. No goal line.
+- **Inputs:** `rows` (`{ day, count }[]`), `today` (UTC day drawn lighter), `locale`, and `ariaLabel`.
+- **Returns / side effects:** SVG figure. No network.
+- **Used by:** `StatisticsScreen`.
+
+## Function: StatisticsScreen
+
+- **Purpose:** Client chart of people counted once per UTC day, with a shop-activity panel under the people chart. A signed-out visitor fetches both feeds and sees both panels. Does not return `null`. Any visitor fetches both feeds and sees yesterday's person count, the measurement paragraph, and the 30-UTC-day people chart (no goal line), then the shop panel (one explainer and the 30-UTC-day shop-count chart). Each panel loads and fails on its own. The people panel is always open and there is no **Tap to close**. No forbidden card. When `roleAtLeast(..., 'moderator')` and yesterday's person count is a number (including 0; not loading and not the people error panel, including omitted `officialCount`), closed `StaffFunctions` sits after the people chart and before the shop panel; its only child is the payout `ButtonLink` (`href` `/moderate/payouts`, `variant` `secondary`, `size` `lg`, label `moderate.payouts.link`). Basis and verified never render `StaffFunctions`. A signed-out visitor never renders `StaffFunctions`.
+- **Inputs:** Account from `useAuthStore`; catalog and locale via `useTranslations`.
+- **Returns / side effects:** A React element. No session still fetches. Fetches `GET /gifts/stats` and also calls `fetchShopActivity`. Does not return `null`.
+- **Used by:** `StatisticsPage`.
+
 ## Function: ModerateScreen
 
-- **Purpose:** Client moderation hub of staff tools. Staff (`roleAtLeast(..., 'moderator')`) see the daily payout-goal widget (yesterday versus 100 people, each person counted once, with the 100-a-day label and the yesterday count on one line; tap expands explanation plus a 30-UTC-day count chart), a labeled **Hidden notes** `ButtonLink` (`variant="secondary"` `size="lg"`) → `/moderate/hidden`, a labeled **Open proposals** `ButtonLink` (`variant="secondary"` `size="lg"`) → `/moderate/proposals` that shows `proposalCount` plus `moderate.proposals.unread` when greater than zero, a **Moderators chat group** `ButtonLink` → `/moderate/group` that shows the staff-room unread count plus `moderate.groupUnread` when unread, and a labeled **Handbook** `ButtonLink` (`variant="secondary"` `size="lg"`) → `/moderate/handbook`. Non-staff signed-in visitors see the heading plus forbidden copy and no tools list. Does not fetch hidden notes, proposals, applications, or the group thread itself; unread for Open proposals and Moderators chat group comes from `useUnreadCount`. Renders `null` without a session. No un-hide control.
+- **Purpose:** Client moderation hub of staff tools. Staff (`roleAtLeast(..., 'moderator')`) see a labeled **Goals** `ButtonLink` (`variant="secondary"` `size="lg"`) → `/grants/goals` (first tool), a labeled **Hidden notes** `ButtonLink` (`variant="secondary"` `size="lg"`) → `/moderate/hidden`, a labeled **Open proposals** `ButtonLink` (`variant="secondary"` `size="lg"`) → `/moderate/proposals` that shows `proposalCount` plus `moderate.proposals.unread` when greater than zero, a **Moderators chat group** `ButtonLink` → `/moderate/group` that shows the staff-room unread count plus `moderate.groupUnread` when unread, a labeled **Handbook** `ButtonLink` (`variant="secondary"` `size="lg"`) → `/moderate/handbook`, and a labeled **Show payout per person** `ButtonLink` (`variant="secondary"` `size="lg"`) → `/moderate/payouts` (last tool). There is no payout-goal widget. Non-staff signed-in visitors see the heading plus forbidden copy and no tools list. Does not fetch hidden notes, proposals, applications, gift stats, or the group thread itself; unread for Open proposals and Moderators chat group comes from `useUnreadCount`. Renders `null` without a session. No un-hide control.
 - **Inputs:** Session and account from `useAuthStore`; catalog via `useTranslations`; `useUnreadCount(true, { writeBadge: false })` for Open proposals `proposalCount` and Moderators chat group staff-room unread (network for those counts; does not write the home-screen badge).
-- **Returns / side effects:** React element or `null` without a session. Staff fetch `GET /gifts/stats` for the goal widget; others see forbidden copy and do not fetch. Does not fetch hidden notes, proposals, applications, or the group thread itself.
+- **Returns / side effects:** React element or `null` without a session. Does not fetch `GET /gifts/stats`. Others see forbidden copy and do not fetch. Does not fetch hidden notes, proposals, applications, or the group thread itself.
 - **Used by:** `ModeratePage`.
 
 ## Function: ModerateHandbookPage
@@ -3855,49 +4303,105 @@ The No gifts yet mode keeps only loaded messages with exactly zero sats, includi
 
 ## Function: GrantsScreen
 
-- **Purpose:** Signed-in grants page. Renders `FundingStatusCard` (verification / 21 gifts grant). When `roleAtLeast(role, 'moderator')`, loads open applications. A count above zero is a secondary large `ButtonLink` to `/grants/applications` labeled **Open application (1)** when the count is one and **Open applications (2)** otherwise (`funding.applications.openCount`). A count of zero is the plain sentence **No open applications.**, not a link. Renders `null` without a session.
+- **Purpose:** Signed-in grants page. Renders `FundingStatusCard` (verification / 21 gifts grant). When the account is non-null, a secondary large **Goals** `ButtonLink` (`funding.goals.link`) goes to `/grants/goals`, under the grant card and above the staff queue. A missing account shows no link. When `canEditDailyPayoutRoster` is true (initiator or founder only), two secondary large `ButtonLink`s, **Daily payment text** to `/grants/payments/comment` and **Daily payment amounts** to `/grants/payments/amounts`, do not fetch the roster. A moderator does not see those links. When `roleAtLeast(role, 'moderator')`, loads open applications. A count above zero is a secondary large `ButtonLink` to `/grants/applications` labeled **Open application (1)** when the count is one and **Open applications (2)** otherwise (`funding.applications.openCount`). A count of zero is the plain sentence **No open applications.**, not a link. Renders `null` without a session.
 - **Inputs:** Session and account from `useAuthStore`; catalog via `useTranslations`.
-- **Returns / side effects:** React element or `null` without a session. Fetches `GET /funding/applications` only for a founder or moderator. Other roles do not fetch. Loading and a failed load (error sentence plus **Try again**) do not show the link.
+- **Returns / side effects:** React element or `null` without a session. Fetches `GET /funding/applications` only when `roleAtLeast(role, 'moderator')`, which includes an initiator and a founder. Roles below moderator do not fetch. Loading and a failed load (error sentence plus **Try again**) do not show the applications link. The Goals link does not fetch; `/grants/goals` loads `GET /funding/goal`.
 - **Used by:** `GrantsPage`.
+
+## Function: GrantGoalsPage
+
+- **Purpose:** Next.js page for `/grants/goals`. Fill `AppShell` with `ProfileChromeLeft`, `SignedInChrome`, and `OnboardingGate screen="profile"` around `GrantGoalsScreen`.
+- **Inputs:** None.
+- **Returns / side effects:** The goals screen inside fill AppShell.
+- **Used by:** Route `/grants/goals`.
+
+## Function: GrantGoalsScreen
+
+- **Purpose:** Signed-in grant goal. Heading **Goals**, the sentence that the program continues at 10 active shops, the sentence that a shop is active with at least one transaction on 5 of the last 7 days, and the sentence that defines a transaction as a till payment created at https://21.gifts/pos (creating it counts, including later expiry or cancel). When the load succeeds, shows how many shops meet that rule, the label **Shops per UTC day**, `ShopActivityChart` for those 7 days, and the note that the lighter bar is today still open. Loading and error (error sentence plus **Try again**) keep the heading and those sentences. Renders `null` without a session and does not fetch then.
+- **Inputs:** Session from `useAuthStore`; catalog and locale via `useTranslations`.
+- **Returns / side effects:** React element or `null` without a session. Fetches `GET /funding/goal` through `fetchGrantContinuation` only when a session exists. Does not call `fetchShopActivity`.
+- **Used by:** `GrantGoalsPage`.
+
+## Function: DailyPaymentCommentPage
+
+- **Purpose:** Next.js page for `/grants/payments/comment`. Fill `AppShell` (`align="center"`) with `ProfileChromeLeft` top-left (the only back control: the arrow returns to the previous in-app view in this tab, or `/welcome` when this tab has none; the wordmark is not that control), `SignedInChrome` top-right, and `OnboardingGate screen="welcome"` around `DailyPaymentCommentScreen`. Amounts are a separate page. Roster HTTP lives under `/funding/daily-roster` because Next.js forbids a `route.ts` beside this page.
+- **Inputs:** None.
+- **Returns / side effects:** The daily-payment comment screen inside fill AppShell.
+- **Used by:** Route `/grants/payments/comment`.
+
+## Function: DailyPaymentCommentScreen
+
+- **Purpose:** Client editor for the daily payout comment only. An initiator or founder fetches `fetchDailyRoster` and may save the comment. The comment is text until an icon-only pencil (`funding.daily.editComment`) opens it. The check (`funding.daily.save`) stores it and the X (`funding.daily.cancel`) restores the stored comment. An empty comment shows `funding.daily.commentEmpty`. Words Save, Cancel, and Edit are not visible labels. A save in flight replaces the check with a spinner. This screen does not show the default-amount sentence, the payments switch, recipients, or Add. Everyone else who is signed in sees the heading plus `funding.daily.forbidden` and does not fetch. Renders `null` without a session. The page chrome owns the back; this screen renders no back control. A failed load shows `funding.daily.error` and **Try again**.
+- **Inputs:** Session and account from `useAuthStore`; catalog via `useTranslations`.
+- **Returns / side effects:** React element or `null` without a session. Fetches `GET /funding/daily-roster` only when `canEditDailyPayoutRoster` is true. The comment save goes to `POST /funding/daily-roster/comment`. A save failure shows a `funding.daily.*` catalog sentence and leaves the field open.
+- **Used by:** `DailyPaymentCommentPage`.
+
+## Function: DailyPaymentAmountsPage
+
+- **Purpose:** Next.js page for `/grants/payments/amounts`. Fill `AppShell` (`align="center"`) with `ProfileChromeLeft` top-left (the only back control: the arrow returns to the previous in-app view in this tab, or `/welcome` when this tab has none; the wordmark is not that control), `SignedInChrome` top-right, and `OnboardingGate screen="welcome"` around `DailyPaymentAmountsScreen`. The comment is a separate page. Roster HTTP lives under `/funding/daily-roster` because Next.js forbids a `route.ts` beside this page.
+- **Inputs:** None.
+- **Returns / side effects:** The daily-payment amounts screen inside fill AppShell.
+- **Used by:** Route `/grants/payments/amounts`.
+
+## Function: DailyPaymentAmountsScreen
+
+- **Purpose:** Client editor for daily payout amounts only. An initiator or founder fetches `fetchDailyRoster` and may turn payments on or off and add, update, or delete a recipient. The loaded editor shows `funding.daily.defaultNote` with `{amount}` from `roster.defaultAmountUsd` via `formatUsdDisplay`. A row shows the display name, or Unnamed when the name is null or blank. When accountId is set the name is a link to `/members/{accountId}`. On a recipient row the formatted USD amount, the pencil (`funding.daily.edit` plus that label), and the trash share one line. The pencil opens a `Field`; the check saves and the X cancels. Amounts are the stored USD figure (`Field`, not `AmountEntry`). The total uses `formatUsdDisplay` and the visitor grouping style. The add field is Person. Typing `@` opens the first page of people from the same search as a forum mention. Further letters keep only usernames that start that way. Choosing one fills `@username`, keeps that person selected while the field equals that token, and leaves the list open. Add posts accountId. No address is rendered. The comment is not on this screen. Everyone else who is signed in sees the heading plus `funding.daily.forbidden` and does not fetch. Renders `null` without a session. The page chrome owns the back; this screen renders no back control. A failed load shows `funding.daily.error` and **Try again**.
+- **Inputs:** Session and account from `useAuthStore`; catalog via `useTranslations`; grouping via `useNumberFormat`.
+- **Returns / side effects:** React element or `null` without a session. Fetches `GET /funding/daily-roster` only when `canEditDailyPayoutRoster` is true. Saves go to the payments, add, update, and delete daily-roster POSTs. A save failure shows a `funding.daily.*` catalog sentence.
+- **Used by:** `DailyPaymentAmountsPage`.
 
 ## Function: FundingStatusCard
 
-- **Purpose:** Owner grant section on `/grants`, not on the profile. The title is one `h1` **21 gifts grant** at the app page ramp, with no hairline above it. `basis` sees not-verified copy and how in-person verification works (no apply). Verified and above see funding status from `account.funding` (missing or `null` treated as `none`): copy that admitted members receive the daily gift, an **About** link to `/about`, and **Apply for the 21 gifts grant** as a `ButtonLink` to `/grants/apply` for `none`/`rejected` (no date, no denial sentence, and no conviction titles); pending; one-day trial; or admitted with **Takes part in the 21.gifts funding program** (since {date} when `admittedAt` is a number).
+- **Purpose:** Owner grant section on `/grants`, not on the profile. The title is one `h1` **21 gifts grant** at the app page ramp, with no hairline above it. `basis` sees not-verified copy and how in-person verification works (no apply), including when the username is `joey-rosima`, `vincent`, or `jewel-bacolbas`. Verified and above see funding status from `account.funding` (missing or `null` treated as `none`): while `grantApplicationsPaused` is true, `FundingPausedCopy` for `none`/`rejected` (no Apply, no About link) except usernames `joey-rosima`, `vincent`, and `jewel-bacolbas`, who still see the daily-gift sentence, About link, and Apply link to `/grants/apply`; when that switch is false, the daily-gift sentence, About link, and Apply link to `/grants/apply`. Then pending, one-day trial, or admitted with **Takes part in the 21.gifts funding program** (since {date} when `admittedAt` is a number). Pending, trial, and admitted stay as they are for every username.
 - **Inputs:** Session and account from `useAuthStore`; catalog via `useTranslations`.
-- **Returns / side effects:** React element or `null` without a session or account. Apply is a link; it does not POST.
+- **Returns / side effects:** React element or `null` without a session or account. `none`/`rejected` do not offer Apply while applications are paused, except a verified account named `joey-rosima`, `vincent`, or `jewel-bacolbas`.
 - **Used by:** `GrantsScreen`.
 
 ## Function: FundingApplyPage
 
 - **Purpose:** Next.js page for `/grants/apply`. Fill `AppShell` with `ProfileChromeLeft` top-left (the only back control: the arrow returns to the previous in-app view in this tab, or `/welcome` when this tab has none; the wordmark is not that control), `SignedInChrome` top-right, and `OnboardingGate screen="profile"` around `FundingApplyScreen`. `/profile/apply` redirects to this path.
 - **Inputs:** None.
-- **Returns / side effects:** The apply walk inside fill AppShell.
+- **Returns / side effects:** `FundingApplyScreen` inside fill AppShell. While applications are paused, the username is not `joey-rosima`, `vincent`, or `jewel-bacolbas`, and the status is not pending, trial, or admitted: the paused card. A verified account with one of those names and status `none` or `rejected`: the apply walk. Pending, trial, and admitted: that copy for every verified username. A basis account named one of those three, and a basis account whose status is pending, trial, or admitted: **You are not verified yet.** Any other basis account sees the paused card.
 - **Used by:** Route `/grants/apply`.
 
 ## Function: FundingApplyScreen
 
-- **Purpose:** Guided grant apply. Missing About me, photo, or location are the next calm steps (not errors). Then two yes/no questions against `fetchMemberPosts` (post text uses `TranslatableNoteBody` with `messageId` = `row.id`; the name, location, and About me editor have no Translate control). The first is `funding.review.question.self`, plus an About link to `https://21.gifts/about`. **Yes** shows `funding.review.truth`. **Yes** there posts `postFundingApply` and goes to `/grants`. **No** does not apply. The page chrome owns the back; this screen renders no back control.
-- **Inputs:** Session and account from `useAuthStore`; catalog via `useTranslations`.
-- **Returns / side effects:** React element or `null` without a session.
+- **Purpose:** Signed-in grant apply screen. While `grantApplicationsPaused` is true, `grantApplicationStillOpen` is false, and funding status is not pending, trial, or admitted, heading **21 gifts grant** and `FundingPausedCopy` only: no About-me steps, no questions, no POST. A missing account still shows that paused card. Pending, trial, and admitted keep their copy for every verified username. Usernames `joey-rosima`, `vincent`, and `jewel-bacolbas` with status `none` or `rejected` open the existing apply card: a verified account fills About me, photo, and location, then two yes/no questions; a basis account sees **You are not verified yet.** and does not post. When that switch is false, every signed-in account opens that same card. The page chrome owns the back; this screen renders no back control.
+- **Inputs:** Session and account from `useAuthStore` (the account is read before choosing the pause card or the walk). Uses translations.
+- **Returns / side effects:** The paused card while applications are paused, the username is not one of those three, and the status is not pending, trial, or admitted. Otherwise the apply card. On that card a verified account with status none or rejected on the roster sees the walk, and a verified account with status pending, trial, or admitted sees that status. A basis account on that card sees **You are not verified yet.**, including when the status is pending, trial, or admitted. Without a session the screen is `null` when the walk is open. Yes on the truth question posts `postFundingApply` only when the walk is open and the account is verified.
 - **Used by:** `FundingApplyPage`.
+
+## Function: grantApplicationsPaused
+
+- **Purpose:** Switch for new grant applications. Returns true while they are paused. The apply walk and the apply API stay in the code. This switch stays true for everyone; `grantApplicationStillOpen` is the username exception in the three screens.
+- **Inputs:** None.
+- **Returns / side effects:** `true`.
+- **Used by:** `FundingApplyScreen`, `FundingStatusCard`, `DailyPayoutStoppedNotice`.
+
+## Function: grantApplicationStillOpen
+
+- **Purpose:** Whether this signed-in username skips the pause card while applications are paused. Exact, case-sensitive match against `joey-rosima`, `vincent`, and `jewel-bacolbas`. It does not by itself open the apply walk: a basis account on the open card still sees **You are not verified yet.** Null, omitted, empty, and every other username (including `Vincent`) do not skip the card.
+- **Inputs:** `username` string, null, or undefined.
+- **Returns / side effects:** `true` only for those three strings.
+- **Used by:** `FundingApplyScreen`, `FundingStatusCard`, `DailyPayoutStoppedNotice`.
 
 ## Function: aboutMeFilled
 
-- **Purpose:** True when About me is a real bio (not empty or the display-name auto note).
+- **Purpose:** True when About me is a real bio (not empty or the display-name auto note). Used by the apply walk. That walk is shown while applications are paused only for a verified account named `joey-rosima`, `vincent`, or `jewel-bacolbas` with status `none` or `rejected`, and, when the switch is off, for a verified account with status `none` or `rejected`.
 - **Inputs:** `aboutMe`, `name`.
 - **Returns / side effects:** boolean.
 - **Used by:** `nextFillStep`, `FundingApplyScreen`.
 
 ## Function: locationFilled
 
-- **Purpose:** True when location is a non-empty trimmed string.
+- **Purpose:** True when location is a non-empty trimmed string. Used by the apply walk. That walk is shown while applications are paused only for a verified account named `joey-rosima`, `vincent`, or `jewel-bacolbas` with status `none` or `rejected`, and, when the switch is off, for a verified account with status `none` or `rejected`.
 - **Inputs:** `location`.
 - **Returns / side effects:** boolean.
 - **Used by:** `nextFillStep`, `FundingApplyScreen`.
 
 ## Function: nextFillStep
 
-- **Purpose:** First missing apply fill step: about, photo, then location, or `null` when all three are present.
+- **Purpose:** First missing apply fill step: about, photo, then location, or `null` when all three are present. Used by the apply walk. That walk is shown while applications are paused only for a verified account named `joey-rosima`, `vincent`, or `jewel-bacolbas` with status `none` or `rejected`, and, when the switch is off, for a verified account with status `none` or `rejected`.
 - **Inputs:** Owner `Account`.
 - **Returns / side effects:** `'about' | 'photo' | 'location' | null`.
 - **Used by:** `FundingApplyScreen`.
@@ -3932,8 +4436,8 @@ The No gifts yet mode keeps only loaded messages with exactly zero sats, includi
 
 ## Function: HandbookScreensPage
 
-- **Purpose:** Next.js page for `/handbook/screens`. Loads screen-variant topics (with English descriptions from `screens.md` via `parseScreenVariantDescriptions`) and renders the compact-card `HandbookImageViewer`.
-- **Inputs:** None.
+- **Purpose:** Next.js page for `/handbook/screens`. Loads screen-variant topics and renders the compact-card `HandbookImageViewer`. English card text comes from `screens.md`. German, Spanish, and Filipino come from the screen-card locale file for the request locale.
+- **Inputs:** Request locale from `getRequestLocale` (cookie `locale`, otherwise `Accept-Language`).
 - **Returns / side effects:** The screens handbook screen inside `MarketingLayout`.
 - **Used by:** Route `/handbook/screens`.
 
@@ -4041,6 +4545,13 @@ The No gifts yet mode keeps only loaded messages with exactly zero sats, includi
 - **Purpose:** Parse `docs/handbook/screens.md` into a map of catalog topic id → English description. Under each `## Screen:` / `### Variant:`, collect paragraphs (excluding image-only lines), unwrap `**bold**` and `` `code` ``, join with a blank line; skip empty strings.
 - **Inputs:** Raw screens handbook markdown string.
 - **Returns / side effects:** `ReadonlyMap<string, string>` keyed as `<path>:<variantId>`. No network.
+- **Used by:** `HandbookScreensPage` (`loadScreenTopics`) and the screen-description tests.
+
+## Function: screenVariantDescription
+
+- **Purpose:** Screen-card description for one catalog id in the request locale. English is the paragraph from `docs/handbook/screens.md`. German, Spanish, and Filipino come from the screen-card locale file. A missing or blank English paragraph shows the catalog label in every locale.
+- **Inputs:** Locale (`en`, `de`, `es`, or `fil`), catalog id (`<path>:<variant>`), the English paragraph when present, and the catalog label.
+- **Returns / side effects:** Locale text, unchanged English, or the catalog label. Throws when `de`, `es`, or `fil` has no non-blank text for that id. No network. No English fallback.
 - **Used by:** `HandbookScreensPage` (`loadScreenTopics`).
 
 ## Function: topicImageSrc
@@ -4082,8 +4593,15 @@ The No gifts yet mode keeps only loaded messages with exactly zero sats, includi
 
 - **Purpose:** Inline moderator post or nested-reply deletion with confirmation, pending and error states.
 - **Inputs:** messageId, onDeleted, optional kind (`'post'` default, `'reply'` for nested replies); reads the current account and Bearer session.
-- **Returns / side effects:** Hidden for other roles; idle trash sits in the note footer icon row (parent) or the nested reply action row (`kind="reply"`); confirming wraps to the next line via `basis-full w-full`. Idle/confirm/error copy is `forum.delete*` for posts and `forum.deleteReply*` for replies. Calls deleteMessage on explicit confirmation, then onDeleted. Error keeps the post or reply and permits retry.
+- **Returns / side effects:** Hidden for other roles; idle trash sits in the note footer icon row (parent) or the nested reply action row (`kind="reply"`); confirming wraps to the next line via `basis-full w-full` and renders `InlineConfirm`. Idle/confirm/error copy is `forum.delete*` for posts and `forum.deleteReply*` for replies. Calls deleteMessage on explicit confirmation, then onDeleted. Error keeps the post or reply and permits retry.
 - **Used by:** `ForumBoard` on the parent footer and on nested reply cards.
+
+## Function: InlineConfirm
+
+- **Purpose:** Bordered confirm or cancel group shared by post delete, habit archive, and habit comment delete. Callers keep their own idle button. This is only the open question.
+- **Inputs:** `label` (the question and the group's accessible name), `confirmLabel`, `cancelLabel`, `onConfirm`, `onCancel`, optional `busy`, and optional `error`.
+- **Returns / side effects:** A `role="group"` with the question, an optional alert, a check (a spinner while `busy`), and an X. Both actions are disabled while `busy`. It sends no request of its own.
+- **Used by:** `DeletePostControl`, `MemberHabits`, and `HabitComments`.
 
 ## Function: deleteMessage
 
@@ -4098,6 +4616,27 @@ The No gifts yet mode keeps only loaded messages with exactly zero sats, includi
 - **Inputs:** sessionToken, messageId, and `place` (`ForumPlacePin`, or `null` to clear).
 - **Returns / side effects:** PATCH `/forum/messages/:id/place` with JSON `{ place }`. Resolves to the public message JSON (`place` omitted when cleared). Throws `Could not save place` on a non-2xx status.
 - **Used by:** `ShopPlaceControl`.
+
+## Function: setMessageShopPhotos
+
+- **Purpose:** Replace the stills on a shop note for a moderator session. An empty list clears stills. A video on the note stays.
+- **Inputs:** sessionToken, messageId, and `photos` (`{ contentType, data, takenAt? }[]`, at most 10).
+- **Returns / side effects:** PATCH `/forum/messages/:id/photos` with JSON `{ photos }`. A blank `takenAt` is omitted. Resolves to the public message JSON. Throws `Could not save shop note` on a non-2xx status.
+- **Used by:** `ShopNoteEditControl`.
+
+## Function: setMessageShopText
+
+- **Purpose:** Replace the text of a shop note for a moderator session. The API keeps the shop tag.
+- **Inputs:** sessionToken, messageId, and `text` (the visible draft; the shop tag may be omitted).
+- **Returns / side effects:** PATCH `/forum/messages/:id/text` with JSON `{ text }`. Resolves to the public message JSON. Throws `Could not save shop note` on a non-2xx status.
+- **Used by:** `ShopNoteEditControl`.
+
+## Function: fetchShopNoteEdits
+
+- **Purpose:** Load the staff edit history of one shop note, newest first.
+- **Inputs:** sessionToken and messageId.
+- **Returns / side effects:** GET `/forum/messages/:id/edits`. Resolves to the `edits` array (text, place, or shop account, with actor id, name, and role). Throws `Could not load edit history` on a non-2xx status.
+- **Used by:** `ShopNoteEditControl` when the pencil panel opens.
 
 ## Function: setMessageShopAccount
 
@@ -4126,6 +4665,27 @@ The No gifts yet mode keeps only loaded messages with exactly zero sats, includi
 - **Inputs:** Incoming Request (Bearer JSON `{ place }`) and messageId.
 - **Returns / side effects:** Proxied PATCH `/messages/:id/place`, with encoded id, authorization and upstream status. 200 is the public message JSON; a cleared pin omits `place`.
 - **Used by:** App Router `PATCH` on `/forum/messages/[id]/place`.
+
+## Function: proxyMessagesPhotosPatch
+
+- **Purpose:** Forward a moderator's PATCH of shop-note stills to the API.
+- **Inputs:** Incoming Request (Bearer JSON `{ photos }`) and messageId.
+- **Returns / side effects:** Proxied PATCH `/messages/:id/photos`, with encoded id, authorization and upstream status. 200 is the public message JSON.
+- **Used by:** App Router `PATCH` on `/forum/messages/[id]/photos`.
+
+## Function: proxyMessagesTextPatch
+
+- **Purpose:** Forward a moderator's PATCH of a shop-note body to the API.
+- **Inputs:** Incoming Request (Bearer JSON `{ text }`) and messageId.
+- **Returns / side effects:** Proxied PATCH `/messages/:id/text`, with encoded id, authorization and upstream status. 200 is the public message JSON. The shop tag stays on the stored text.
+- **Used by:** App Router `PATCH` on `/forum/messages/[id]/text`.
+
+## Function: proxyMessagesEditsGet
+
+- **Purpose:** Forward a moderator's GET of shop-note edit history to the API.
+- **Inputs:** Incoming Request (Bearer) and messageId.
+- **Returns / side effects:** Proxied GET `/messages/:id/edits`, with encoded id, authorization and upstream status. 200 is `{ edits }` newest first.
+- **Used by:** App Router `GET` on `/forum/messages/[id]/edits`.
 
 ## Function: proxyMessagesShopAccountPatch
 
@@ -4202,19 +4762,13 @@ The No gifts yet mode keeps only loaded messages with exactly zero sats, includi
 - **Purpose:** Exclusive original XOR translated body in the same React commit (not a parent `useEffect` after paint). Clicking **Translate** marks the note read-in-full so **Show more** is gone immediately (while loading, on error, and after **Show original**). A visible translation is the full text. Idle and error keep the original. **Show original** restores the original and hides the translation. Identity is `source + messageId + text + locale`. Holds `translatedText` and `showingTranslation`; a successful POST sets both so the original unmounts in that commit.
 - **Inputs:** Required `messageId` (stored forum or conversation message id) and `text`. Optional `source` (default forum message, or `{ kind: 'conversation', conversationId }`). Optional `plain`. Optional `truncate` (default true; applies only to the original body — `ForumNoteText` vs `LinkedText`). A visible translation is always the full text via `LinkedText` (no Show more), including past 280 characters. Clicking Translate sets an internal read-full flag so a truncated original expands on that click and stays expanded when Show original restores it. A new identity clears that flag. Optional `className` (default `whitespace-pre-wrap text-sm text-app-fg`; `text-app-btn-fg` selects NoteTranslate `tone="onButton"`). Optional `formatTranslated` (applied only to the visible translation, not the original; not part of the identity key). Optional `controlSlotId` (when set, portals `NoteTranslate` with `placement="row"` into that element; if the node is missing, the control is omitted rather than stacked).
 - **Returns / side effects:** Original or translated paragraph plus the translate control, or `null` when `text` is empty. Mounts `NoteTranslate` under the body, or portals it into `controlSlotId` when that node exists. Visible body is original XOR translation in the same commit. Idle/error keep original; **Show original** restores original and hides translation.
-- **Used by:** `ForumBoard` (notes and replies, including `via === 'nostr'`), `PublicMessageLoader`, `ForumQuotedBody`, `QuotedForumNote` (any caption when `translate` is true; `plain` only when `via === 'nostr'`), `AboutMeSection`, `HiddenNotesScreen`, `FundingApplyScreen`, and `FundingApplicationDetailScreen`.
+- **Used by:** `ForumBoard` (notes and replies, including `via === 'nostr'`), `PublicMessageLoader`, `ForumQuotedBody`, `QuotedForumNote` (any caption when `translate` is true; `plain` only when `via === 'nostr'`), `AboutMeSection`, `HiddenNotesScreen`, `FundingApplicationDetailScreen`, and `FundingApplyScreen` (apply walk, shown while applications are paused only for a verified account named `joey-rosima`, `vincent`, or `jewel-bacolbas` with status `none` or `rejected`, and, when the switch is off, for a verified account with status `none` or `rejected`).
 
 ## Function: HappylandSection
 
-- **Purpose:** Presents Father Severin's account of Happyland after How it works on the public homepage.
-- **Input:** Receives the marketing page locale and reads all paragraphs, headings and image descriptions from the shared English, German, Spanish or Filipino catalog.
-- **Output:** Renders an accessible section with eight full-proportion photographs in a lead image, alternating text and image groups, and a portrait row that stacks on small screens.
-
-## Function: HappylandPhoto
-
-- **Purpose:** Keeps each Happyland photograph and its localized caption together in a semantic figure.
-- **Input:** Receives approved image metadata, the active message catalog and optional layout classes.
-- **Output:** Renders a directly served WebP with intrinsic dimensions, descriptive alternative text and a visible caption. Eager loading keeps the photographs visible in the embedded local preview.
+- **Purpose:** Presents Father Severin's account of Happyland after Why on the public homepage.
+- **Input:** Receives the marketing page locale and reads the place portrait and observations from the shared English, German, Spanish or Filipino catalog.
+- **Output:** Renders a place portrait, four photographs from the original 21.gifts Happyland page in balanced frames, an unlinked source paragraph, and three observations.
 
 ## Function: fiatDraftForSats
 
@@ -4232,9 +4786,9 @@ The No gifts yet mode keeps only loaded messages with exactly zero sats, includi
 
 ## Function: parseAmountDraft
 
-- **Purpose:** Reads a bitcoin or fiat typing draft into whole sats. Blank is empty. Fiat allows a dot or comma and at most eight fraction digits, so a unit toggle can round-trip.
+- **Purpose:** Reads a bitcoin or fiat typing draft into whole sats. Blank is empty. Fiat allows a dot or comma and at most eight fraction digits, so a unit toggle can round-trip. A positive fiat amount whose gift-day total for that currency is missing, not finite, or zero is `no-rate`. A well-formed amount on a usable total that does not become a safe sat count is `invalid`, not `no-rate`.
 - **Inputs:** `unit` (`btc` or `fiat`), raw `draft`, gift `day` or null, fiat `code`.
-- **Returns / side effects:** `{ kind: 'empty' }`, `{ kind: 'invalid' }`, or `{ kind: 'sats', sats }`. No I/O.
+- **Returns / side effects:** `{ kind: 'empty' }`, `{ kind: 'invalid' }`, `{ kind: 'no-rate' }`, or `{ kind: 'sats', sats }`. No I/O.
 - **Used by:** `AmountEntry`, `replySatsFromDraft`, `paySatsFromDraft`, `parseForumAskAmountInUnit`, `PayLinkScreen`, `PosAmount`.
 
 ## Function: replySatsFromDraft
@@ -4299,3 +4853,63 @@ The No gifts yet mode keeps only loaded messages with exactly zero sats, includi
 - **Inputs:** Incoming `Request` with JSON `{ fiat, onlyIfUnset }`.
 - **Returns / side effects:** Returns the owner-account upstream response; `onlyIfUnset=true` preserves a stored fiat value.
 - **Used by:** Route POST `/me/fiat`.
+
+## Function: HabitTrackerPage
+
+- **Purpose:** Next.js server page for `/habit-tracker` (public habit tracker). It does not read the auth store. Top-right is `HabitTrackerTopRight`. `OnboardingGate screen="welcome"` `allowGuest`. HTML `/habit-tracker` is the page, not a GET proxy. Fill `AppShell` (`align="center"`) with `ProfileChromeLeft` top-left around `MemberHabits`.
+- **Inputs:** None.
+- **Returns / side effects:** The habit-tracker screen inside fill AppShell.
+- **Used by:** Route `/habit-tracker`.
+
+## Function: HabitTrackerTopRight
+
+- **Purpose:** Client boundary for the `/habit-tracker` header. **Log in** without a session and `SignedInChrome` with one. The page stays a server component.
+- **Inputs:** None. Reads the auth store session.
+- **Returns / side effects:** The top-right control. No request.
+- **Used by:** `HabitTrackerPage`.
+
+## Function: MemberHabits
+
+- **Purpose:** Loads `GET /habits` and writes `POST /habits`. Renders every member's public habits, periods, and comments on the same note card as a living-room note. Internal notes render only for the owner. The owner rates every returned period of an open habit on a neutral `SegmentedControl` and posts that period's key. An archived habit keeps its rows, comments, and gift, and has no rating pill, pencil, or archive control. The owner opens edit with the pencil and archives from the card while the habit is open. Any signed-in account can comment. Comments render in `HabitComments`. Comment and delete use `SundayWritingGate` and send `Time-Zone`. Add sends `Time-Zone` and does not use that gate. Edit, log, and archive do not. A gift on someone else's comment uses the same Gift control, `ForumPaySheet`, amount rules, and Sunday zap pause as a forum reply, and sends `Time-Zone`. Continue stays disabled until `useLatestRateDayState` has settled. The sheet does not show the raw invoice. A failed reload keeps a list that was already shown and puts the error above it. The open edit stays; a rating or a comment does not discard it. A successful edit or archive closes that habit's edit and does not close a different habit's open draft. The same action is not posted again while that reload is still failing. When a later reload settles, including one that Try again started, a rating, edit, archive, comment, deletion, or the same add can be sent again. An add is not posted again while its request or the reload that confirms it is still unresolved. Try again also closes an edit or archive whose save had already reached the server when that Try again load started. A rating or a comment does not. The archive confirmation stays open until a reload releases an archive that had already reached the server when that reload started. It stays open when that post fails or that reload fails. A reload releases only actions that had already reached the server when that reload started. A second submit does not send that same body while the first request is still waiting, including after another session's list has settled. When that request finishes after the session changed, it does not reload the list and it does not mark the body as posted for the new session. When that request fails after the session changed, or the reload it started fails after the session changed, the new session does not show that error. A request is ignored when the visit changed, including when the same account comes back: it does not reload the list, it does not mark the body as posted, and it does not show an error. A gift request that finishes after the session changed does not show its invoice or its error, and the sheet closes. A session change closes an open edit, an archive confirmation, and a comment-deletion confirmation, clears the new-habit draft and unsent comments before paint, and does not show the previous account's draft or private notes. The same gift body is not posted again while that request is still waiting. A failed request can be sent again. Try again reloads that list and does not send the action again. A different session may send it. A list load already started by a session change or Try again is not replaced by that save. A reload that a save started is not replaced by another save. The full-screen error is only when nothing has loaded. Does not log invoices, addresses, notes, or comment text.
+- **Inputs:** None. Reads the auth store session and account.
+- **Returns / side effects:** The habit-tracker body. Posts add, edit, archive, log, comment, deleteComment, and invoice actions.
+- **Used by:** `HabitTrackerPage`.
+
+## Function: HabitComments
+
+- **Purpose:** Public comments on one habit. An empty list says there are no comments yet. A signed-out visitor uses the header **Log in** and gets no second sign-in link. A signed-in account gets **Write a comment** and **Post** inside `SundayWritingGate`. Delete is the same inline confirm as a forum note and only when the account is at least initiator, also inside that gate, and sends `Time-Zone`. **Send Bitcoin** on someone else's comment uses `ForumPaySheet` inside the zap gate and sends `Time-Zone`. Archived habits keep this block.
+- **Inputs:** The habit, the viewer account and session, the comment draft, and the pay-sheet state owned by `MemberHabits`.
+- **Returns / side effects:** The comment block. Posts nothing itself; `MemberHabits` posts comment, deleteComment, and invoice.
+- **Used by:** `MemberHabits`.
+
+## Function: fetchMemberHabits
+
+- **Purpose:** Load the public habit tracker from same-origin `GET /habits`.
+- **Inputs:** `sessionToken` — bearer token, or `null` when signed out. A blank string sends no `Authorization` header.
+- **Returns / side effects:** The parsed habit list. Throws `'Could not load the habit tracker. Please try again.'` when the response is not OK or the body fails the schema.
+- **Used by:** `MemberHabits`.
+
+## Function: postMemberHabit
+
+- **Purpose:** Post a habit-tracker action to same-origin `POST /habits`.
+- **Inputs:** `sessionToken` — bearer token; `body` — JSON action; `timeZone` — when true, also sends the device `Time-Zone` header.
+- **Returns / side effects:** The JSON body when the response is OK. Throws the api `error` string when that field is a string, otherwise `'Could not save the habit tracker. Please try again.'`.
+- **Used by:** `MemberHabits`.
+
+## Function: localizedPublicPath
+
+- **Purpose:** Builds a stable public URL for one supported language and one of Home, About, Donate, or Rules.
+- **Inputs:** A supported locale and one localized public path.
+- **Returns:** A language-prefixed path such as `/de/about`; used by metadata, links, and the language switcher.
+
+## Function: parseLocalizedPublicPath
+
+- **Purpose:** Recognizes only the sixteen supported language and public-page combinations.
+- **Inputs:** A request pathname.
+- **Returns:** Its locale and public path, or `null` for app routes, unsupported languages, or extra path segments.
+
+## Function: publicPathFromUrl
+
+- **Purpose:** Keeps the visitor on the same public page when they choose another language.
+- **Inputs:** A legacy or language-prefixed pathname.
+- **Returns:** The public page path, or `null` when the pathname belongs to the app.

@@ -36,6 +36,8 @@ import {
   fetchReplies,
   PublicForumUnauthorizedError,
   markNotificationRead,
+  markNotificationsReadForMessage,
+  markVisibleForumNoteRead,
   NoteDeletedError,
   postMessage,
   fetchComposeTarget,
@@ -50,6 +52,8 @@ import {
   type ForumMessage,
   type ForumPlacePin,
 } from '@/lib/api-types';
+import { bumpUnreadAppBadgeEpoch, refreshUnreadAppBadge } from '@/lib/app-badge';
+import { isForumCardFullyVisible } from '@/lib/forum-card-visible';
 import {
   DEFAULT_FORUM_FEED_MODE,
   FORUM_HOME_EVENT,
@@ -65,6 +69,7 @@ import { SHOP_HASHTAG, ensureShopHashtag, isShopNote } from '@/lib/forum-shop';
 import { loadUnpaidSeenAt, saveUnpaidSeenAt } from '@/lib/forum-unpaid-seen';
 import { isForumVideoFile, prepareForumVideo, type ForumVideoPayload } from '@/lib/forum-video';
 import { MissingRequirementsError, nextPostRequirement } from '@/lib/missing-requirements';
+import { closeLocalPushNotifications, pushTagForNotification } from '@/lib/push';
 import { isReplyPaymentExempt, roleAtLeast } from '@/lib/roles';
 import { useAuthStore } from '@/stores/auth-store';
 
@@ -301,10 +306,20 @@ function mergePayableStatus(prev: ForumMessage[] | null, next: ForumMessage[]): 
   });
 }
 
+/** Optional shop handle for a shops-feed post, or null when unset. */
+function composeShopUsername(feed: 'living-room' | 'shops', username: string): string | null {
+  if (feed !== 'shops') {
+    return null;
+  }
+  const handle = username.trim().replace(/^@/, '');
+  return handle === '' ? null : handle;
+}
+
 /**
  * Client loader for the public forum on `/welcome`. Also used on `/shops` with
- * `feed="shops"` (hashtag filter, no laws hint, compose appends `#21GiftsShop`,
- * staff place editor and staff account editor on listed shop notes).
+ * `feed="shops"` (hashtag filter, no laws hint, **Add a shop** instead of the
+ * living-room composer, compose appends `#21GiftsShop`, optional shop username
+ * on create, staff place editor and staff account editor on listed shop notes).
  *
  * Reads the session and account from the auth store, fetches the first page of
  * 20 messages for the current mode with a cancelled-flag pattern matching
@@ -331,8 +346,11 @@ function mergePayableStatus(prev: ForumMessage[] | null, next: ForumMessage[]): 
  * notifications and, when an unread `moderator_appointed` row exists, shows a
  * matching pill that marks that row read and stays on `/welcome` without
  * auto-scroll. Silent refresh keeps an existing list on screen (no loading
- * copy) and does not auto-scroll the newest note. Renders nothing when there
- * is no session.
+ * copy) and does not auto-scroll the newest note. Expanding a note marks that
+ * note's notifications read (`markNotificationsReadForMessage`); collapsing
+ * does not. A signed-in card fully inside the shell scrollport marks via
+ * `markVisibleForumNoteRead` and does not mark replies that are not that card.
+ * Renders nothing when there is no session.
  *
  * @param feed - Optional `'living-room'` (default) or `'shops'`.
  * @returns The forum board, or `null` without a session.
@@ -353,6 +371,12 @@ export function ForumLoader({
   const setAccount = useAuthStore((state) => state.setAccount);
   /** Session-local hidden message ids (posts and replies) so stale GETs cannot resurrect either. */
   const deletedIds = useRef(new Set<string>());
+  /** Note ids already marked (or attempted) while they stay fully visible. */
+  const visibleReadAttemptedIds = useRef(new Set<string>());
+  /** Note ids with an in-flight `markVisibleForumNoteRead`. */
+  const visibleReadInFlightIds = useRef(new Set<string>());
+  const visibleReadSessionRef = useRef(session);
+  const visibleReadScrollerRef = useRef(scroller);
   /** Session-deleted nested reply counts keyed by parent id. */
   const hiddenReplyCounts = useRef(new Map<string, number>());
   /** Last merged server replyCount per parent, for shrinking hidden on catch-up. */
@@ -383,7 +407,10 @@ export function ForumLoader({
   const videoDraftRef = useRef(videoDraft);
   videoDraftRef.current = videoDraft;
   const [placeDraft, setPlaceDraft] = useState<ForumPlacePin | null>(null);
+  const [shopUsername, setShopUsername] = useState('');
+  const [shopResetToken, setShopResetToken] = useState(0);
   const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({});
+  const [photoEpoch, setPhotoEpoch] = useState(0);
   const photoUrlsRef = useRef(photoUrls);
   photoUrlsRef.current = photoUrls;
   const [videoUrls, setVideoUrls] = useState<Record<string, string>>({});
@@ -490,6 +517,7 @@ export function ForumLoader({
     | undefined
   >(undefined);
   const pendingComposePlaceRef = useRef<ForumPlacePin | null>(null);
+  const pendingComposeShopUsernameRef = useRef<string | null>(null);
   const composeFeePaidRef = useRef(false);
   const payPollGeneration = useRef(0);
   const payPollAbortRef = useRef<AbortController | null>(null);
@@ -1090,6 +1118,86 @@ export function ForumLoader({
     };
   }, [newPostsAvailable, session, showNewPosts, scroller]);
 
+  const renderedMessageIdsKey =
+    messages === null
+      ? ''
+      : visibleForumMessages(filterListed(messages), feedMode)
+          .map((message) => message.id)
+          .join('\n');
+
+  useEffect(() => {
+    if (visibleReadSessionRef.current !== session || visibleReadScrollerRef.current !== scroller) {
+      visibleReadAttemptedIds.current.clear();
+      visibleReadInFlightIds.current.clear();
+      visibleReadSessionRef.current = session;
+      visibleReadScrollerRef.current = scroller;
+    }
+    if (session === null || scroller === null) {
+      return;
+    }
+    let frame = 0;
+    const measure = (): void => {
+      const rootRect = scroller.getBoundingClientRect();
+      const nextVisible = new Set<string>();
+      for (const card of scroller.querySelectorAll('li[data-message-id]')) {
+        const id = card.getAttribute('data-message-id');
+        if (id === null || id === '') {
+          continue;
+        }
+        if (!isForumCardFullyVisible(card.getBoundingClientRect(), rootRect)) {
+          continue;
+        }
+        nextVisible.add(id);
+        if (visibleReadAttemptedIds.current.has(id)) {
+          continue;
+        }
+        visibleReadAttemptedIds.current.add(id);
+        visibleReadInFlightIds.current.add(id);
+        void markVisibleForumNoteRead(session, id)
+          .then(() => {
+            visibleReadInFlightIds.current.delete(id);
+            bumpUnreadAppBadgeEpoch();
+            return refreshUnreadAppBadge(session);
+          })
+          .catch(() => {
+            visibleReadInFlightIds.current.delete(id);
+            return undefined;
+          });
+      }
+      for (const id of [...visibleReadAttemptedIds.current]) {
+        if (!nextVisible.has(id)) {
+          visibleReadAttemptedIds.current.delete(id);
+          visibleReadInFlightIds.current.delete(id);
+        }
+      }
+    };
+    const schedule = (): void => {
+      if (frame !== 0) {
+        return;
+      }
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        measure();
+      });
+    };
+    schedule();
+    scroller.addEventListener('scroll', schedule, { passive: true });
+    let observer: ResizeObserver | undefined;
+    if (typeof ResizeObserver !== 'undefined') {
+      observer = new ResizeObserver(() => {
+        schedule();
+      });
+      observer.observe(scroller);
+    }
+    return () => {
+      scroller.removeEventListener('scroll', schedule);
+      observer?.disconnect();
+      if (frame !== 0) {
+        cancelAnimationFrame(frame);
+      }
+    };
+  }, [feedMode, renderedMessageIdsKey, scroller, session]);
+
   useEffect(() => {
     if (photoIdsKey === '' || (session === null && feed === 'shops')) {
       return;
@@ -1165,7 +1273,7 @@ export function ForumLoader({
     return () => {
       cancelled = true;
     };
-  }, [feed, photoIdsKey, session]);
+  }, [feed, photoEpoch, photoIdsKey, session]);
 
   useEffect(() => {
     return () => {
@@ -1299,11 +1407,13 @@ export function ForumLoader({
       return;
     }
     void markNotificationRead(session, id)
-      .then(() => {
+      .then((row) => {
         const current = useAuthStore.getState();
         if (current.session !== session) {
           return;
         }
+        const tag = pushTagForNotification(row);
+        void closeLocalPushNotifications(tag === null ? [] : [tag]);
         setModeratorAppointedId(null);
       })
       .catch(() => undefined);
@@ -1335,6 +1445,7 @@ export function ForumLoader({
     replyParentId: string | null = null,
     postAfterPay = false,
     clearReplyDraft = false,
+    baselineReceivedSats?: number,
   ): void => {
     /* v8 ignore next -- pay polling starts only after a signed-in invoice */
     if (session === null) return;
@@ -1375,14 +1486,21 @@ export function ForumLoader({
       }
       for (;;) {
         try {
-          const next = await fetchPublicMessage(messageId, {
-            sinceSats: baselineSats,
-            signal,
-          });
+          const next = await fetchPublicMessage(
+            messageId,
+            typeof baselineReceivedSats === 'number'
+              ? { sinceReceivedSats: baselineReceivedSats, signal }
+              : { sinceSats: baselineSats, signal },
+          );
           if (generation !== payPollGeneration.current || signal.aborted) {
             return;
           }
-          if (next !== null && next.sats > baselineSats) {
+          if (
+            next !== null &&
+            (typeof baselineReceivedSats === 'number'
+              ? (next.receivedSats ?? 0) > baselineReceivedSats
+              : next.sats > baselineSats)
+          ) {
             let ownContent = !composePay;
             if (composePay && postAfterPay) {
               ownContent = true;
@@ -1410,6 +1528,8 @@ export function ForumLoader({
                 const askGoal = pendingComposeGoalRef.current;
                 const pendingPlace = pendingComposePlaceRef.current;
                 const placeFields = pendingPlace !== null ? { place: pendingPlace } : {};
+                const pendingShop = pendingComposeShopUsernameRef.current;
+                const shopFields = pendingShop === null ? {} : { shopUsername: pendingShop };
                 try {
                   const created =
                     video !== null
@@ -1420,6 +1540,7 @@ export function ForumLoader({
                           /* v8 ignore next -- Ask plus a video clip is the photo path in tests */
                           ...(askGoal !== undefined ? askGoal : {}),
                           ...placeFields,
+                          ...shopFields,
                         })
                       : await postMessage(session, {
                           text: caption,
@@ -1435,11 +1556,13 @@ export function ForumLoader({
                               }),
                           ...(askGoal !== undefined ? askGoal : {}),
                           ...placeFields,
+                          ...shopFields,
                         });
                   applyCreatedNote(created, photos, video);
                   composeFeePaidRef.current = false;
                   pendingComposeGoalRef.current = undefined;
                   pendingComposePlaceRef.current = null;
+                  pendingComposeShopUsernameRef.current = null;
                 } catch {
                   setFormError('request');
                   composeFeePaidRef.current = true;
@@ -1676,18 +1799,7 @@ export function ForumLoader({
         saveUnpaidSeenAt(iso);
         setUnpaidSeenAt(iso);
       }
-      const askStaysOnActive = typeof created.goalSats === 'number' && created.goalSats > 0;
-      if (askStaysOnActive && feedModeRef.current === 'popular') {
-        replaceInFlightRef.current = true;
-        paginationGeneration.current += 1;
-        loadingMoreRef.current = false;
-        refreshGeneration.current += 1;
-        nextCursorRef.current = null;
-        setNextCursor(null);
-        setNewPostsAvailable(false);
-        feedModeRef.current = 'active';
-        setFeedMode('active');
-      } else if (feedModeRef.current !== 'all' && !askStaysOnActive) {
+      if (feedModeRef.current !== 'all') {
         replaceInFlightRef.current = true;
         paginationGeneration.current += 1;
         loadingMoreRef.current = false;
@@ -1734,6 +1846,9 @@ export function ForumLoader({
     setAskCadence('once');
     setAskObligation('donation');
     setPlaceDraft(null);
+    setShopUsername('');
+    pendingComposeShopUsernameRef.current = null;
+    setShopResetToken((token) => token + 1);
     setPhotoDrafts([]);
     setVideoDraft(null);
     startPayablePoll(session);
@@ -1766,8 +1881,11 @@ export function ForumLoader({
         !composeFeePaidRef.current
       ) {
         const hasMedia = pendingPhotos.length > 0 || pendingVideo !== null;
-        const postAfterPay = hasMedia || askGoal !== undefined || pendingPlace !== null;
+        const shopHandle = composeShopUsername(feed, shopUsername);
+        const postAfterPay =
+          hasMedia || askGoal !== undefined || pendingPlace !== null || shopHandle !== null;
         pendingComposePlaceRef.current = pendingPlace;
+        pendingComposeShopUsernameRef.current = shopHandle;
         const target = await fetchComposeTarget(session);
         const invoice = await postMessageInvoice(
           session,
@@ -1799,6 +1917,8 @@ export function ForumLoader({
         return;
       }
       const placeFields = pendingPlace !== null ? { place: pendingPlace } : {};
+      const shopHandle = composeShopUsername(feed, shopUsername);
+      const shopAccount = shopHandle === null ? {} : { shopUsername: shopHandle };
       const created =
         pendingVideo !== null
           ? await postMessageVideo(session, {
@@ -1807,6 +1927,7 @@ export function ForumLoader({
               poster: pendingVideo.poster,
               ...(askGoal !== undefined ? askGoal : {}),
               ...placeFields,
+              ...shopAccount,
             })
           : await postMessage(session, {
               text: trimmed,
@@ -1821,6 +1942,7 @@ export function ForumLoader({
                   }),
               ...(askGoal !== undefined ? askGoal : {}),
               ...placeFields,
+              ...shopAccount,
             });
       applyCreatedNote(created, pendingPhotos, pendingVideo);
       pendingPostRef.current = null;
@@ -1842,6 +1964,7 @@ export function ForumLoader({
         return;
       }
       pendingComposePlaceRef.current = null;
+      pendingComposeShopUsernameRef.current = null;
       setFormError(isRateLimitError(err) ? 'rateLimit' : 'request');
     } finally {
       if (!awaitingPay) {
@@ -1968,7 +2091,11 @@ export function ForumLoader({
           };
           setPayInvoice(minted);
           setPayBusy(false);
-          startPayPoll(messageId, baseline);
+          if (listed.parentId) {
+            startPayPoll(messageId, baseline, false, null, false, false, listed.receivedSats ?? 0);
+          } else {
+            startPayPoll(messageId, baseline);
+          }
         } catch (err) {
           if (generation !== payPollGeneration.current) {
             return null;
@@ -2063,6 +2190,9 @@ export function ForumLoader({
       setReplyAmountDraft('');
       setReplyFormError(null);
       return;
+    }
+    if (session !== null) {
+      void markNotificationsReadForMessage(session, messageId).catch(() => undefined);
     }
     setExpandedId(messageId);
     setReplies(null);
@@ -2418,6 +2548,17 @@ export function ForumLoader({
         {...(feed === 'shops' ? { composerMaxLength } : {})}
         {...(feed === 'shops'
           ? {
+              shopComposer: true as const,
+              shopUsername,
+              onShopUsernameChange: (value: string) => {
+                setShopUsername(value);
+                setFormError(null);
+              },
+              shopResetToken,
+            }
+          : {})}
+        {...(feed === 'shops'
+          ? {
               shopPlaceEdit: true as const,
               onShopPlaceUpdated: (messageId: string, place: ForumPlacePin | null) => {
                 setMessages((prev) =>
@@ -2459,6 +2600,53 @@ export function ForumLoader({
         onShowNewPosts={showNewPosts}
         moderatorAppointedAvailable={moderatorAppointedId !== null}
         onShowModeratorAppointed={showModeratorAppointed}
+        {...(account !== null && roleAtLeast(account.role, 'moderator')
+          ? {
+              shopNoteEdit: true as const,
+              onShopNoteUpdated: (updated: ForumMessage) => {
+                setPhotoUrls((prev) => {
+                  const prefix = `${updated.id}:`;
+                  let changed = false;
+                  const next = { ...prev };
+                  for (const [key, url] of Object.entries(next)) {
+                    if (!key.startsWith(prefix)) {
+                      continue;
+                    }
+                    URL.revokeObjectURL(url);
+                    delete next[key];
+                    changed = true;
+                  }
+                  return changed ? next : prev;
+                });
+                setPhotoEpoch((n) => n + 1);
+                setMessages((prev) =>
+                  prev!.map((row) => {
+                    if (row.id !== updated.id) {
+                      return row;
+                    }
+                    const next = {
+                      ...row,
+                      text: updated.text,
+                      hasPhoto: updated.hasPhoto,
+                      photoCount: updated.photoCount,
+                      hasVideo: updated.hasVideo,
+                    };
+                    if (updated.place === undefined) {
+                      delete next.place;
+                    } else {
+                      next.place = updated.place;
+                    }
+                    if (updated.shopAccount === undefined) {
+                      delete next.shopAccount;
+                    } else {
+                      next.shopAccount = updated.shopAccount;
+                    }
+                    return next;
+                  }),
+                );
+              },
+            }
+          : {})}
         {...(account !== null && roleAtLeast(account.role, 'moderator')
           ? {
               onDeleted: (messageId: string) => {

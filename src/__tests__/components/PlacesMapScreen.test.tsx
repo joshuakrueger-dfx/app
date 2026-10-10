@@ -7,13 +7,21 @@ import { useAuthStore } from '@/stores/auth-store';
 
 vi.mock('@/lib/api', () => ({
   fetchPlaces: vi.fn(),
+  fetchForumMessage: vi.fn(),
+  fetchShopNoteEdits: vi.fn(),
+  fetchMessagePhoto: vi.fn(),
+  setMessagePlace: vi.fn(),
+  setMessageShopAccount: vi.fn(),
+  setMessageShopPhotos: vi.fn(),
+  setMessageShopText: vi.fn(),
 }));
 
 vi.mock('next/navigation', () => ({
   useSearchParams: (): URLSearchParams => new URLSearchParams(window.location.search),
 }));
 
-import { fetchPlaces } from '@/lib/api';
+import { fetchForumMessage, fetchPlaces, fetchShopNoteEdits, setMessageShopText } from '@/lib/api';
+import type { Account, ForumMessage } from '@/lib/api-types';
 
 const fetchPlacesMock = vi.mocked(fetchPlaces);
 
@@ -24,6 +32,14 @@ const ROW = {
   lat: 14.6,
   lng: 120.98,
   label: 'Happyland' as string | null,
+};
+
+const SECOND_ROW = {
+  ...ROW,
+  id: 'm-2',
+  lat: -1.95,
+  lng: 37.84,
+  label: 'Machakos',
 };
 
 afterEach(() => {
@@ -42,6 +58,42 @@ function jsonResponse(body: unknown): Response {
   return { json: () => Promise.resolve(body) } as Response;
 }
 
+function installGoogleMaps(zoom: number | undefined, withEvent = true) {
+  const points: Array<{ lat: number; lng: number }> = [];
+  const bounds = {
+    extend: vi.fn((point: { lat: number; lng: number }) => {
+      points.push({ ...point });
+    }),
+  };
+  const map = {
+    setCenter: vi.fn(),
+    fitBounds: vi.fn(),
+    getZoom: vi.fn(() => zoom),
+    setZoom: vi.fn(),
+  };
+  const Map = vi.fn(() => map);
+  const Marker = vi.fn();
+  const LatLngBounds = vi.fn(() => bounds);
+  let idleHandler: (() => void) | undefined;
+  const addListenerOnce = vi.fn((_instance: unknown, _eventName: string, handler: () => void) => {
+    idleHandler = handler;
+  });
+  const maps = { Map, Marker, LatLngBounds };
+  (window as { google?: unknown }).google = {
+    maps: withEvent ? { ...maps, event: { addListenerOnce } } : maps,
+  };
+  return {
+    points,
+    bounds,
+    map,
+    Map,
+    Marker,
+    LatLngBounds,
+    addListenerOnce,
+    getIdleHandler: (): (() => void) | undefined => idleHandler,
+  };
+}
+
 describe('PlacesMapScreen', () => {
   it('stays on loading when there is no session', () => {
     renderWithLocale(<PlacesMapScreen />);
@@ -56,6 +108,11 @@ describe('PlacesMapScreen', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ key: null })));
     const view = renderWithLocale(<PlacesMapScreen />);
     expect(await screen.findByRole('link', { name: 'Ada · Happyland' })).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Ada · Happyland' }).className).toContain('min-w-0');
+    expect(screen.getByRole('link', { name: 'Ada · Happyland' }).className).toContain('max-w-full');
+    expect(screen.getByRole('link', { name: 'Ada · Happyland' }).className).toContain(
+      'break-words',
+    );
     expect(screen.getByRole('link', { name: 'Ada · 1.00000, 2.00000' })).toBeTruthy();
     expect(
       screen.getByRole('link', { name: 'Ada · Happyland' }).getAttribute('data-selected'),
@@ -80,6 +137,9 @@ describe('PlacesMapScreen', () => {
     expect(authors[0]?.getAttribute('href')).toBe('/members/acc-ada');
     expect(authors[0]?.textContent).toBe('Ada');
     expect(authors[0]?.parentElement?.getAttribute('data-selected')).toBe('true');
+    expect(authors[0]?.parentElement?.className).toContain('min-w-0');
+    expect(authors[0]?.parentElement?.className).toContain('max-w-full');
+    expect(authors[0]?.parentElement?.className).toContain('break-words');
     expect(authors[1]?.parentElement?.getAttribute('data-selected')).toBe('false');
     expect(screen.getByRole('link', { name: 'Happyland' }).getAttribute('href')).toBe(
       '/messages/m-pin',
@@ -128,6 +188,112 @@ describe('PlacesMapScreen', () => {
       expect(Marker).toHaveBeenCalled();
     });
     expect(map.setCenter).toHaveBeenCalledWith({ lat: 14.6, lng: 120.98 });
+  });
+
+  it('frames every pin when several places have no matching query', async () => {
+    useAuthStore.setState({ session: 'tok' });
+    fetchPlacesMock.mockResolvedValue([ROW, SECOND_ROW]);
+    const maps = installGoogleMaps(4);
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ key: 'browser-key' })));
+    renderWithLocale(<PlacesMapScreen />);
+    await screen.findByRole('link', { name: 'Ada · Happyland' });
+    await waitFor(() => {
+      expect(maps.map.fitBounds).toHaveBeenCalledWith(maps.bounds, 32);
+    });
+    expect(maps.points).toEqual([
+      { lat: 14.6, lng: 120.98 },
+      { lat: -1.95, lng: 37.84 },
+    ]);
+    expect(maps.map.setCenter).not.toHaveBeenCalled();
+    expect(maps.Marker).toHaveBeenCalledTimes(2);
+    expect(maps.Map).toHaveBeenCalledWith(expect.any(HTMLElement), {
+      center: { lat: 14.6, lng: 120.98 },
+      zoom: 2,
+    });
+    expect(maps.addListenerOnce).toHaveBeenCalledWith(maps.map, 'idle', expect.any(Function));
+    maps.getIdleHandler()?.();
+    expect(maps.map.getZoom).toHaveBeenCalledOnce();
+    expect(maps.map.setZoom).not.toHaveBeenCalled();
+  });
+
+  it('caps a tight fit at zoom 14', async () => {
+    useAuthStore.setState({ session: 'tok' });
+    fetchPlacesMock.mockResolvedValue([ROW, SECOND_ROW]);
+    const maps = installGoogleMaps(21);
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ key: 'browser-key' })));
+    renderWithLocale(<PlacesMapScreen />);
+    await screen.findByRole('link', { name: 'Ada · Happyland' });
+    await waitFor(() => {
+      expect(maps.map.fitBounds).toHaveBeenCalledWith(maps.bounds, 32);
+    });
+    maps.getIdleHandler()?.();
+    expect(maps.map.setZoom).toHaveBeenCalledOnce();
+    expect(maps.map.setZoom).toHaveBeenCalledWith(14);
+  });
+
+  it('ignores a non-numeric zoom after fitting', async () => {
+    useAuthStore.setState({ session: 'tok' });
+    fetchPlacesMock.mockResolvedValue([ROW, SECOND_ROW]);
+    const maps = installGoogleMaps(undefined);
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ key: 'browser-key' })));
+    renderWithLocale(<PlacesMapScreen />);
+    await screen.findByRole('link', { name: 'Ada · Happyland' });
+    await waitFor(() => {
+      expect(maps.map.fitBounds).toHaveBeenCalledWith(maps.bounds, 32);
+    });
+    maps.getIdleHandler()?.();
+    expect(maps.map.getZoom).toHaveBeenCalledOnce();
+    expect(maps.map.setZoom).not.toHaveBeenCalled();
+  });
+
+  it('does not fit after unmount', async () => {
+    useAuthStore.setState({ session: 'tok' });
+    fetchPlacesMock.mockResolvedValue([ROW, SECOND_ROW]);
+    const maps = installGoogleMaps(21);
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ key: 'browser-key' })));
+    const view = renderWithLocale(<PlacesMapScreen />);
+    await screen.findByRole('link', { name: 'Ada · Happyland' });
+    await waitFor(() => {
+      expect(maps.addListenerOnce).toHaveBeenCalledWith(maps.map, 'idle', expect.any(Function));
+    });
+    view.unmount();
+    maps.getIdleHandler()?.();
+    expect(maps.map.getZoom).not.toHaveBeenCalled();
+    expect(maps.map.setZoom).not.toHaveBeenCalled();
+  });
+
+  it('keeps a matching pin centered when other pins exist', async () => {
+    window.history.replaceState(null, '', '/map?pin=m-pin');
+    useAuthStore.setState({ session: 'tok' });
+    fetchPlacesMock.mockResolvedValue([ROW, SECOND_ROW]);
+    const maps = installGoogleMaps(4);
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ key: 'browser-key' })));
+    renderWithLocale(<PlacesMapScreen />);
+    await screen.findByRole('link', { name: 'Ada · Happyland' });
+    await waitFor(() => {
+      expect(maps.map.setCenter).toHaveBeenCalledWith({ lat: 14.6, lng: 120.98 });
+    });
+    expect(maps.LatLngBounds).not.toHaveBeenCalled();
+    expect(maps.map.fitBounds).not.toHaveBeenCalled();
+    expect(maps.Map).toHaveBeenCalledWith(expect.any(HTMLElement), {
+      center: { lat: 14.6, lng: 120.98 },
+      zoom: 14,
+    });
+  });
+
+  it('fits every pin when the query does not match', async () => {
+    window.history.replaceState(null, '', '/map?pin=missing');
+    useAuthStore.setState({ session: 'tok' });
+    fetchPlacesMock.mockResolvedValue([ROW, SECOND_ROW]);
+    const maps = installGoogleMaps(4, false);
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ key: 'browser-key' })));
+    renderWithLocale(<PlacesMapScreen />);
+    await screen.findByRole('link', { name: 'Ada · Happyland' });
+    await waitFor(() => {
+      expect(maps.map.fitBounds).toHaveBeenCalledWith(maps.bounds, 32);
+    });
+    expect(maps.map.setCenter).not.toHaveBeenCalled();
+    expect(maps.addListenerOnce).not.toHaveBeenCalled();
   });
 
   it('keeps the list when the map script fails', async () => {
@@ -330,5 +496,124 @@ describe('PlacesMapScreen', () => {
     renderWithLocale(<PlacesMapScreen embedded />);
     expect(await screen.findByText('No places yet.')).toBeTruthy();
     expect(screen.queryByRole('heading', { name: 'Map' })).toBeNull();
+  });
+
+  it('edits a shop pin and refuses a missing, plain, or failed note', async () => {
+    const moderator = {
+      id: 'acc',
+      linkingKey: '02',
+      role: 'moderator',
+      name: 'Ada',
+      location: null,
+      lightningAddress: null,
+      lightningAddressVerified: false,
+      forumLawsDismissed: true,
+      createdAt: 1,
+      rulesAgreedAt: 1,
+      viewKey: 'a'.repeat(64),
+      aboutMe: null,
+      aboutMeHasPhoto: false,
+      setup: null,
+      missing: [],
+    } as Account;
+    const note: ForumMessage = {
+      id: 'm-pin',
+      name: 'Ada',
+      text: 'Cafe Luna\n\n#21GiftsShop',
+      createdAt: '2026-08-28T12:00:00.000Z',
+      sats: 5,
+      payable: true,
+      hasPhoto: false,
+      photoCount: 0,
+      hasVideo: false,
+      videoContentType: null,
+      role: 'basis',
+      replyCount: 0,
+      place: { lat: 14.6, lng: 120.98, label: 'Happyland' },
+    };
+    useAuthStore.setState({ session: 'tok', account: null });
+    fetchPlacesMock.mockResolvedValue([
+      { ...ROW, shop: true },
+      { ...ROW, id: 'm-2', label: 'Other', shop: true },
+      { ...ROW, id: 'm-plain', label: 'Plain' },
+    ]);
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ key: null })));
+    vi.mocked(fetchShopNoteEdits).mockResolvedValue([]);
+    vi.mocked(fetchForumMessage)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ ...note, id: 'm-2', text: 'Hello' })
+      .mockRejectedValueOnce(new Error('down'))
+      .mockResolvedValueOnce(note);
+    vi.mocked(setMessageShopText).mockResolvedValue({
+      ...note,
+      text: 'Cafe Sol\n\n#21GiftsShop',
+      place: { lat: 3, lng: 4, label: 'Stall' },
+    });
+    renderWithLocale(<PlacesMapScreen />);
+    expect(await screen.findByRole('link', { name: 'Ada · Happyland' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Edit shop note' })).toBeNull();
+    useAuthStore.setState({ session: 'tok', account: { ...moderator, role: 'basis' } });
+    expect(await screen.findByRole('link', { name: 'Ada · Happyland' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Edit shop note' })).toBeNull();
+    useAuthStore.setState({ session: 'tok', account: moderator });
+    const pencils = await screen.findAllByRole('button', { name: 'Edit shop note' });
+    expect(pencils).toHaveLength(2);
+    fireEvent.click(pencils[0]!);
+    expect((await screen.findByRole('alert')).textContent).toContain(
+      'Could not load this shop note',
+    );
+    fireEvent.click(pencils[1]!);
+    await waitFor(() => {
+      expect(screen.getAllByRole('alert')).toHaveLength(2);
+    });
+    fireEvent.click(pencils[0]!);
+    await waitFor(() => {
+      expect(screen.getAllByRole('alert')).toHaveLength(2);
+    });
+    fireEvent.click(pencils[0]!);
+    expect(await screen.findByText('1 / 5 · Photos')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Shop text' }), {
+      target: { value: 'Cafe Sol' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+    expect(await screen.findByRole('link', { name: 'Ada · Stall' })).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Ada · Other' })).toBeTruthy();
+
+    const saveOpened = async (value: string): Promise<void> => {
+      fireEvent.click(screen.getAllByRole('button', { name: 'Edit shop note' })[0]!);
+      fireEvent.click(await screen.findByRole('button', { name: 'Next' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+      fireEvent.change(screen.getByRole('textbox', { name: 'Shop text' }), {
+        target: { value },
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+    };
+
+    vi.mocked(setMessageShopText).mockResolvedValue({
+      ...note,
+      text: 'Cafe Norte\n\n#21GiftsShop',
+      place: { lat: 3, lng: 4, label: null },
+    });
+    await saveOpened('Cafe Norte');
+    expect(await screen.findByRole('link', { name: 'Ada · 3.00000, 4.00000' })).toBeTruthy();
+
+    const withoutPlace: ForumMessage = { ...note, text: 'Cafe Sur\n\n#21GiftsShop' };
+    delete withoutPlace.place;
+    vi.mocked(setMessageShopText).mockResolvedValue(withoutPlace);
+    await saveOpened('Cafe Sur');
+    await waitFor(() => {
+      expect(screen.queryByRole('link', { name: 'Ada · 3.00000, 4.00000' })).toBeNull();
+    });
+    expect(screen.getByRole('link', { name: 'Ada · Other' })).toBeTruthy();
+    useAuthStore.setState({ session: null, account: null });
+    await waitFor(() => {
+      expect(screen.queryAllByRole('button', { name: 'Edit shop note' })).toHaveLength(0);
+    });
   });
 });

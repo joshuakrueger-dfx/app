@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from 'react';
 import { createPortal } from 'react-dom';
+import { DailyPayoutStoppedNotice } from '@/components/DailyPayoutStoppedNotice';
 import { PasskeyRenewNotice } from '@/components/PasskeyRenewNotice';
 import { Scrollport } from '@/components/ui/Scrollport';
 import { useAuthStore } from '@/stores/auth-store';
@@ -67,8 +68,9 @@ export { AppShellContext };
  * `[data-menu-scrim-host]` sits on that frame. `[data-menu-sheet-host]`
  * (`px-8`, the page inset) and `[data-scroll-page]` sit inside the one
  * `[data-scrollport]`. `<main>` has
- * no `overflow-hidden`. The document does not scroll. Content scrolls in the
- * one `[data-scrollport]`. Cards never host page chrome.
+ * no `overflow-hidden`. The document does not scroll. The scrollport
+ * scrolls vertically only. Sideways movement stays inside `[data-scroll-x]`.
+ * Cards never host page chrome.
  *
  * @param props - See {@link AppShellProps}.
  * @returns The page shell element.
@@ -155,6 +157,7 @@ export function AppShell({
             </div>
           </div>
           {showPasskeyRenew ? <PasskeyRenewNotice /> : null}
+          <DailyPayoutStoppedNotice />
           <header ref={setHeaderEl} className="flex-none empty:hidden px-8" />
           <Scrollport
             scrollRef={(node) => {
@@ -166,12 +169,12 @@ export function AppShell({
             {align === 'center' ? (
               <div
                 data-scroll-page
-                className="shell-safe-center flex min-h-full flex-col items-center px-8 py-6"
+                className="shell-safe-center flex min-h-full min-w-0 flex-col items-center px-8 py-6"
               >
                 {children}
               </div>
             ) : (
-              <div data-scroll-page className="flex w-full flex-col items-center px-8 py-6">
+              <div data-scroll-page className="flex w-full min-w-0 flex-col items-center px-8 py-6">
                 {children}
               </div>
             )}

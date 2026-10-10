@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { closeLocalPushNotifications, currentPushEndpoint } from '@/lib/push';
 import {
   accountSchema,
   contactSchema,
@@ -12,11 +13,14 @@ import {
   notificationSchema,
   forumListSchema,
   forumMessageSchema,
+  externalAuthorProfileSchema,
   forumPlacesResponseSchema,
   hiddenListSchema,
   lnAddressResolvedSchema,
   giftDaySchema,
   giftStatsSchema,
+  shopActivitySchema,
+  grantContinuationSchema,
   postStatsSchema,
   accountActivitySchema,
   memberProfileSchema,
@@ -27,6 +31,7 @@ import {
   fundingApplicationsResponseSchema,
   fundingPayoutDaysResponseSchema,
   fundingDecisionResultSchema,
+  dailyRosterSchema,
   trustActionResultSchema,
   trustChainSchema,
   passkeyBeginSchema,
@@ -44,11 +49,14 @@ import {
   type Notification,
   type NotificationList,
   type ForumMessage,
+  type ExternalAuthorProfile,
   type ForumPlacePin,
   type ForumPlaceRow,
   type HiddenMessage,
   type GiftDay,
   type GiftStats,
+  type ShopActivityDay,
+  type GrantContinuation,
   type PostStats,
   type AccountActivity,
   type LnAddressResolved,
@@ -59,6 +67,7 @@ import {
   type FundingApplicationDetail,
   type FundingPayoutDays,
   type FundingDecisionResult,
+  type DailyRoster,
   type OwnerFunding,
   type PasskeyBegin,
   type PasskeySession,
@@ -1013,11 +1022,11 @@ export async function fetchGiftDay(day: string): Promise<GiftDay> {
   try {
     const response = await fetch(`/gifts?day=${encodeURIComponent(day)}`);
     if (!response.ok) {
-      throw new Error('Could not load gift stats. Please try again.');
+      throw new Error('Could not load donation stats. Please try again.');
     }
     return giftDaySchema.parse(await response.json());
   } catch {
-    throw new Error('Could not load gift stats. Please try again.');
+    throw new Error('Could not load donation stats. Please try again.');
   }
 }
 
@@ -1037,11 +1046,57 @@ export async function fetchGiftStats(recipient?: string): Promise<GiftStats> {
       trimmed === '' ? '/gifts/stats' : `/gifts/stats?recipient=${encodeURIComponent(trimmed)}`;
     const response = await fetch(path);
     if (!response.ok) {
-      throw new Error('Could not load gift stats. Please try again.');
+      throw new Error('Could not load donation stats. Please try again.');
     }
     return giftStatsSchema.parse(await response.json());
   } catch {
-    throw new Error('Could not load gift stats. Please try again.');
+    throw new Error('Could not load donation stats. Please try again.');
+  }
+}
+
+/**
+ * Fetches public shop counts per UTC day. No session.
+ *
+ * @returns The 30 {@link ShopActivityDay} rows, oldest first.
+ * @throws Error with visitor-facing copy when the api is unavailable or the
+ * body fails {@link shopActivitySchema}.
+ */
+export async function fetchShopActivity(): Promise<ShopActivityDay[]> {
+  try {
+    const response = await fetch('/shops/activity');
+    if (!response.ok) {
+      throw new Error('Could not load shop activity. Please try again.');
+    }
+    return shopActivitySchema.parse(await response.json()).days;
+  } catch {
+    throw new Error('Could not load shop activity. Please try again.');
+  }
+}
+
+const GRANT_GOAL_LOAD_ERROR = 'Could not load the shop goal. Please try again.';
+
+/**
+ * Fetches the signed-in grant goal: shops per UTC day for the last 7 days,
+ * and how many shops meet 5 of those days.
+ *
+ * Does not call {@link fetchShopActivity}.
+ *
+ * @param sessionToken - Bearer session from a completed login.
+ * @returns The 7-day series and `qualifyingShops`.
+ * @throws Error with visitor-facing copy when the api is unavailable or the
+ * body fails {@link grantContinuationSchema}.
+ */
+export async function fetchGrantContinuation(sessionToken: string): Promise<GrantContinuation> {
+  try {
+    const response = await fetch('/funding/goal', {
+      headers: { Authorization: `Bearer ${sessionToken}` },
+    });
+    if (!response.ok) {
+      throw new Error(GRANT_GOAL_LOAD_ERROR);
+    }
+    return grantContinuationSchema.parse(await response.json());
+  } catch {
+    throw new Error(GRANT_GOAL_LOAD_ERROR);
   }
 }
 
@@ -1100,6 +1155,7 @@ export async function fetchTrustChain(sessionToken: string, around?: string): Pr
  * @param path - Same-origin proxy path.
  * @param sessionToken - Bearer session.
  * @param accountId - Subject account id.
+ * @param extra - Optional Verify-only `{ confirmedName }`. Omitted, the body is `{ accountId }`.
  * @returns Parsed {@link TrustActionResult}.
  * @throws Error with visitor-facing copy on any failure.
  */
@@ -1107,6 +1163,7 @@ async function postTrustAction(
   path: string,
   sessionToken: string,
   accountId: string,
+  extra?: { confirmedName: string },
 ): Promise<TrustActionResult> {
   try {
     const response = await fetch(path, {
@@ -1116,7 +1173,7 @@ async function postTrustAction(
         'Content-Type': 'application/json',
         ...deviceTimeZoneHeader(),
       },
-      body: JSON.stringify({ accountId }),
+      body: JSON.stringify(extra === undefined ? { accountId } : { accountId, ...extra }),
     });
     if (!response.ok) {
       throw new Error(TRUST_ACTION_ERROR);
@@ -1132,14 +1189,16 @@ async function postTrustAction(
  *
  * @param sessionToken - Bearer session of a moderator.
  * @param accountId - Subject account id.
+ * @param confirmedName - Stored name that uniquely identifies the person.
  * @returns The updated account snapshot.
  * @throws Error with visitor-facing copy on 401/403/404/409/503 or any other failure.
  */
 export async function postTrustVerify(
   sessionToken: string,
   accountId: string,
+  confirmedName: string,
 ): Promise<TrustActionResult> {
-  return postTrustAction('/trust/verify', sessionToken, accountId);
+  return postTrustAction('/trust/verify', sessionToken, accountId, { confirmedName });
 }
 
 /**
@@ -1234,6 +1293,76 @@ const FUNDING_APPLICATIONS_LOAD_ERROR = 'Could not load grant applications. Plea
 const FUNDING_APPLICATION_LOAD_ERROR = 'Could not load this application. Please try again.';
 const FUNDING_PAYOUT_DAYS_LOAD_ERROR = 'Could not load the payout table. Please try again.';
 const FUNDING_ACTION_ERROR = 'Could not update this member. Please try again.';
+const FUNDING_DAILY_ROSTER_LOAD_ERROR = 'Could not load daily payments. Please try again.';
+const FUNDING_DAILY_ROSTER_SAVE_ERROR = 'funding.daily.saveError';
+
+/** Exact api English mapped to catalog keys so the UI never shows that English. */
+const DAILY_ROSTER_API_SAVE_ERRORS: Record<string, string> = {
+  'Invalid comment': 'funding.daily.invalidComment',
+  'Invalid payments switch': 'funding.daily.invalidSwitch',
+  'Invalid address or amount': 'funding.daily.invalidRow',
+  'Invalid person or amount': 'funding.daily.invalidPerson',
+  'Address already listed': 'funding.daily.duplicate',
+  'Unknown address': 'funding.daily.unknown',
+  'Unknown person': 'funding.daily.unknownPerson',
+  'Person has no Lightning address': 'funding.daily.noLightning',
+};
+
+const DAILY_ROSTER_SAVE_KEYS = new Set([
+  'funding.daily.invalidComment',
+  'funding.daily.invalidSwitch',
+  'funding.daily.invalidRow',
+  'funding.daily.invalidPerson',
+  'funding.daily.duplicate',
+  'funding.daily.unknown',
+  'funding.daily.unknownPerson',
+  'funding.daily.noLightning',
+  FUNDING_DAILY_ROSTER_SAVE_ERROR,
+]);
+
+/**
+ * Maps an api `{ error }` string to a daily-roster save catalog key.
+ *
+ * @param raw - Api English, or `null` when the body is not that envelope.
+ * @returns A `funding.daily.*` key. Never the raw api English.
+ */
+function dailyRosterSaveErrorKey(raw: string | null): string {
+  if (raw === null) {
+    return FUNDING_DAILY_ROSTER_SAVE_ERROR;
+  }
+  return DAILY_ROSTER_API_SAVE_ERRORS[raw] ?? FUNDING_DAILY_ROSTER_SAVE_ERROR;
+}
+
+/**
+ * Posts a daily-roster mutation and parses the returned {@link DailyRoster}.
+ *
+ * @param path - Same-origin proxy path.
+ * @param session - Bearer session.
+ * @param body - JSON body for the proxy.
+ * @returns The updated roster.
+ * @throws Error whose message is a `funding.daily.*` catalog key.
+ */
+async function postDailyRoster(path: string, session: string, body: unknown): Promise<DailyRoster> {
+  try {
+    const response = await fetch(path, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${session}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+    if (!response.ok) {
+      throw new Error(dailyRosterSaveErrorKey(await readApiError(response)));
+    }
+    return dailyRosterSchema.parse(await response.json());
+  } catch (err) {
+    if (err instanceof Error && DAILY_ROSTER_SAVE_KEYS.has(err.message)) {
+      throw err;
+    }
+    throw new Error(FUNDING_DAILY_ROSTER_SAVE_ERROR);
+  }
+}
 
 /**
  * Applies for the 21 gifts grant (verified and above).
@@ -1420,6 +1549,140 @@ export async function postFundingReject(
   accountId: string,
 ): Promise<FundingDecisionResult> {
   return postFundingAction('/funding/reject', sessionToken, accountId);
+}
+
+/**
+ * Fetches the daily payout roster for founder and initiator editors.
+ *
+ * Hits same-origin `GET /funding/daily-roster` (Bearer). Next.js forbids a
+ * `route.ts` beside `/grants/payments/comment` and `/grants/payments/amounts`,
+ * so the proxy lives at this path.
+ *
+ * @param session - A bearer token from a completed challenge.
+ * @returns The parsed {@link DailyRoster}.
+ * @throws Error `'funding.daily.forbidden'` on 403 with api `Forbidden`.
+ * @throws Error with visitor-facing copy on 401, other 403, 503, other non-2xx, a
+ * network failure, or a body that fails {@link dailyRosterSchema}.
+ */
+export async function fetchDailyRoster(session: string): Promise<DailyRoster> {
+  try {
+    const response = await fetch('/funding/daily-roster', {
+      headers: { Authorization: `Bearer ${session}` },
+    });
+    if (!response.ok) {
+      if (response.status === 403 && (await readApiError(response)) === 'Forbidden') {
+        throw new Error('funding.daily.forbidden');
+      }
+      throw new Error(FUNDING_DAILY_ROSTER_LOAD_ERROR);
+    }
+    return dailyRosterSchema.parse(await response.json());
+  } catch (err) {
+    if (err instanceof Error && err.message === 'funding.daily.forbidden') {
+      throw err;
+    }
+    throw new Error(FUNDING_DAILY_ROSTER_LOAD_ERROR);
+  }
+}
+
+/**
+ * Saves the daily payout comment.
+ *
+ * Hits same-origin `POST /funding/daily-roster/comment` with `{ comment }`.
+ *
+ * @param session - Bearer session.
+ * @param comment - Comment text as typed.
+ * @returns The updated {@link DailyRoster}.
+ * @throws Error whose message is a `funding.daily.*` catalog key. Maps
+ * `Invalid comment` to `funding.daily.invalidComment`.
+ */
+export async function saveDailyRosterComment(
+  session: string,
+  comment: string,
+): Promise<DailyRoster> {
+  return postDailyRoster('/funding/daily-roster/comment', session, { comment });
+}
+
+/**
+ * Sets whether daily payments are on.
+ *
+ * Hits same-origin `POST /funding/daily-roster/payments` with `{ enabled }`.
+ *
+ * @param session - Bearer session.
+ * @param enabled - `true` to turn payments on, `false` to turn them off.
+ * @returns The updated {@link DailyRoster}.
+ * @throws Error whose message is a `funding.daily.*` catalog key. Maps
+ * `Invalid payments switch` to `funding.daily.invalidSwitch`.
+ */
+export async function saveDailyRosterPayments(
+  session: string,
+  enabled: boolean,
+): Promise<DailyRoster> {
+  return postDailyRoster('/funding/daily-roster/payments', session, { enabled });
+}
+
+/**
+ * Adds a recipient to the daily payout roster.
+ *
+ * Hits same-origin `POST /funding/daily-roster/recipients` with
+ * `{ accountId, amountUsd }`.
+ *
+ * @param session - Bearer session.
+ * @param accountId - Member account id.
+ * @param amountUsd - Daily amount in USD.
+ * @returns The updated {@link DailyRoster}.
+ * @throws Error whose message is a `funding.daily.*` catalog key. Maps
+ * `Invalid person or amount`, `Unknown person`, `Person has no Lightning address`,
+ * and `Address already listed`.
+ */
+export async function addDailyRosterRecipient(
+  session: string,
+  accountId: string,
+  amountUsd: number,
+): Promise<DailyRoster> {
+  return postDailyRoster('/funding/daily-roster/recipients', session, { accountId, amountUsd });
+}
+
+/**
+ * Updates one daily-payout recipient amount.
+ *
+ * Hits same-origin `POST /funding/daily-roster/recipients/update` with
+ * `{ address, amountUsd }`.
+ *
+ * @param session - Bearer session.
+ * @param address - Recipient address already on the list.
+ * @param amountUsd - New daily amount in USD.
+ * @returns The updated {@link DailyRoster}.
+ * @throws Error whose message is a `funding.daily.*` catalog key. Maps
+ * `Invalid address or amount` and `Unknown address`.
+ */
+export async function updateDailyRosterRecipient(
+  session: string,
+  address: string,
+  amountUsd: number,
+): Promise<DailyRoster> {
+  return postDailyRoster('/funding/daily-roster/recipients/update', session, {
+    address,
+    amountUsd,
+  });
+}
+
+/**
+ * Removes a recipient from the daily payout roster.
+ *
+ * Hits same-origin `POST /funding/daily-roster/recipients/delete` with
+ * `{ address }`.
+ *
+ * @param session - Bearer session.
+ * @param address - Recipient address to remove.
+ * @returns The updated {@link DailyRoster}.
+ * @throws Error whose message is a `funding.daily.*` catalog key. Maps
+ * `Unknown address`.
+ */
+export async function deleteDailyRosterRecipient(
+  session: string,
+  address: string,
+): Promise<DailyRoster> {
+  return postDailyRoster('/funding/daily-roster/recipients/delete', session, { address });
 }
 
 /**
@@ -1722,24 +1985,35 @@ export async function fetchForumMessage(
 /**
  * Fetches one public forum message without a session (HTML note page).
  * Optional `sinceSats` waits on the api until the note has more sats (pay poll).
+ * Optional `sinceReceivedSats` waits until a reply has more received sats.
  *
  * @param id - Forum message UUID.
- * @param opts - Optional `sinceSats` query and `AbortSignal` for the fetch.
+ * @param opts - Optional `sinceSats` / `sinceReceivedSats` query and
+ * `AbortSignal` for the fetch.
  * @returns The {@link ForumMessage}, or `null` when the id is unknown (404) or
  * the request was aborted.
  * @throws Error with visitor-facing copy on other failures or schema mismatch.
  */
 export async function fetchPublicMessage(
   id: string,
-  opts?: { sinceSats?: number; signal?: AbortSignal },
+  opts?: { sinceSats?: number; sinceReceivedSats?: number; signal?: AbortSignal },
 ): Promise<ForumMessage | null> {
   try {
     const sinceSats = opts?.sinceSats;
+    const sinceReceivedSats = opts?.sinceReceivedSats;
     const path = `/public-messages/${encodeURIComponent(id)}`;
-    const url =
-      sinceSats !== undefined && Number.isInteger(sinceSats) && sinceSats >= 0
-        ? `${path}?sinceSats=${sinceSats}`
-        : path;
+    const query: string[] = [];
+    if (sinceSats !== undefined && Number.isInteger(sinceSats) && sinceSats >= 0) {
+      query.push(`sinceSats=${sinceSats}`);
+    }
+    if (
+      sinceReceivedSats !== undefined &&
+      Number.isInteger(sinceReceivedSats) &&
+      sinceReceivedSats >= 0
+    ) {
+      query.push(`sinceReceivedSats=${sinceReceivedSats}`);
+    }
+    const url = query.length === 0 ? path : `${path}?${query.join('&')}`;
     const signal = opts?.signal;
     const response = signal !== undefined ? await fetch(url, { signal }) : await fetch(url);
     if (response.status === 404) {
@@ -1759,6 +2033,110 @@ export async function fetchPublicMessage(
     /* Zod / network */
     throw new Error('Could not load messages. Please try again.');
   }
+}
+
+/**
+ * Fetches the public Nostr profile for an external forum author.
+ *
+ * HTTP 404, other non-OK responses, network failures, JSON failures, and
+ * schema mismatch return `null`.
+ *
+ * @param id - Forum message UUID.
+ * @returns The {@link ExternalAuthorProfile}, or `null`.
+ * @throws Does not throw.
+ */
+export async function fetchExternalAuthorProfile(
+  id: string,
+): Promise<ExternalAuthorProfile | null> {
+  try {
+    const response = await fetch(`/public-messages/${encodeURIComponent(id)}/external-profile`);
+    if (!response.ok) {
+      return null;
+    }
+    const parsed = externalAuthorProfileSchema.safeParse(await response.json());
+    if (!parsed.success) {
+      return null;
+    }
+    return parsed.data;
+  } catch {
+    return null;
+  }
+}
+
+const EXTERNAL_AUTHOR_FEED_ERROR = 'Could not load messages. Please try again.';
+
+/**
+ * GET `{ messages }` for an external author's public posts or replies.
+ *
+ * @param id - Forum message UUID.
+ * @param kind - Path segment after the id.
+ * @returns Items that pass {@link forumMessageSchema}; invalid items skipped.
+ * @throws Visitor copy on non-OK, network, non-JSON, or a body that is not
+ * `{ messages: array }`.
+ */
+async function fetchExternalAuthorFeed(
+  id: string,
+  kind: 'external-posts' | 'external-replies',
+): Promise<ForumMessage[]> {
+  try {
+    const response = await fetch(`/public-messages/${encodeURIComponent(id)}/${kind}`);
+    if (!response.ok) {
+      throw new Error(EXTERNAL_AUTHOR_FEED_ERROR);
+    }
+    const body: unknown = await response.json();
+    if (
+      typeof body !== 'object' ||
+      body === null ||
+      !('messages' in body) ||
+      !Array.isArray(body.messages)
+    ) {
+      throw new Error(EXTERNAL_AUTHOR_FEED_ERROR);
+    }
+    const kept: ForumMessage[] = [];
+    for (const item of body.messages) {
+      const parsed = forumMessageSchema.safeParse(item);
+      if (parsed.success) {
+        kept.push(parsed.data);
+      }
+    }
+    return kept;
+  } catch {
+    throw new Error(EXTERNAL_AUTHOR_FEED_ERROR);
+  }
+}
+
+/**
+ * Fetches this external author's public posts without a session.
+ *
+ * Items that fail {@link forumMessageSchema} are skipped; none surviving
+ * returns `[]`. HTTP 200 with an empty list returns `[]`. HTTP 404 is an
+ * error (not empty). Does not send Authorization.
+ *
+ * @param id - Forum message UUID.
+ * @returns Post list.
+ * @throws Error with visitor-facing copy when the api is unavailable, the
+ * id is unknown (404), the body is not JSON, or the body is not
+ * `{ messages: array }`.
+ */
+export async function fetchExternalAuthorPosts(id: string): Promise<ForumMessage[]> {
+  return fetchExternalAuthorFeed(id, 'external-posts');
+}
+
+/**
+ * Fetches this external author's public replies without a session.
+ *
+ * Items that fail {@link forumMessageSchema} are skipped; none surviving
+ * returns `[]`. HTTP 200 with an empty list returns `[]`. HTTP 404 is an
+ * error (not empty). Does not send Authorization.
+ *
+ * @param id - Forum message UUID.
+ * @returns Reply list.
+ * @throws Error with visitor-facing copy when the api is unavailable, the
+ * id is unknown (404), the body is not JSON, or the body is not
+ * `{ messages: array }`.
+ */
+export async function fetchExternalAuthorReplies(id: string): Promise<ForumMessage[]> {
+  return fetchExternalAuthorFeed(id, 'external-replies');
 }
 
 /**
@@ -1933,10 +2311,13 @@ function forumAskGoalFields(
  * notes), optional `goalCurrency` plus `goalAmount` (top-level Ask; omitted
  * on replies and when either is unset; never `goalSats`), optional
  * `goalRepayable: true` on a credit Ask (omitted on a donation), and optional
- * `place` pin (omit when unset; replies must not send it).
+ * `place` pin (omit when unset; replies must not send it), and optional
+ * `shopUsername` (omit when unset; a leading `@` is stripped).
  * @returns The created {@link ForumMessage}.
- * @throws {@link NoteDeletedError} on 404 (missing or deleted `inReplyTo` parent).
- * @throws Error when the api rejects the body (400, 403, or 429) — the api
+ * @throws {@link NoteDeletedError} on 404 unless the api error is exactly
+ * `No account with that username`.
+ * @throws Error when the api rejects the body (400, 403, or 429), or on 404
+ * whose error is exactly `No account with that username` — the api
  * error string when present, otherwise a fallback — {@link MissingRequirementsError}
  * on 409, on any other non-2xx status, or when the body fails
  * {@link forumMessageSchema} validation.
@@ -1953,6 +2334,7 @@ export async function postMessage(
     goalRepayable?: true;
     goalTermDays?: number;
     place?: ForumPlacePin;
+    shopUsername?: string;
   },
 ): Promise<ForumMessage> {
   const sourceStills =
@@ -1977,6 +2359,7 @@ export async function postMessage(
     input.goalRepayable,
     input.goalTermDays,
   );
+  const shopUsername = input.shopUsername?.trim().replace(/^@/, '') ?? '';
   const response = await fetch('/forum/messages', {
     method: 'POST',
     headers: {
@@ -1990,6 +2373,7 @@ export async function postMessage(
       ...(inReplyTo !== undefined ? { inReplyTo } : {}),
       ...(askGoal === null ? {} : askGoal),
       ...(inReplyTo === undefined && input.place !== undefined ? { place: input.place } : {}),
+      ...(shopUsername === '' ? {} : { shopUsername }),
     }),
   });
   if (response.status === 400 || response.status === 429) {
@@ -2014,6 +2398,10 @@ export async function postMessage(
     throw new Error('Could not post your message');
   }
   if (response.status === 404) {
+    const raw = await readApiError(response);
+    if (raw === 'No account with that username') {
+      throw new Error(toUserFacingError(raw));
+    }
     throw new NoteDeletedError();
   }
   if (!response.ok) {
@@ -2029,9 +2417,10 @@ export async function postMessage(
  * @param input - Text, video file, optional JPEG poster, optional
  * `goalCurrency` plus `goalAmount` (omitted from the form when either is
  * unset; never `goalSats`), optional `goalRepayable: true` on a credit Ask,
- * and optional `place` pin (omit when unset; form fields only when set).
+ * and optional `place` pin (omit when unset; form fields only when set),
+ * and optional `shopUsername` (omit when unset; a leading `@` is stripped).
  * @returns The created {@link ForumMessage}.
- * @throws Error when the api rejects the body (400 or 429) — the api error
+ * @throws Error when the api rejects the body (400, 404, or 429) — the api error
  * string when present, otherwise a fallback — on any other non-2xx status, or
  * when the body fails {@link forumMessageSchema} validation.
  */
@@ -2046,6 +2435,7 @@ export async function postMessageVideo(
     goalRepayable?: true;
     goalTermDays?: number;
     place?: ForumPlacePin;
+    shopUsername?: string;
   },
 ): Promise<ForumMessage> {
   const form = new FormData();
@@ -2078,12 +2468,16 @@ export async function postMessageVideo(
       form.set('placeLabel', input.place.label);
     }
   }
+  const shopUsername = input.shopUsername?.trim().replace(/^@/, '') ?? '';
+  if (shopUsername !== '') {
+    form.set('shopUsername', shopUsername);
+  }
   const response = await fetch('/forum/messages', {
     method: 'POST',
     headers: { Authorization: `Bearer ${sessionToken}`, ...deviceTimeZoneHeader() },
     body: form,
   });
-  if (response.status === 400 || response.status === 429) {
+  if (response.status === 400 || response.status === 404 || response.status === 429) {
     const raw = await readApiError(response);
     throw new Error(raw === null ? 'Could not post your message' : toUserFacingError(raw));
   }
@@ -2710,10 +3104,14 @@ export async function markNotificationRead(
   id: string,
 ): Promise<Notification> {
   try {
-    const response = await fetch(`/forum/notifications/${encodeURIComponent(id)}/read`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${sessionToken}` },
-    });
+    const endpoint = await currentPushEndpoint();
+    const headers: Record<string, string> = { Authorization: `Bearer ${sessionToken}` };
+    const init: RequestInit = { method: 'POST', headers };
+    if (typeof endpoint === 'string' && endpoint !== '') {
+      headers['Content-Type'] = 'application/json';
+      init.body = JSON.stringify({ endpoint });
+    }
+    const response = await fetch(`/forum/notifications/${encodeURIComponent(id)}/read`, init);
     if (!response.ok) {
       throw new Error('Could not mark notification as read');
     }
@@ -2732,15 +3130,113 @@ export async function markNotificationRead(
  */
 export async function markAllNotificationsRead(sessionToken: string): Promise<void> {
   try {
-    const response = await fetch('/forum/notifications/read-all', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${sessionToken}` },
-    });
+    const endpoint = await currentPushEndpoint();
+    const headers: Record<string, string> = { Authorization: `Bearer ${sessionToken}` };
+    const init: RequestInit = { method: 'POST', headers };
+    if (typeof endpoint === 'string' && endpoint !== '') {
+      headers['Content-Type'] = 'application/json';
+      init.body = JSON.stringify({ endpoint });
+    }
+    const response = await fetch('/forum/notifications/read-all', init);
     if (!response.ok) {
       throw new Error('Could not mark notifications as read');
     }
+    let body: unknown;
+    try {
+      body = await response.json();
+    } catch {
+      return;
+    }
+    if (body !== null && typeof body === 'object' && 'tags' in body && Array.isArray(body.tags)) {
+      const tags = body.tags.filter((tag): tag is string => typeof tag === 'string');
+      await closeLocalPushNotifications(tags);
+    }
   } catch {
     throw new Error('Could not mark notifications as read');
+  }
+}
+
+/**
+ * Marks every notification for one forum note as read.
+ *
+ * @param sessionToken - A bearer token from a completed challenge.
+ * @param messageId - Forum message id (thread root or reply).
+ * @returns `{ ok: true, tags }` from the api (`tags` defaults to `[]`).
+ * @throws Error with visitor-facing copy when the api is unavailable — same
+ * family as {@link markNotificationRead}.
+ */
+export async function markNotificationsReadForMessage(
+  sessionToken: string,
+  messageId: string,
+): Promise<{ ok: true; tags: string[] }> {
+  try {
+    const endpoint = await currentPushEndpoint();
+    const payload: { messageId: string; endpoint?: string } = { messageId };
+    if (typeof endpoint === 'string' && endpoint !== '') {
+      payload.endpoint = endpoint;
+    }
+    const response = await fetch('/forum/notifications/read-by-message', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${sessionToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+      throw new Error('Could not mark notification as read');
+    }
+    const body: unknown = await response.json();
+    const tags =
+      body !== null && typeof body === 'object' && 'tags' in body && Array.isArray(body.tags)
+        ? body.tags.filter((tag): tag is string => typeof tag === 'string')
+        : [];
+    await closeLocalPushNotifications(tags);
+    return { ok: true, tags };
+  } catch {
+    throw new Error('Could not mark notification as read');
+  }
+}
+
+/**
+ * Marks the notification for one fully visible forum note as read.
+ *
+ * @param sessionToken - A bearer token from a completed challenge.
+ * @param messageId - Forum message id (thread root or reply).
+ * @returns `{ ok: true, tags }` from the api (`tags` defaults to `[]`).
+ * @throws Error with visitor-facing copy when the api is unavailable — same
+ * family as {@link markNotificationRead}.
+ */
+export async function markVisibleForumNoteRead(
+  sessionToken: string,
+  messageId: string,
+): Promise<{ ok: true; tags: string[] }> {
+  try {
+    const endpoint = await currentPushEndpoint();
+    const payload: { messageId: string; endpoint?: string } = { messageId };
+    if (typeof endpoint === 'string' && endpoint !== '') {
+      payload.endpoint = endpoint;
+    }
+    const response = await fetch('/forum/notifications/read-visible', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${sessionToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+      throw new Error('Could not mark notification as read');
+    }
+    const body: unknown = await response.json();
+    const tags =
+      body !== null && typeof body === 'object' && 'tags' in body && Array.isArray(body.tags)
+        ? body.tags.filter((tag): tag is string => typeof tag === 'string')
+        : [];
+    await closeLocalPushNotifications(tags);
+    return { ok: true, tags };
+  } catch {
+    throw new Error('Could not mark notification as read');
   }
 }
 
@@ -2899,18 +3395,31 @@ export async function deletePushSubscription(
  * Starts a passkey registration ceremony.
  *
  * @param viewKey - Optional 64-hex public view key to claim an existing profile.
- * When set (non-empty), POSTs JSON `{ viewKey }`; otherwise POSTs with no body.
+ * When set (non-empty), POSTs JSON `{ viewKey }` and ignores `name`.
+ * @param name - Optional already-normalized username for a new account. Used only
+ * when `viewKey` is absent or empty: a non-empty string POSTs JSON `{ name }`.
+ * Otherwise POSTs with no body.
  * @returns Challenge id plus WebAuthn creation options JSON.
  * @throws Error with the api `{ error }` string when present on non-2xx, otherwise
  * a status fallback; or when the body fails validation.
  */
-export async function startPasskeyRegistration(viewKey?: string): Promise<PasskeyBegin> {
-  const response =
-    viewKey !== undefined && viewKey !== ''
+export async function startPasskeyRegistration(
+  viewKey?: string,
+  name?: string,
+): Promise<PasskeyBegin> {
+  const hasViewKey = viewKey !== undefined && viewKey !== '';
+  const hasName = name !== undefined && name !== '';
+  const response = hasViewKey
+    ? await fetch('/auth/passkey/register/begin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ viewKey }),
+      })
+    : hasName
       ? await fetch('/auth/passkey/register/begin', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ viewKey }),
+          body: JSON.stringify({ name }),
         })
       : await fetch('/auth/passkey/register/begin', { method: 'POST' });
   if (!response.ok) {
@@ -2929,6 +3438,7 @@ export async function startPasskeyRegistration(viewKey?: string): Promise<Passke
  * @param credential - Browser attestation JSON (`PublicKeyCredential.toJSON()`).
  * @returns Token plus account (`linkingKey` is null).
  * @throws {@link WrongAccountError} on 403 with the duplicate-account api string.
+ * @throws Error `'Username is already in use'` on 409 with that exact api string.
  * @throws Error on any other non-2xx status or a body that fails validation.
  */
 export async function finishPasskeyRegistration(
@@ -2941,6 +3451,12 @@ export async function finishPasskeyRegistration(
     body: JSON.stringify({ challengeId, credential }),
   });
   await throwIfWrongAccount(response);
+  if (response.status === 409) {
+    const raw = await readApiError(response);
+    if (raw === 'Username is already in use') {
+      throw new Error(raw);
+    }
+  }
   if (!response.ok) {
     throw new Error(`Failed to finish passkey registration: ${response.status}`);
   }
@@ -3267,4 +3783,120 @@ export async function setMessageShopAccount(
     throw new Error('Could not save account');
   }
   return forumMessageSchema.parse(await response.json());
+}
+
+/**
+ * Replaces the stills on a shop note (moderator session).
+ *
+ * An empty list clears stills. Video on the note is left in place.
+ *
+ * @param sessionToken - Bearer session.
+ * @param messageId - Forum message UUID.
+ * @param photos - JPEG, PNG, or WebP stills, at most 10.
+ * @returns The updated {@link ForumMessage}.
+ * @throws Error `Could not save shop note` on a non-2xx status or a body that
+ * fails {@link forumMessageSchema}.
+ */
+export async function setMessageShopPhotos(
+  sessionToken: string,
+  messageId: string,
+  photos: { contentType: string; data: string; takenAt?: string | null }[],
+): Promise<ForumMessage> {
+  const response = await fetch(`/forum/messages/${encodeURIComponent(messageId)}/photos`, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${sessionToken}`,
+      'Content-Type': 'application/json',
+      ...deviceTimeZoneHeader(),
+    },
+    body: JSON.stringify({
+      photos: photos.map((photo) => ({
+        contentType: photo.contentType,
+        data: photo.data,
+        ...(typeof photo.takenAt === 'string' && photo.takenAt !== ''
+          ? { takenAt: photo.takenAt }
+          : {}),
+      })),
+    }),
+  });
+  if (!response.ok) {
+    throw new Error('Could not save shop note');
+  }
+  return forumMessageSchema.parse(await response.json());
+}
+
+/** One staff edit of a shop note, newest first when listed. */
+export const shopNoteEditSchema = z.object({
+  id: z.string(),
+  createdAt: z.string(),
+  field: z.enum(['text', 'place', 'shopAccount']),
+  before: z.unknown(),
+  after: z.unknown(),
+  actor: z.object({
+    id: z.string(),
+    name: z.string().nullable(),
+    role: z.string().nullable(),
+  }),
+});
+
+/** Parsed `GET /forum/messages/:id/edits` row. */
+export type ShopNoteEdit = z.infer<typeof shopNoteEditSchema>;
+
+const shopNoteEditsSchema = z.object({ edits: z.array(shopNoteEditSchema) });
+
+/**
+ * Replaces the visible text of a shop note (moderator session).
+ *
+ * The stored body keeps `#21GiftsShop`. This sends the draft as typed.
+ *
+ * @param sessionToken - Bearer session.
+ * @param messageId - Forum message UUID.
+ * @param text - New visible body. The shop tag may be omitted.
+ * @returns The updated {@link ForumMessage}.
+ * @throws Error `Could not save shop note` on a non-2xx status or a body that
+ * fails {@link forumMessageSchema}.
+ */
+export async function setMessageShopText(
+  sessionToken: string,
+  messageId: string,
+  text: string,
+): Promise<ForumMessage> {
+  const response = await fetch(`/forum/messages/${encodeURIComponent(messageId)}/text`, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${sessionToken}`,
+      'Content-Type': 'application/json',
+      ...deviceTimeZoneHeader(),
+    },
+    body: JSON.stringify({ text }),
+  });
+  if (!response.ok) {
+    throw new Error('Could not save shop note');
+  }
+  return forumMessageSchema.parse(await response.json());
+}
+
+/**
+ * Loads the staff edit history of one shop note.
+ *
+ * @param sessionToken - Bearer session.
+ * @param messageId - Forum message UUID.
+ * @returns Newest-first edits. An empty list means nobody has edited it.
+ * @throws Error `Could not load edit history` on a non-2xx status or a body
+ * that fails {@link shopNoteEditSchema}.
+ */
+export async function fetchShopNoteEdits(
+  sessionToken: string,
+  messageId: string,
+): Promise<ShopNoteEdit[]> {
+  const response = await fetch(`/forum/messages/${encodeURIComponent(messageId)}/edits`, {
+    headers: {
+      Authorization: `Bearer ${sessionToken}`,
+      ...deviceTimeZoneHeader(),
+    },
+  });
+  if (!response.ok) {
+    throw new Error('Could not load edit history');
+  }
+  return shopNoteEditsSchema.parse(await response.json()).edits;
 }

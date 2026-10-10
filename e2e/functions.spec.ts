@@ -7,6 +7,8 @@ import { openCryptoPayQrValue } from '../src/lib/gifts-address';
 import {
   buildShopStickerPdf,
   buildShopStickerSvg,
+  shopStickerLangFromQuery,
+  shopStickerLangInitial,
   type ShopStickerFormat,
 } from '../src/lib/shop-sticker';
 import { encodeLnurl } from '../src/lib/lnurl';
@@ -20,6 +22,7 @@ import {
   paySatsFromDraft,
   replySatsFromDraft,
 } from '../src/lib/stats-money';
+import { fitBoxInFrame, pageFrameProblems } from '../src/lib/page-frame';
 
 async function chooseForumView(page: Page, name: string): Promise<void> {
   await page.getByRole('combobox', { name: 'Forum view' }).click();
@@ -48,6 +51,26 @@ test.beforeEach(async ({ page }) => {
       }),
     });
   });
+});
+
+test('Function: marketingMetadata — homepage has its own search and social title', async ({
+  request,
+}) => {
+  const response = await request.get('/');
+  expect(response.ok()).toBe(true);
+  const html = await response.text();
+  expect(html).toContain('<title>Help people with Bitcoin | 21.gifts</title>');
+  expect(html).toContain('<meta property="og:title" content="Help people with Bitcoin | 21.gifts"');
+  expect(html).toContain('<link rel="canonical" href="https://21.gifts/en"');
+
+  const german = await request.get('/de');
+  expect(german.ok()).toBe(true);
+  const germanHtml = await german.text();
+  expect(germanHtml).toContain('<title>Help people with Bitcoin | 21.gifts</title>');
+  expect(germanHtml).toContain('/og.png');
+  expect(germanHtml).toContain('21.gifts: Help people. With Bitcoin. Your wallet to their wallet.');
+  expect(germanHtml).toContain('rel="canonical" href="https://21.gifts/de"');
+  expect(germanHtml).not.toContain('/og-de.png');
 });
 
 test('Function: readJpegTakenAt — a jpeg with Exif sends its capture time', async ({
@@ -365,7 +388,6 @@ async function openPayInvoice(page: Page, request: APIRequestContext): Promise<v
   await stubWalletLocationAssign(page);
   await stubPayableNote(page);
   await signInViaStub(page, request);
-  await saveOnboardingName(page);
   await page.getByLabel('Wallet of Satoshi address').fill('alice@walletofsatoshi.com');
   await page.getByRole('button', { name: 'Continue' }).click();
   await agreeToLivingRoomRules(page);
@@ -497,28 +519,30 @@ async function seedGermanNoteWelcome(page: Page): Promise<void> {
   });
 }
 
-async function confirmNewAccount(page: Page): Promise<void> {
+async function confirmNewAccount(page: Page): Promise<string> {
   await expect(
     page.getByRole('heading', { name: 'Do you already have an account?' }),
   ).toBeVisible();
   await page.getByRole('button', { name: 'Open a new account' }).click();
-  await expect(page).toHaveURL(/\/setup\/name/, { timeout: 10_000 });
+  await expect(page.getByRole('heading', { name: 'Choose your name' })).toBeVisible();
+  const handle = `a${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`.slice(
+    0,
+    32,
+  );
+  await page.getByRole('textbox', { name: 'Name' }).fill(handle);
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await expect(page).toHaveURL(/\/setup\/address/, { timeout: 10_000 });
+  return handle;
 }
 
-async function signInViaStub(page: Page, _request: APIRequestContext): Promise<void> {
+async function signInViaStub(page: Page, _request: APIRequestContext): Promise<string> {
   await installFakeWebAuthn(page);
   await page.goto('/login');
   await page.getByRole('button', { name: 'Log in' }).click();
-  await confirmNewAccount(page);
-  await expect(page).toHaveURL(/\/setup\/name/, { timeout: 10_000 });
+  const handle = await confirmNewAccount(page);
+  await expect(page).toHaveURL(/\/setup\/address/, { timeout: 10_000 });
   await expect(page.getByRole('button', { name: 'Continue' })).toBeVisible();
-}
-
-async function saveOnboardingName(page: Page): Promise<void> {
-  await page.getByRole('textbox', { name: 'Name' }).fill('Ada');
-  await page.getByRole('button', { name: 'Continue' }).click();
-  await expect(page).toHaveURL(/\/setup\/address/);
-  await expect(page.getByRole('button', { name: 'Continue' })).toBeVisible();
+  return handle;
 }
 
 async function saveOnboardingUsername(page: Page): Promise<void> {
@@ -606,13 +630,13 @@ async function signInWithPasskeyThenAgain(page: Page): Promise<void> {
   await page.goto('/login');
   await page.getByRole('button', { name: 'Log in' }).click();
   await confirmNewAccount(page);
-  await expect(page).toHaveURL(/\/setup\/name/, { timeout: 10_000 });
+  await expect(page).toHaveURL(/\/setup\/address/, { timeout: 10_000 });
   await expect(page.getByRole('button', { name: 'Continue' })).toBeVisible();
   await openSignedInMenu(page);
   await page.getByRole('button', { name: 'Log out' }).click();
   await expect(page.getByRole('button', { name: 'Log in' })).toBeVisible();
   await page.getByRole('button', { name: 'Log in' }).click();
-  await expect(page).toHaveURL(/\/setup\/name/, { timeout: 10_000 });
+  await expect(page).toHaveURL(/\/setup\/address/, { timeout: 10_000 });
   await expect(page.getByRole('button', { name: 'Continue' })).toBeVisible();
 }
 
@@ -639,6 +663,16 @@ async function loginHttp(request: APIRequestContext): Promise<string> {
   });
   expect(seen.status()).toBe(200);
   return body.token;
+}
+
+async function signInUnnamed(page: Page, request: APIRequestContext): Promise<void> {
+  const token = await loginHttp(request);
+  await page.addInitScript((session: string) => {
+    localStorage['21gifts.session'] = session;
+  }, token);
+  await page.goto('/setup/name');
+  await expect(page).toHaveURL(/\/setup\/name/);
+  await expect(page.getByRole('button', { name: 'Continue' })).toBeVisible();
 }
 
 test('Function: GET — healthz is ok', async ({ request }) => {
@@ -707,6 +741,287 @@ test('Function: proxyPublicMessageRepliesGet — GET /public-messages/[id]/repli
   request,
 }) => {
   expect((await request.get('/public-messages/[id]/replies')).status()).toBeGreaterThanOrEqual(400);
+});
+
+test('Function: proxyExternalAuthorProfileGet — GET /public-messages/[id]/external-profile is reachable', async ({
+  request,
+}) => {
+  expect(
+    (await request.get('/public-messages/[id]/external-profile')).status(),
+  ).toBeGreaterThanOrEqual(400);
+});
+
+test('Function: proxyExternalAuthorPostsGet — GET /public-messages/[id]/external-posts is reachable', async ({
+  request,
+}) => {
+  expect(
+    (await request.get('/public-messages/[id]/external-posts')).status(),
+  ).toBeGreaterThanOrEqual(400);
+});
+
+test('Function: proxyExternalAuthorRepliesGet — GET /public-messages/[id]/external-replies is reachable', async ({
+  request,
+}) => {
+  expect(
+    (await request.get('/public-messages/[id]/external-replies')).status(),
+  ).toBeGreaterThanOrEqual(400);
+});
+
+test('Function: fetchExternalAuthorProfile — the page shows the address from the client fetch', async ({
+  page,
+}) => {
+  await seedAdaSession(page);
+  await page.route(/\/me$/, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        id: 'acc_e2e',
+        linkingKey: null,
+        role: 'basis',
+        name: 'Ada',
+        location: null,
+        lightningAddress: 'alice@walletofsatoshi.com',
+        lightningAddressVerified: false,
+        forumLawsDismissed: true,
+        createdAt: 1,
+        rulesAgreedAt: 1_700_000_001,
+        viewKey: 'a'.repeat(64),
+        aboutMe: null,
+        setup: null,
+        missing: [],
+      }),
+    });
+  });
+  await page.route(/\/messages(?:\?|$)/, async (route) => {
+    if (route.request().method() !== 'GET') {
+      await route.continue();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        messages: [
+          {
+            id: 'm-ext',
+            name: 'Robin',
+            via: 'nostr',
+            text: 'Hello from Robin',
+            createdAt: '2026-08-28T12:00:00.000Z',
+            sats: 21,
+            payable: false,
+            hasPhoto: false,
+            role: 'basis',
+          },
+        ],
+      }),
+    });
+  });
+  await page.route('**/external-profile', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        name: 'Robin',
+        npub: 'npub1example',
+        nip05: 'robin@nostr.example',
+        lud16: 'pay@ln.example',
+      }),
+    });
+  });
+  await page.goto('/welcome');
+  const profileRequest = page.waitForRequest((request) =>
+    request.url().includes('/public-messages/m-ext/external-profile'),
+  );
+  await page.getByRole('button', { name: 'View profile' }).click();
+  await expect(page).toHaveURL(/\/messages\/m-ext\/author/);
+  expect((await profileRequest).method()).toBe('GET');
+  await expect(page.getByText('robin@nostr.example', { exact: true })).toBeVisible();
+  await expect(page.getByText('npub1example', { exact: true })).toBeVisible();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+});
+
+test('Function: ExternalAuthorProfile — card shows the address, npub, and icon Copy', async ({
+  page,
+}) => {
+  await seedAdaSession(page);
+  await page.route(/\/me$/, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        id: 'acc_e2e',
+        linkingKey: null,
+        role: 'basis',
+        name: 'Ada',
+        location: null,
+        lightningAddress: 'alice@walletofsatoshi.com',
+        lightningAddressVerified: false,
+        forumLawsDismissed: true,
+        createdAt: 1,
+        rulesAgreedAt: 1_700_000_001,
+        viewKey: 'a'.repeat(64),
+        aboutMe: null,
+        setup: null,
+        missing: [],
+      }),
+    });
+  });
+  await page.route(/\/messages(?:\?|$)/, async (route) => {
+    if (route.request().method() !== 'GET') {
+      await route.continue();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        messages: [
+          {
+            id: 'm-ext',
+            name: 'Robin',
+            via: 'nostr',
+            text: 'Hello from Robin',
+            createdAt: '2026-08-28T12:00:00.000Z',
+            sats: 21,
+            payable: false,
+            hasPhoto: false,
+            role: 'basis',
+          },
+        ],
+      }),
+    });
+  });
+  await page.route('**/external-profile', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        name: 'Robin',
+        npub: 'npub1example',
+        nip05: 'robin@nostr.example',
+        lud16: 'pay@ln.example',
+      }),
+    });
+  });
+  await page.goto('/welcome');
+  await expect(page.getByRole('heading', { name: 'Welcome, Ada' })).toBeVisible();
+  await page.getByRole('button', { name: 'View profile' }).click();
+  await expect(page.getByText('robin@nostr.example', { exact: true })).toBeVisible();
+  await expect(page.getByText('npub1example', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Copy' })).toBeVisible();
+  await expect(page.getByText('Copy', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Close' })).toHaveCount(0);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.getByRole('link').first()).toBeVisible();
+  await expect(page.getByRole('link', { name: 'robin@nostr.example' })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'npub1example' })).toHaveCount(0);
+});
+
+test('Function: fetchExternalAuthorPosts — the page shows a post from the client fetch', async ({
+  page,
+}) => {
+  await page.route('**/external-profile', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        name: 'Robin',
+        npub: 'npub1example',
+        nip05: 'robin@nostr.example',
+        lud16: 'pay@ln.example',
+        postCount: 1,
+        replyCount: 1,
+      }),
+    });
+  });
+  await page.route('**/external-posts', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        messages: [
+          {
+            id: '33333333-3333-4333-8333-333333333333',
+            name: 'Robin',
+            via: 'nostr',
+            text: 'Robin wrote a note',
+            createdAt: '2026-08-28T12:00:00.000Z',
+            sats: 0,
+            payable: false,
+            hasPhoto: false,
+          },
+        ],
+      }),
+    });
+  });
+  await page.goto('/messages/11111111-1111-4111-8111-111111111111/author?name=Robin');
+  await page.getByRole('button', { name: '1 post' }).click();
+  await expect(page.getByText('Robin wrote a note')).toBeVisible();
+});
+
+test('Function: fetchExternalAuthorReplies — the page shows a reaction from the client fetch', async ({
+  page,
+}) => {
+  await page.route('**/external-profile', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        name: 'Robin',
+        npub: 'npub1example',
+        nip05: 'robin@nostr.example',
+        lud16: 'pay@ln.example',
+        postCount: 1,
+        replyCount: 1,
+      }),
+    });
+  });
+  await page.route('**/external-replies', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        messages: [
+          {
+            id: '33333333-3333-4333-8333-333333333333',
+            name: 'Robin',
+            via: 'nostr',
+            text: 'Robin wrote a reaction',
+            createdAt: '2026-08-28T12:00:00.000Z',
+            sats: 0,
+            payable: false,
+            hasPhoto: false,
+            parentId: '22222222-2222-4222-8222-222222222222',
+          },
+        ],
+      }),
+    });
+  });
+  await page.goto('/messages/11111111-1111-4111-8111-111111111111/author?name=Robin');
+  await page.getByRole('button', { name: '1 reaction' }).click();
+  await expect(page.getByText('Robin wrote a reaction')).toBeVisible();
+});
+
+test('Function: ExternalAuthorPage — heading Profile and the published address', async ({
+  page,
+}) => {
+  await page.route('**/external-profile', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        name: 'Robin',
+        npub: 'npub1example',
+        nip05: 'robin@nostr.example',
+        lud16: 'pay@ln.example',
+      }),
+    });
+  });
+  await page.goto('/messages/11111111-1111-4111-8111-111111111111/author?name=Robin');
+  await expect(page.getByRole('heading', { name: 'Profile' })).toBeVisible();
+  await expect(page.getByText('robin@nostr.example', { exact: true })).toBeVisible();
 });
 
 test('Function: proxyContactPost — POST /contact/submit without bearer is 401', async ({
@@ -857,6 +1172,549 @@ test('Function: proxyNotificationsReadAllPost — POST /forum/notifications/read
   request,
 }) => {
   expect((await request.post('/forum/notifications/read-all')).status()).toBe(401);
+});
+
+test('Function: proxyNotificationsReadByMessagePost — POST /forum/notifications/read-by-message without bearer is 401', async ({
+  request,
+}) => {
+  expect((await request.post('/forum/notifications/read-by-message')).status()).toBe(401);
+});
+
+test('Function: markVisibleForumNoteRead — POST /forum/notifications/read-visible without bearer is 401', async ({
+  request,
+}) => {
+  expect((await request.post('/forum/notifications/read-visible')).status()).toBe(401);
+});
+
+test('Function: proxyNotificationsReadVisiblePost — POST /forum/notifications/read-visible without bearer is 401', async ({
+  request,
+}) => {
+  expect((await request.post('/forum/notifications/read-visible')).status()).toBe(401);
+});
+
+test('Function: isForumCardFullyVisible — a fully shown welcome note is marked read and a taller note is not', async ({
+  page,
+}) => {
+  const shownId = '11111111-1111-4111-8111-111111111111';
+  const tallId = '22222222-2222-4222-8222-222222222222';
+  const posted: string[] = [];
+  let inFlight = 0;
+  await page.addInitScript((id: string) => {
+    localStorage.setItem('21gifts.session', 'sess-e2e');
+    const original = Element.prototype.getBoundingClientRect;
+    Element.prototype.getBoundingClientRect = function getBoundingClientRect(): DOMRect {
+      if (this instanceof Element && this.getAttribute('data-message-id') === id) {
+        const root = this.closest('[data-scrollport]');
+        const rootRect = root instanceof Element ? original.call(root) : original.call(this);
+        return new DOMRect(rootRect.left, rootRect.top - 1, rootRect.width, rootRect.height + 2);
+      }
+      return original.call(this);
+    };
+  }, tallId);
+  await page.route(/\/me$/, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        id: 'acc_e2e',
+        linkingKey: null,
+        role: 'basis',
+        name: 'Ada',
+        location: null,
+        lightningAddress: 'alice@walletofsatoshi.com',
+        lightningAddressVerified: false,
+        forumLawsDismissed: true,
+        createdAt: 1,
+        rulesAgreedAt: 1_700_000_001,
+        viewKey: 'a'.repeat(64),
+        aboutMe: null,
+        setup: null,
+        missing: [],
+      }),
+    });
+  });
+  await page.route(/\/messages(?:\?|$)/, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        messages: [
+          {
+            id: shownId,
+            name: 'Ada',
+            text: 'Short note on screen',
+            createdAt: '2026-08-28T12:00:00.000Z',
+            sats: 21,
+            payable: false,
+            hasPhoto: false,
+          },
+          {
+            id: tallId,
+            name: 'Ada',
+            text: 'Tall note',
+            createdAt: '2026-08-28T11:00:00.000Z',
+            sats: 21,
+            payable: false,
+            hasPhoto: false,
+          },
+        ],
+      }),
+    });
+  });
+  await page.route('**/forum/notifications/read-visible', async (route) => {
+    inFlight += 1;
+    const raw = route.request().postData() ?? '';
+    try {
+      const body = JSON.parse(raw) as { messageId?: unknown };
+      if (typeof body.messageId === 'string') {
+        posted.push(body.messageId);
+      }
+    } catch {
+      posted.push('unparsed');
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: true, tags: [] }),
+    });
+    inFlight -= 1;
+  });
+  await page.goto('/welcome');
+  await expect(page.getByText('Short note on screen')).toBeVisible();
+  await expect(page.locator(`[data-message-id="${tallId}"]`)).toBeAttached();
+  await expect.poll(() => posted.includes(shownId) && inFlight === 0).toBe(true);
+  const geometry = await page.locator(`[data-message-id="${tallId}"]`).evaluate((el) => {
+    const card = el.getBoundingClientRect();
+    const rootEl = el.closest('[data-scrollport]');
+    if (!(rootEl instanceof HTMLElement)) {
+      throw new Error('expected scrollport');
+    }
+    const root = rootEl.getBoundingClientRect();
+    return {
+      heightGap: card.height - root.height,
+      topSlack: root.top - card.top,
+      bottomSlack: card.bottom - root.bottom,
+      leftSlack: root.left - card.left,
+      rightSlack: card.right - root.right,
+    };
+  });
+  expect(geometry.heightGap).toBeGreaterThan(1);
+  expect(geometry.topSlack).toBeLessThanOrEqual(1);
+  expect(geometry.bottomSlack).toBeLessThanOrEqual(1);
+  expect(geometry.leftSlack).toBeLessThanOrEqual(1);
+  expect(geometry.rightSlack).toBeLessThanOrEqual(1);
+  expect(posted).not.toContain(tallId);
+});
+
+test('Function: markNotificationsReadForMessage — opening a signed-in message page POSTs read-by-message', async ({
+  page,
+}) => {
+  const messageId = '11111111-1111-4111-8111-111111111111';
+  const noteText = 'Hello from Ada';
+  await page.addInitScript(() => {
+    localStorage.setItem('21gifts.session', 'sess-e2e');
+  });
+  await page.route(/\/me$/, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        id: 'acc_e2e',
+        linkingKey: null,
+        role: 'basis',
+        name: 'Ada',
+        location: null,
+        lightningAddress: 'alice@walletofsatoshi.com',
+        lightningAddressVerified: false,
+        forumLawsDismissed: false,
+        createdAt: 1,
+        rulesAgreedAt: 1_700_000_001,
+        viewKey: 'a'.repeat(64),
+        aboutMe: null,
+        setup: null,
+        missing: [],
+      }),
+    });
+  });
+  await page.route(`**/forum/messages/${messageId}`, async (route) => {
+    const pathname = new URL(route.request().url()).pathname;
+    if (route.request().method() !== 'GET' || pathname !== `/forum/messages/${messageId}`) {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        id: messageId,
+        name: 'Ada',
+        text: noteText,
+        createdAt: '2026-09-12T12:00:00.000Z',
+        sats: 0,
+        payable: false,
+        hasPhoto: false,
+      }),
+    });
+  });
+  await page.route(`**/forum/messages/${messageId}/replies`, async (route) => {
+    const pathname = new URL(route.request().url()).pathname;
+    if (route.request().method() !== 'GET' || pathname !== `/forum/messages/${messageId}/replies`) {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ messages: [] }),
+    });
+  });
+  await page.route(/\/forum\/notifications\/read-by-message$/, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: true, tags: [] }),
+    });
+  });
+  const readByMessage = page.waitForRequest(
+    (req) => req.method() === 'POST' && req.url().includes('/forum/notifications/read-by-message'),
+  );
+  await page.goto(`/messages/${messageId}`);
+  const post = await readByMessage;
+  expect(post.method()).toBe('POST');
+  expect(post.headers()['authorization']).toBe('Bearer sess-e2e');
+  const body = post.postDataJSON() as { messageId?: unknown; endpoint?: unknown };
+  expect(body.messageId).toBe(messageId);
+  if ('endpoint' in body) {
+    expect(typeof body.endpoint).toBe('string');
+  }
+  await expect(page.getByText(noteText)).toBeVisible();
+});
+
+test('Function: pushTagForNotification — clicking a forum reply closes only that push tag', async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('21gifts.session', 'sess-e2e');
+  });
+  const note = {
+    id: 'n1',
+    type: 'forum_reply',
+    parentId: 'p1',
+    replyId: 'r1',
+    name: 'Bob',
+    text: 'hello',
+    createdAt: '2026-09-12T12:00:00.000Z',
+    readAt: null,
+  };
+  await page.route(/\/me$/, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        id: 'acc_e2e',
+        linkingKey: null,
+        role: 'basis',
+        name: 'Ada',
+        location: null,
+        lightningAddress: 'alice@walletofsatoshi.com',
+        lightningAddressVerified: false,
+        forumLawsDismissed: false,
+        createdAt: 1,
+        rulesAgreedAt: 1_700_000_001,
+        viewKey: 'a'.repeat(64),
+        aboutMe: null,
+        setup: null,
+        missing: [],
+      }),
+    });
+  });
+  await page.route(/\/forum\/notifications\/read-all$/, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: true }),
+    });
+  });
+  await page.route(/\/forum\/notifications\/n1\/read$/, async (route) => {
+    expect(route.request().method()).toBe('POST');
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ ...note, readAt: '2026-09-12T12:01:00.000Z' }),
+    });
+  });
+  await page.route(/\/forum\/notifications$/, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ notifications: [note], unreadCount: 1 }),
+    });
+  });
+  await page.addInitScript(() => {
+    if (
+      !Array.isArray((window as unknown as { __e2eClosedPushTags?: string[] }).__e2eClosedPushTags)
+    ) {
+      (window as unknown as { __e2eClosedPushTags?: string[] }).__e2eClosedPushTags = [];
+    }
+    const registration = {
+      pushManager: {
+        getSubscription: async () => ({ endpoint: 'https://push.example/e2e' }),
+      },
+      getNotifications: async () => [
+        {
+          tag: 'forum_reply:r1',
+          close: () => {
+            (window as unknown as { __e2eClosedPushTags?: string[] }).__e2eClosedPushTags?.push(
+              'forum_reply:r1',
+            );
+          },
+        },
+        {
+          tag: 'other',
+          close: () => {
+            (window as unknown as { __e2eClosedPushTags?: string[] }).__e2eClosedPushTags?.push(
+              'other',
+            );
+          },
+        },
+      ],
+    };
+    const serviceWorker = {
+      addEventListener() {},
+      removeEventListener() {},
+      getRegistration: async () => registration,
+    };
+    Object.defineProperty(navigator, 'serviceWorker', {
+      configurable: true,
+      value: serviceWorker,
+    });
+  });
+  await page.goto('/notifications');
+  await page.getByRole('button', { name: /Bob replied/ }).click();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => (window as unknown as { __e2eClosedPushTags?: string[] }).__e2eClosedPushTags,
+      ),
+    )
+    .toEqual(['forum_reply:r1']);
+});
+
+test('Function: currentPushEndpoint — clicking a row POSTs read with the push endpoint', async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('21gifts.session', 'sess-e2e');
+  });
+  const note = {
+    id: 'n1',
+    type: 'forum_reply',
+    parentId: 'p1',
+    replyId: 'r1',
+    name: 'Bob',
+    text: 'hello',
+    createdAt: '2026-09-12T12:00:00.000Z',
+    readAt: null,
+  };
+  await page.route(/\/me$/, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        id: 'acc_e2e',
+        linkingKey: null,
+        role: 'basis',
+        name: 'Ada',
+        location: null,
+        lightningAddress: 'alice@walletofsatoshi.com',
+        lightningAddressVerified: false,
+        forumLawsDismissed: false,
+        createdAt: 1,
+        rulesAgreedAt: 1_700_000_001,
+        viewKey: 'a'.repeat(64),
+        aboutMe: null,
+        setup: null,
+        missing: [],
+      }),
+    });
+  });
+  await page.route(/\/forum\/notifications\/read-all$/, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: true }),
+    });
+  });
+  await page.route(/\/forum\/notifications\/n1\/read$/, async (route) => {
+    expect(route.request().method()).toBe('POST');
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ ...note, readAt: '2026-09-12T12:01:00.000Z' }),
+    });
+  });
+  await page.route(/\/forum\/notifications$/, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ notifications: [note], unreadCount: 1 }),
+    });
+  });
+  await page.addInitScript(() => {
+    if (
+      !Array.isArray((window as unknown as { __e2eClosedPushTags?: string[] }).__e2eClosedPushTags)
+    ) {
+      (window as unknown as { __e2eClosedPushTags?: string[] }).__e2eClosedPushTags = [];
+    }
+    const registration = {
+      pushManager: {
+        getSubscription: async () => ({ endpoint: 'https://push.example/e2e' }),
+      },
+      getNotifications: async () => [
+        {
+          tag: 'forum_reply:r1',
+          close: () => {
+            (window as unknown as { __e2eClosedPushTags?: string[] }).__e2eClosedPushTags?.push(
+              'forum_reply:r1',
+            );
+          },
+        },
+        {
+          tag: 'other',
+          close: () => {
+            (window as unknown as { __e2eClosedPushTags?: string[] }).__e2eClosedPushTags?.push(
+              'other',
+            );
+          },
+        },
+      ],
+    };
+    const serviceWorker = {
+      addEventListener() {},
+      removeEventListener() {},
+      getRegistration: async () => registration,
+    };
+    Object.defineProperty(navigator, 'serviceWorker', {
+      configurable: true,
+      value: serviceWorker,
+    });
+  });
+  await page.goto('/notifications');
+  const read = page.waitForRequest(
+    (req) => req.method() === 'POST' && req.url().includes('/forum/notifications/n1/read'),
+  );
+  await page.getByRole('button', { name: /Bob replied/ }).click();
+  expect((await read).postDataJSON()).toEqual({ endpoint: 'https://push.example/e2e' });
+});
+
+test('Function: closeLocalPushNotifications — clicking a row closes only the matching push tag', async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('21gifts.session', 'sess-e2e');
+  });
+  const note = {
+    id: 'n1',
+    type: 'forum_reply',
+    parentId: 'p1',
+    replyId: 'r1',
+    name: 'Bob',
+    text: 'hello',
+    createdAt: '2026-09-12T12:00:00.000Z',
+    readAt: null,
+  };
+  await page.route(/\/me$/, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        id: 'acc_e2e',
+        linkingKey: null,
+        role: 'basis',
+        name: 'Ada',
+        location: null,
+        lightningAddress: 'alice@walletofsatoshi.com',
+        lightningAddressVerified: false,
+        forumLawsDismissed: false,
+        createdAt: 1,
+        rulesAgreedAt: 1_700_000_001,
+        viewKey: 'a'.repeat(64),
+        aboutMe: null,
+        setup: null,
+        missing: [],
+      }),
+    });
+  });
+  await page.route(/\/forum\/notifications\/read-all$/, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: true }),
+    });
+  });
+  await page.route(/\/forum\/notifications\/n1\/read$/, async (route) => {
+    expect(route.request().method()).toBe('POST');
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ ...note, readAt: '2026-09-12T12:01:00.000Z' }),
+    });
+  });
+  await page.route(/\/forum\/notifications$/, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ notifications: [note], unreadCount: 1 }),
+    });
+  });
+  await page.addInitScript(() => {
+    if (
+      !Array.isArray((window as unknown as { __e2eClosedPushTags?: string[] }).__e2eClosedPushTags)
+    ) {
+      (window as unknown as { __e2eClosedPushTags?: string[] }).__e2eClosedPushTags = [];
+    }
+    const registration = {
+      pushManager: {
+        getSubscription: async () => ({ endpoint: 'https://push.example/e2e' }),
+      },
+      getNotifications: async () => [
+        {
+          tag: 'forum_reply:r1',
+          close: () => {
+            (window as unknown as { __e2eClosedPushTags?: string[] }).__e2eClosedPushTags?.push(
+              'forum_reply:r1',
+            );
+          },
+        },
+        {
+          tag: 'other',
+          close: () => {
+            (window as unknown as { __e2eClosedPushTags?: string[] }).__e2eClosedPushTags?.push(
+              'other',
+            );
+          },
+        },
+      ],
+    };
+    const serviceWorker = {
+      addEventListener() {},
+      removeEventListener() {},
+      getRegistration: async () => registration,
+    };
+    Object.defineProperty(navigator, 'serviceWorker', {
+      configurable: true,
+      value: serviceWorker,
+    });
+  });
+  await page.goto('/notifications');
+  await page.getByRole('button', { name: /Bob replied/ }).click();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => (window as unknown as { __e2eClosedPushTags?: string[] }).__e2eClosedPushTags,
+      ),
+    )
+    .toEqual(['forum_reply:r1']);
 });
 
 test('Function: proxyNotificationReadPost — POST /forum/notifications/[id]/read without bearer', async ({
@@ -1018,12 +1876,11 @@ test('Function: isForumPhotoFile — attach control accepts jpeg png webp', asyn
 });
 
 test('Function: fetchMessages — welcome shows the empty forum', async ({ page, request }) => {
-  await signInViaStub(page, request);
-  await saveOnboardingName(page);
+  const handle = await signInViaStub(page, request);
   await page.getByLabel('Wallet of Satoshi address').fill('alice@walletofsatoshi.com');
   await page.getByRole('button', { name: 'Continue' }).click();
   await agreeToLivingRoomRules(page);
-  await expect(page.getByRole('heading', { name: 'Welcome, Ada' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: `Welcome, ${handle}` })).toBeVisible();
   await expect(page.getByText('Loading…')).toHaveCount(0);
   await expect(page.getByText('Could not load messages. Please try again.')).toHaveCount(0);
   await expect(page.getByLabel('Your message')).toBeVisible();
@@ -1045,7 +1902,6 @@ test('Function: postContact — sending from contact shows the official thread',
   request,
 }) => {
   await signInViaStub(page, request);
-  await saveOnboardingName(page);
   await page.getByLabel('Wallet of Satoshi address').fill('alice@walletofsatoshi.com');
   await page.getByRole('button', { name: 'Continue' }).click();
   await agreeToLivingRoomRules(page);
@@ -1057,18 +1913,18 @@ test('Function: postContact — sending from contact shows the official thread',
   await expect(page.getByText(body)).toBeVisible();
 });
 
-async function reachWelcome(page: Page, request: APIRequestContext): Promise<void> {
-  await signInViaStub(page, request);
-  await saveOnboardingName(page);
+async function reachWelcome(page: Page, request: APIRequestContext): Promise<string> {
+  const handle = await signInViaStub(page, request);
   await page.getByLabel('Wallet of Satoshi address').fill('alice@walletofsatoshi.com');
   await page.getByRole('button', { name: 'Continue' }).click();
   await agreeToLivingRoomRules(page);
   await expect(page).toHaveURL(/\/welcome/);
   await expect(page.getByRole('button', { name: 'Add a photo or video' })).toBeVisible();
+  return handle;
 }
 
-async function reachWelcomeVerified(page: Page, request: APIRequestContext): Promise<void> {
-  await reachWelcome(page, request);
+async function reachWelcomeVerified(page: Page, request: APIRequestContext): Promise<string> {
+  const handle = await reachWelcome(page, request);
   await page.route(/\/me$/, async (route) => {
     const res = await route.fetch();
     const body = (await res.json()) as Record<string, unknown>;
@@ -1081,6 +1937,7 @@ async function reachWelcomeVerified(page: Page, request: APIRequestContext): Pro
   await page.reload();
   await expect(page).toHaveURL(/\/welcome/);
   await expect(page.getByRole('button', { name: 'Add a photo or video' })).toBeVisible();
+  return handle;
 }
 
 async function attachTinyJpeg(page: Page): Promise<void> {
@@ -1088,7 +1945,11 @@ async function attachTinyJpeg(page: Page): Promise<void> {
   await expect(page.getByAltText('Selected photo')).toBeVisible({ timeout: 10_000 });
 }
 
-async function postAndExpectPhotoRow(page: Page, caption?: string): Promise<string> {
+async function postAndExpectPhotoRow(
+  page: Page,
+  author: string,
+  caption?: string,
+): Promise<string> {
   const posted = page.waitForResponse((response) => {
     if (response.request().method() !== 'POST' || !response.ok()) {
       return false;
@@ -1105,7 +1966,7 @@ async function postAndExpectPhotoRow(page: Page, caption?: string): Promise<stri
   expect(created.text).toBe(caption ?? '');
   const row = page.locator(`li[data-message-id="${created.id}"]`);
   await expect(row).toBeVisible();
-  await expect(row.getByRole('img', { name: 'Photo from Ada' })).toBeVisible({
+  await expect(row.getByRole('img', { name: `Photo from ${author}` })).toBeVisible({
     timeout: 10_000,
   });
   if (caption !== undefined) {
@@ -1130,27 +1991,27 @@ test('Function: prepareForumPhoto — attaching a jpeg shows a preview then post
   page,
   request,
 }) => {
-  await reachWelcomeVerified(page, request);
+  const handle = await reachWelcomeVerified(page, request);
   await attachTinyJpeg(page);
-  await postAndExpectPhotoRow(page);
+  await postAndExpectPhotoRow(page, handle);
 });
 
 test('Function: isForumPhotoFile — photo-only post does not require text', async ({
   page,
   request,
 }) => {
-  await reachWelcomeVerified(page, request);
+  const handle = await reachWelcomeVerified(page, request);
   await attachTinyJpeg(page);
   await expect(page.getByLabel('Your message')).toHaveValue('');
-  await postAndExpectPhotoRow(page);
+  await postAndExpectPhotoRow(page, handle);
 });
 
 test('Function: fetchMessagePhoto — text plus photo posts both', async ({ page, request }) => {
-  await reachWelcomeVerified(page, request);
+  const handle = await reachWelcomeVerified(page, request);
   const caption = `Caption ${Date.now()}`;
   await page.getByLabel('Your message').fill(caption);
   await attachTinyJpeg(page);
-  await postAndExpectPhotoRow(page, caption);
+  await postAndExpectPhotoRow(page, handle, caption);
 });
 
 test('Function: ForumPhotoGallery — two stills peek the next photo', async ({ page }) => {
@@ -1360,7 +2221,7 @@ test('Function: fetchViewAboutMePhoto — public view shows the About me photo',
 test('Function: fetchMe — reload hydrates the signed-in view', async ({ page, request }) => {
   await signInViaStub(page, request);
   await page.reload();
-  await expect(page).toHaveURL(/\/setup\/name/);
+  await expect(page).toHaveURL(/\/setup\/address/);
   await expect(page.getByRole('button', { name: 'Continue' })).toBeVisible();
 });
 
@@ -1381,7 +2242,7 @@ test('Function: skipSetup — Skip on name setup advances without a name', async
   page,
   request,
 }) => {
-  await signInViaStub(page, request);
+  await signInUnnamed(page, request);
   await page.goto('/setup/name');
   await expect(page.getByRole('button', { name: 'Skip' })).toBeVisible();
   await page.getByRole('button', { name: 'Skip' }).click();
@@ -1391,7 +2252,7 @@ test('Function: skipSetup — Skip on name setup advances without a name', async
 });
 
 test('Function: NameForm — Skip is absent on the rules setup screen', async ({ page, request }) => {
-  await signInViaStub(page, request);
+  await signInUnnamed(page, request);
   await page.getByRole('button', { name: 'Skip' }).click();
   await saveOnboardingUsername(page);
   await page.getByRole('button', { name: 'Skip' }).click();
@@ -1514,7 +2375,7 @@ test('Function: RequirementsOverlay — contact post without a name opens the ov
   page,
   request,
 }) => {
-  await signInViaStub(page, request);
+  await signInUnnamed(page, request);
   await page.getByRole('button', { name: 'Skip' }).click();
   await saveOnboardingUsername(page);
   await page.getByLabel('Wallet of Satoshi address').fill('alice@walletofsatoshi.com');
@@ -1533,7 +2394,6 @@ test('Function: RequirementsOverlay — forum post without a lightning-address o
   request,
 }) => {
   await signInViaStub(page, request);
-  await saveOnboardingName(page);
   await page.getByRole('button', { name: 'Skip' }).click();
   await agreeToLivingRoomRules(page);
   await expect(page).toHaveURL(/\/welcome/);
@@ -1919,7 +2779,7 @@ test('Function: nextPostRequirement — rules before name before lightning-addre
   page,
   request,
 }) => {
-  await signInViaStub(page, request);
+  await signInUnnamed(page, request);
   await expect(page).toHaveURL(/\/setup\/name/);
   await page.getByRole('button', { name: 'Skip' }).click();
   await saveOnboardingUsername(page);
@@ -1934,7 +2794,7 @@ test('Function: nextContactRequirement — contact still opens name overlay with
   page,
   request,
 }) => {
-  await signInViaStub(page, request);
+  await signInUnnamed(page, request);
   await page.getByRole('button', { name: 'Skip' }).click();
   await saveOnboardingUsername(page);
   await page.getByRole('button', { name: 'Skip' }).click();
@@ -1955,6 +2815,7 @@ test('Function: MemberProfilePage — member page heading is visible', async ({ 
 
 test('e2e:check dynamic path token for /members/[accountId]', async ({ page, request }) => {
   await page.goto('/members/[accountId]');
+  await page.goto('/members/[accountId]/verify');
   await request.get('/forum/members/[accountId]');
   await request.get('/forum/members/[accountId]/posts');
   await request.get('/forum/members/[accountId]/replies');
@@ -2174,7 +3035,6 @@ test('Function: proxyMeRulesAgreementPost — POST /me/rules-agreement sets agre
 
 test('Function: dismissForumLaws — welcome laws hint dismisses', async ({ page, request }) => {
   await signInViaStub(page, request);
-  await saveOnboardingName(page);
   await page.getByLabel('Wallet of Satoshi address').fill('alice@walletofsatoshi.com');
   await page.getByRole('button', { name: 'Continue' }).click();
   await agreeToLivingRoomRules(page);
@@ -2196,12 +3056,11 @@ test('Function: agreeToRules — signed-in rules screen records agreement', asyn
   page,
   request,
 }) => {
-  await signInViaStub(page, request);
-  await saveOnboardingName(page);
+  const handle = await signInViaStub(page, request);
   await page.getByLabel('Wallet of Satoshi address').fill('alice@walletofsatoshi.com');
   await page.getByRole('button', { name: 'Continue' }).click();
   await agreeToLivingRoomRules(page);
-  await expect(page.getByRole('heading', { name: 'Welcome, Ada' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: `Welcome, ${handle}` })).toBeVisible();
 });
 
 test('Function: RulesSetup — agree button is visible on the rules screen', async ({ page }) => {
@@ -2333,7 +3192,7 @@ test('Function: hasAgreedToRules — name and address without agreement stay on 
 });
 
 test('Function: NameForm — signed-in form saves a display name', async ({ page, request }) => {
-  await signInViaStub(page, request);
+  await signInUnnamed(page, request);
   await expect(page.getByText(/Add your name so people know who you are/i)).toBeVisible();
   await page.getByRole('textbox', { name: 'Name' }).fill('Ada');
   await page.getByRole('button', { name: 'Continue' }).click();
@@ -2341,7 +3200,7 @@ test('Function: NameForm — signed-in form saves a display name', async ({ page
 });
 
 test('Function: setName — signed-in form saves a display name', async ({ page, request }) => {
-  await signInViaStub(page, request);
+  await signInUnnamed(page, request);
   await page.getByRole('textbox', { name: 'Name' }).fill('Ada');
   await page.getByRole('button', { name: 'Continue' }).click();
   await expect(page.getByText('Ada')).toBeVisible();
@@ -2377,12 +3236,11 @@ test('Function: setLightningAddress — signed-in form links a Wallet of Satoshi
   page,
   request,
 }) => {
-  await signInViaStub(page, request);
-  await saveOnboardingName(page);
+  const handle = await signInViaStub(page, request);
   await page.getByLabel('Wallet of Satoshi address').fill('alice@walletofsatoshi.com');
   await page.getByRole('button', { name: 'Continue' }).click();
   await agreeToLivingRoomRules(page);
-  await expect(page.getByRole('heading', { name: 'Welcome, Ada' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: `Welcome, ${handle}` })).toBeVisible();
 });
 
 test('Function: DELETE — DELETE /me/lightning-address clears the address', async ({ request }) => {
@@ -2445,13 +3303,13 @@ test('Function: resolveLightningAddress — GET /lightning-address still resolve
 
 test('Function: RootLayout — landing renders', async ({ page }) => {
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: /Direct human-to-human gifts/i })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Help people with Bitcoin/i })).toBeVisible();
 });
 
 test('Function: Home — landing renders the pitch', async ({ page }) => {
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: /Direct human-to-human gifts/i })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Donate to this project' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Help people with Bitcoin/i })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '21.gifts also needs support' })).toBeVisible();
   await expect(page.getByRole('link', { name: '21gifts@walletofsatoshi.com' })).toHaveAttribute(
     'href',
     'lightning:21gifts@walletofsatoshi.com',
@@ -2532,7 +3390,7 @@ test('Function: shouldOfferIosInstall — iPhone Safari shows the install contro
 
 test('Function: MarketingFooter — landing shows the footer wordmark', async ({ page }) => {
   await page.goto('/');
-  await expect(page.locator('footer').getByText('21.gifts')).toBeVisible();
+  await expect(page.locator('footer').getByText('21.gifts', { exact: true })).toBeVisible();
 });
 
 test('Function: LegalPage — legal heading is visible', async ({ page }) => {
@@ -2542,7 +3400,7 @@ test('Function: LegalPage — legal heading is visible', async ({ page }) => {
 
 test('Function: AboutPage — about heading is visible', async ({ page }) => {
   await page.goto('/about');
-  await expect(page.getByRole('heading', { name: 'Three convictions' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'What 21.gifts stands for' })).toBeVisible();
 });
 
 test('Function: HandbookPage — handbook heading is visible', async ({ page }) => {
@@ -2647,6 +3505,17 @@ test('Function: parseScreenVariantDescriptions — pay-qr description is visible
 }) => {
   await page.goto('/handbook/screens');
   await expect(page.getByText(/invoice card shows the Bitcoin payment QR/)).toBeVisible();
+});
+
+test('Function: screenVariantDescription — German screen cards follow the locale cookie', async ({
+  page,
+  context,
+}) => {
+  await context.addCookies([{ name: 'locale', value: 'de', url: 'http://localhost:3000' }]);
+  await page.goto('/handbook/screens');
+  await expect(page.getByRole('heading', { name: 'Screens' })).toBeVisible();
+  await expect(page.getByText(/Heutige Rate zahlen/).first()).toBeVisible();
+  await expect(page.getByText(/Desktop\/wide layout/)).toHaveCount(0);
 });
 
 test('Function: topicImageSrc — screens viewer shows an image', async ({ page }) => {
@@ -3518,6 +4387,7 @@ test('Function: recordCurrentView shows Back to shops after notifications', asyn
   await seedAdaSession(page);
   await routeForumLists(page);
   await page.goto('/shops');
+  await waitUntilShopsRecorded(page);
   await page.goto('/notifications');
   const back = page.getByRole('link', { name: 'Back', exact: true });
   await expect(back).toHaveCount(1);
@@ -3528,6 +4398,7 @@ test('Function: ViewHistoryRoot records shops then notifications in this tab', a
   await seedAdaSession(page);
   await routeForumLists(page);
   await page.goto('/shops');
+  await waitUntilShopsRecorded(page);
   await page.goto('/notifications');
   const back = page.getByRole('link', { name: 'Back', exact: true });
   await expect(back).toHaveAttribute('href', '/shops');
@@ -3541,6 +4412,7 @@ test('Function: goToPreviousView opens the shops view from notifications', async
   await seedAdaSession(page);
   await routeForumLists(page);
   await page.goto('/shops');
+  await waitUntilShopsRecorded(page);
   await page.goto('/notifications');
   const origin = new URL(page.url()).origin;
   await page.getByRole('link', { name: 'Back', exact: true }).click();
@@ -3552,6 +4424,7 @@ test('Function: previousViewPath is the shops href on the back link', async ({ p
   await seedAdaSession(page);
   await routeForumLists(page);
   await page.goto('/shops');
+  await waitUntilShopsRecorded(page);
   await page.goto('/notifications');
   await expect(page.getByRole('link', { name: 'Back', exact: true })).toHaveAttribute(
     'href',
@@ -3580,10 +4453,30 @@ test('Function: ChromeBackProvider shows no back arrow on welcome', async ({ pag
   await expect(page.getByRole('link', { name: 'Back to the forum' })).toHaveCount(0);
 });
 
+/** Shops is on the tab stack only after ViewHistoryRoot records it. */
+async function waitUntilShopsRecorded(page: Page): Promise<void> {
+  await page.waitForFunction(() => {
+    const raw = sessionStorage.getItem('21gifts.viewHistory');
+    if (raw === null) {
+      return false;
+    }
+    try {
+      const stored = JSON.parse(raw) as { stack?: unknown; cursor?: unknown };
+      if (!Array.isArray(stored.stack) || typeof stored.cursor !== 'number') {
+        return false;
+      }
+      return stored.stack[stored.cursor] === '/shops';
+    } catch {
+      return false;
+    }
+  });
+}
+
 test('Function: previousViewPath is shops when welcome follows shops', async ({ page }) => {
   await seedAdaSession(page);
   await routeForumLists(page);
   await page.goto('/shops');
+  await waitUntilShopsRecorded(page);
   await page.goto('/welcome');
   await expect(page.getByRole('heading', { name: 'Welcome, Ada' })).toBeVisible();
   const back = page.getByRole('link', { name: 'Back', exact: true });
@@ -3791,7 +4684,7 @@ test('Function: LoginPage — login heading is visible', async ({ page }) => {
 
 test('Function: DonatePage — send-help explainer renders', async ({ page }) => {
   await page.goto('/donate');
-  await expect(page.getByRole('heading', { name: 'Send help' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Help someone' })).toBeVisible();
 });
 
 test('Function: LoginCard — a single Log in button is visible', async ({ page }) => {
@@ -3837,7 +4730,7 @@ async function expectWrongAccountHint(page: Page): Promise<void> {
   await page.goto('/login');
   await expect(
     page.getByRole('alert').filter({
-      hasText: 'You signed in with the wrong account. Please try again with the correct account.',
+      hasText: 'You signed in with a different account. Try again with the right one.',
     }),
   ).toBeVisible();
   await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible();
@@ -3978,6 +4871,207 @@ test('Function: iosPasskeyBlock — iOS 18 hides the version line', async ({ pag
   await page.goto('/login');
   await expect(page.getByRole('button', { name: 'Log in' })).toBeVisible();
   await expect(page.getByRole('status')).toHaveCount(0);
+});
+
+test('Function: androidPasskeyBlock — Android below 9 names the installed version', async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'userAgent', {
+      configurable: true,
+      get: () =>
+        'Mozilla/5.0 (Linux; Android 8.1.0; Pixel) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
+    });
+  });
+  await page.goto('/login');
+  await expect(page.getByRole('status')).toHaveText(
+    'Android 8.1.0 is installed. Sign-in needs at least Android 9.',
+  );
+});
+
+test('Function: androidPasskeyBlock — Android 9 hides the version line', async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'userAgent', {
+      configurable: true,
+      get: () =>
+        'Mozilla/5.0 (Linux; Android 9; Pixel) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
+    });
+  });
+  await page.goto('/login');
+  await expect(page.getByRole('button', { name: 'Log in' })).toBeVisible();
+  await expect(page.getByRole('status')).toHaveCount(0);
+});
+
+test('Function: androidInstalledVersion — Android 14 names the installed OS on a failed login', async ({
+  page,
+}) => {
+  const posted: string[] = [];
+  await page.route('**/diagnostics', async (route) => {
+    posted.push(route.request().postData() ?? '');
+    await route.fulfill({ status: 204, body: '' });
+  });
+  await page.addInitScript(() => {
+    Object.defineProperty(Navigator.prototype, 'userAgent', {
+      configurable: true,
+      get: () =>
+        'Mozilla/5.0 (Linux; Android 14; Pixel) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
+    });
+  });
+  await page.addInitScript(() => {
+    const pk = globalThis.PublicKeyCredential as unknown as {
+      parseCreationOptionsFromJSON?: unknown;
+      parseRequestOptionsFromJSON?: unknown;
+    };
+    if (typeof pk === 'function' || (typeof pk === 'object' && pk !== null)) {
+      Object.defineProperty(pk, 'parseCreationOptionsFromJSON', {
+        value: undefined,
+        configurable: true,
+      });
+      Object.defineProperty(pk, 'parseRequestOptionsFromJSON', {
+        value: undefined,
+        configurable: true,
+      });
+    }
+    Object.defineProperty(navigator, 'credentials', {
+      configurable: true,
+      value: {
+        create: async () => {
+          throw new DOMException('No credentials', 'NotAllowedError');
+        },
+        get: async (options?: CredentialRequestOptions) => {
+          const publicKey = options?.publicKey;
+          const challenge = publicKey?.challenge;
+          const isBytes = challenge instanceof ArrayBuffer || ArrayBuffer.isView(challenge);
+          if (!publicKey || !isBytes) {
+            throw new Error('invalid request options');
+          }
+          throw new DOMException('No credentials', 'NotAllowedError');
+        },
+      },
+    });
+  });
+  await page.route(/\/auth\/passkey\/authenticate\/begin$/, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        challengeId: 'ch',
+        options: {
+          challenge: 'aa',
+          rpId: 'localhost',
+          userVerification: 'required',
+        },
+      }),
+    });
+  });
+  await page.goto('/login');
+  await page.getByRole('button', { name: 'Log in' }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Do you already have an account?' }),
+  ).toBeVisible();
+  await expect
+    .poll(() => {
+      for (const raw of posted) {
+        try {
+          const body = JSON.parse(raw) as { event?: string; message?: string };
+          if (
+            body.event === 'client.passkey.login.fail' &&
+            body.message?.startsWith('Android 14')
+          ) {
+            return true;
+          }
+        } catch {
+          continue;
+        }
+      }
+      return false;
+    })
+    .toBe(true);
+});
+
+test('Function: iosInstalledVersion — iOS 18 names the installed OS on a failed login', async ({
+  page,
+}) => {
+  const posted: string[] = [];
+  await page.route('**/diagnostics', async (route) => {
+    posted.push(route.request().postData() ?? '');
+    await route.fulfill({ status: 204, body: '' });
+  });
+  await page.addInitScript(() => {
+    Object.defineProperty(Navigator.prototype, 'userAgent', {
+      configurable: true,
+      get: () =>
+        'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1',
+    });
+  });
+  await page.addInitScript(() => {
+    const pk = globalThis.PublicKeyCredential as unknown as {
+      parseCreationOptionsFromJSON?: unknown;
+      parseRequestOptionsFromJSON?: unknown;
+    };
+    if (typeof pk === 'function' || (typeof pk === 'object' && pk !== null)) {
+      Object.defineProperty(pk, 'parseCreationOptionsFromJSON', {
+        value: undefined,
+        configurable: true,
+      });
+      Object.defineProperty(pk, 'parseRequestOptionsFromJSON', {
+        value: undefined,
+        configurable: true,
+      });
+    }
+    Object.defineProperty(navigator, 'credentials', {
+      configurable: true,
+      value: {
+        create: async () => {
+          throw new DOMException('No credentials', 'NotAllowedError');
+        },
+        get: async (options?: CredentialRequestOptions) => {
+          const publicKey = options?.publicKey;
+          const challenge = publicKey?.challenge;
+          const isBytes = challenge instanceof ArrayBuffer || ArrayBuffer.isView(challenge);
+          if (!publicKey || !isBytes) {
+            throw new Error('invalid request options');
+          }
+          throw new DOMException('No credentials', 'NotAllowedError');
+        },
+      },
+    });
+  });
+  await page.route(/\/auth\/passkey\/authenticate\/begin$/, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        challengeId: 'ch',
+        options: {
+          challenge: 'aa',
+          rpId: 'localhost',
+          userVerification: 'required',
+        },
+      }),
+    });
+  });
+  await page.goto('/login');
+  await page.getByRole('button', { name: 'Log in' }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Do you already have an account?' }),
+  ).toBeVisible();
+  await expect(page.getByRole('status')).toHaveCount(0);
+  await expect
+    .poll(() => {
+      for (const raw of posted) {
+        try {
+          const body = JSON.parse(raw) as { event?: string; message?: string };
+          if (body.event === 'client.passkey.login.fail' && body.message?.startsWith('iOS 18.0')) {
+            return true;
+          }
+        } catch {
+          continue;
+        }
+      }
+      return false;
+    })
+    .toBe(true);
 });
 
 test('Function: isInAppBrowser — Telegram WebView hides Log in', async ({ page }) => {
@@ -4193,7 +5287,7 @@ test('Function: useAuthStore — live login reaches the signed-in view', async (
   request,
 }) => {
   await signInViaStub(page, request);
-  await expect(page).toHaveURL(/\/setup\/name/);
+  await expect(page).toHaveURL(/\/setup\/address/);
   await expect(page.getByRole('button', { name: 'Continue' })).toBeVisible();
 });
 
@@ -4206,17 +5300,16 @@ test('Function: saveSession — live login persists the session token', async ({
 test('Function: loadSession — reload keeps the signed-in view', async ({ page, request }) => {
   await signInViaStub(page, request);
   await page.reload();
-  await expect(page).toHaveURL(/\/setup\/name/);
+  await expect(page).toHaveURL(/\/setup\/address/);
   await expect(page.getByRole('button', { name: 'Continue' })).toBeVisible();
 });
 
 test('Function: LightningAddressForm — link reaches welcome', async ({ page, request }) => {
-  await signInViaStub(page, request);
-  await saveOnboardingName(page);
+  const handle = await signInViaStub(page, request);
   await page.getByLabel('Wallet of Satoshi address').fill('alice@walletofsatoshi.com');
   await page.getByRole('button', { name: 'Continue' }).click();
   await agreeToLivingRoomRules(page);
-  await expect(page.getByRole('heading', { name: 'Welcome, Ada' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: `Welcome, ${handle}` })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Unlink' })).toHaveCount(0);
 });
 
@@ -4231,7 +5324,6 @@ test('Function: clearSession — log out returns to the start action', async ({ 
 test('Function: ForumBoard — welcome forum is the pay surface', async ({ page, request }) => {
   await stubPayableNote(page);
   await signInViaStub(page, request);
-  await saveOnboardingName(page);
   await page.getByLabel('Wallet of Satoshi address').fill('alice@walletofsatoshi.com');
   await page.getByRole('button', { name: 'Continue' }).click();
   await agreeToLivingRoomRules(page);
@@ -4274,7 +5366,6 @@ test('Function: RulesDocument — only free donations rule is visible', async ({
 test('Function: ForumLoader — welcome forum is the pay surface', async ({ page, request }) => {
   await stubPayableNote(page);
   await signInViaStub(page, request);
-  await saveOnboardingName(page);
   await page.getByLabel('Wallet of Satoshi address').fill('alice@walletofsatoshi.com');
   await page.getByRole('button', { name: 'Continue' }).click();
   await agreeToLivingRoomRules(page);
@@ -4334,7 +5425,6 @@ test('Function: shownFiatForSats — pay sheet sends the shown amounts', async (
   await stubWalletLocationAssign(page);
   await stubPayableNote(page);
   await signInViaStub(page, request);
-  await saveOnboardingName(page);
   await page.getByLabel('Wallet of Satoshi address').fill('alice@walletofsatoshi.com');
   await page.getByRole('button', { name: 'Continue' }).click();
   await agreeToLivingRoomRules(page);
@@ -4387,7 +5477,7 @@ test('Function: GiftDayTable — day page lists alice', async ({ page }) => {
 
 test('Function: DayLoader — empty day copy is visible', async ({ page }) => {
   await page.goto('/stats/2026-06-02');
-  await expect(page.getByText('No gifts recorded on this day.')).toBeVisible();
+  await expect(page.getByText('No donations recorded on this day.')).toBeVisible();
 });
 
 test('Function: GiftDayPage — invalid day is 404', async ({ page }) => {
@@ -4432,24 +5522,24 @@ test('Function: fetchPostStats — stats page shows notes and replies as posts',
 test('Function: fetchGiftStats — stats page shows the empty copy', async ({ page }) => {
   await stubGiftStats(page, EMPTY_STATS);
   await page.goto('/stats');
-  await expect(page.getByText('No gifts recorded yet.')).toBeVisible();
+  await expect(page.getByText('No donations recorded yet.')).toBeVisible();
 });
 
 test('Function: StatsPage — stats heading is visible', async ({ page }) => {
   await page.goto('/stats');
-  await expect(page.getByRole('heading', { name: 'Gifts' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Donations' })).toBeVisible();
 });
 
 test('Function: StatsLoader — stats page shows the empty copy', async ({ page }) => {
   await stubGiftStats(page, EMPTY_STATS);
   await page.goto('/stats');
-  await expect(page.getByText('No gifts recorded yet.')).toBeVisible();
+  await expect(page.getByText('No donations recorded yet.')).toBeVisible();
 });
 
 test('Function: StatsDashboard — empty stats hide the spend chart heading', async ({ page }) => {
   await stubGiftStats(page, EMPTY_STATS);
   await page.goto('/stats');
-  await expect(page.getByText('No gifts recorded yet.')).toBeVisible();
+  await expect(page.getByText('No donations recorded yet.')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Total spend over time' })).toHaveCount(0);
 });
 
@@ -4710,6 +5800,7 @@ test('Function: formatDefinedGoalAmount — a peso ask shows the typed amount on
     });
   });
   await page.goto('/welcome');
+  await chooseForumView(page, 'All');
   await expect(page.getByText('₱200.00')).toBeVisible();
   await expect(page.getByText("₿1'000")).toBeVisible();
   await expect(page.getByText('$3.50')).toBeVisible();
@@ -4782,6 +5873,7 @@ test('Function: fiatPrefix — francs keep the code and pesos use the sign', asy
     });
   });
   await page.goto('/welcome');
+  await chooseForumView(page, 'All');
   await expect(page.getByText('CHF 10.00')).toBeVisible();
   await expect(page.getByText('₱200.00')).toBeVisible();
   await expect(page.getByText('PHP 200.00')).toHaveCount(0);
@@ -4928,6 +6020,118 @@ test('Function: latestRateDay — pay sheet shows a live USD equivalent for 21 s
   await expect(page.getByText('$0.02').first()).toBeVisible();
 });
 
+test('Function: latestRateDayFor — peso till uses the last day that has PHP', async ({ page }) => {
+  await seedAdaSession(page);
+  await page.context().addCookies([{ name: 'fiat', value: 'PHP', url: 'http://localhost:3000' }]);
+  await stubGiftStats(page, {
+    ...EMPTY_STATS,
+    totalSats: 100_001_000,
+    totalBtc: '1.00001000',
+    totalUsd: '100010.00',
+    totalPhp: '5600000.00',
+    giftCount: 2,
+    firstPaidAt: '2026-10-07T00:00:00.000Z',
+    lastPaidAt: '2026-10-08T00:08:00.000Z',
+    spendOverTime: [
+      {
+        day: '2026-10-07',
+        sats: 100_000_000,
+        cumulativeSats: 100_000_000,
+        btc: '1.00000000',
+        cumulativeBtc: '1.00000000',
+        usd: '100000.00',
+        cumulativeUsd: '100000.00',
+        chf: '80000.00',
+        cumulativeChf: '80000.00',
+        eur: '90000.00',
+        cumulativeEur: '90000.00',
+        php: '5600000.00',
+        cumulativePhp: '5600000.00',
+      },
+      {
+        day: '2026-10-08',
+        sats: 1000,
+        cumulativeSats: 100_001_000,
+        btc: '0.00001000',
+        cumulativeBtc: '1.00001000',
+        usd: '10.00',
+        cumulativeUsd: '100010.00',
+        chf: null,
+        cumulativeChf: null,
+        eur: null,
+        cumulativeEur: null,
+        php: null,
+        cumulativePhp: null,
+      },
+    ],
+  });
+  await page.route(/\/me$/, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        id: 'acc_e2e',
+        linkingKey: null,
+        role: 'basis',
+        name: 'Ada',
+        username: 'alice',
+        location: null,
+        lightningAddress: 'alice@walletofsatoshi.com',
+        lightningAddressVerified: false,
+        forumLawsDismissed: false,
+        createdAt: 1,
+        rulesAgreedAt: 1_700_000_001,
+        viewKey: 'a'.repeat(64),
+        aboutMe: null,
+        setup: null,
+        missing: [],
+      }),
+    });
+  });
+  await page.route(/\/me\/amount-unit$/, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        id: 'acc_e2e',
+        linkingKey: null,
+        role: 'basis',
+        name: 'Ada',
+        username: 'alice',
+        location: null,
+        lightningAddress: 'alice@walletofsatoshi.com',
+        lightningAddressVerified: false,
+        forumLawsDismissed: false,
+        createdAt: 1,
+        rulesAgreedAt: 1_700_000_001,
+        viewKey: 'a'.repeat(64),
+        aboutMe: null,
+        setup: null,
+        missing: [],
+        amountUnit: 'fiat',
+      }),
+    });
+  });
+  await page.route(/\/pos\/charge$/, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ charge: null, history: [] }),
+    });
+  });
+  await page.goto('/pos/amount');
+  const php = page
+    .getByRole('group', { name: 'Bitcoin or fiat' })
+    .getByRole('button', { name: 'PHP' });
+  await php.click();
+  await expect(php).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('button', { name: '1', exact: true }).click();
+  await page.getByRole('button', { name: '0', exact: true }).click();
+  await page.getByRole('button', { name: '0', exact: true }).click();
+  await expect(page.getByText("\u20BF1'786")).toBeVisible();
+  await expect(page.getByText('Enter a whole number.')).toHaveCount(0);
+});
+
 test('Function: formatFiatTick — populated stats draw the USD chart', async ({ page }) => {
   await stubGiftStats(page, POPULATED_STATS);
   await page.goto('/stats');
@@ -5042,7 +6246,7 @@ test('Function: startPasskeyRegistration — create passkey reaches the signed-i
   await page.goto('/login');
   await page.getByRole('button', { name: 'Log in' }).click();
   await confirmNewAccount(page);
-  await expect(page).toHaveURL(/\/setup\/name/, { timeout: 10_000 });
+  await expect(page).toHaveURL(/\/setup\/address/, { timeout: 10_000 });
   await expect(page.getByRole('button', { name: 'Continue' })).toBeVisible();
 });
 
@@ -5060,7 +6264,7 @@ test('Function: finishPasskeyRegistration — create passkey reaches the signed-
   await page.goto('/login');
   await page.getByRole('button', { name: 'Log in' }).click();
   await confirmNewAccount(page);
-  await expect(page).toHaveURL(/\/setup\/name/, { timeout: 10_000 });
+  await expect(page).toHaveURL(/\/setup\/address/, { timeout: 10_000 });
   await expect(page.getByRole('button', { name: 'Continue' })).toBeVisible();
 });
 
@@ -5098,14 +6302,21 @@ test('Function: usePasskeyLogin — create passkey reaches the signed-in view', 
   await installFakeWebAuthn(page);
   await page.goto('/login');
   await page.getByRole('button', { name: 'Log in' }).click();
-  await confirmNewAccount(page);
-  await expect(page).toHaveURL(/\/setup\/name/, { timeout: 10_000 });
+  const handle = await confirmNewAccount(page);
+  await expect(page).toHaveURL(/\/setup\/address/, { timeout: 10_000 });
   await expect(page.getByRole('button', { name: 'Continue' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Continue' })).toBeVisible();
   const token = await page.evaluate(() => window.localStorage.getItem('21gifts.session'));
   expect(token).toBeTruthy();
   const me = await request.get('/me', { headers: { authorization: `Bearer ${token}` } });
-  expect(((await me.json()) as { linkingKey: string | null }).linkingKey).toBeNull();
+  const body = (await me.json()) as {
+    name: string;
+    username: string;
+    linkingKey: string | null;
+  };
+  expect(body.name).toBe(handle);
+  expect(body.username).toBe(handle);
+  expect(body.linkingKey).toBeNull();
 });
 
 test('Function: creationOptionsFromJSON — create passkey reaches the signed-in view', async ({
@@ -5115,7 +6326,7 @@ test('Function: creationOptionsFromJSON — create passkey reaches the signed-in
   await page.goto('/login');
   await page.getByRole('button', { name: 'Log in' }).click();
   await confirmNewAccount(page);
-  await expect(page).toHaveURL(/\/setup\/name/, { timeout: 10_000 });
+  await expect(page).toHaveURL(/\/setup\/address/, { timeout: 10_000 });
   await expect(page.getByRole('button', { name: 'Continue' })).toBeVisible();
 });
 
@@ -5124,7 +6335,7 @@ test('Function: credentialToJSON — create passkey reaches the signed-in view',
   await page.goto('/login');
   await page.getByRole('button', { name: 'Log in' }).click();
   await confirmNewAccount(page);
-  await expect(page).toHaveURL(/\/setup\/name/, { timeout: 10_000 });
+  await expect(page).toHaveURL(/\/setup\/address/, { timeout: 10_000 });
   await expect(page.getByRole('button', { name: 'Continue' })).toBeVisible();
 });
 
@@ -5133,7 +6344,7 @@ test('Function: base64UrlToBytes — create passkey reaches the signed-in view',
   await page.goto('/login');
   await page.getByRole('button', { name: 'Log in' }).click();
   await confirmNewAccount(page);
-  await expect(page).toHaveURL(/\/setup\/name/, { timeout: 10_000 });
+  await expect(page).toHaveURL(/\/setup\/address/, { timeout: 10_000 });
   await expect(page.getByRole('button', { name: 'Continue' })).toBeVisible();
 });
 
@@ -5142,7 +6353,7 @@ test('Function: bytesToBase64Url — create passkey reaches the signed-in view',
   await page.goto('/login');
   await page.getByRole('button', { name: 'Log in' }).click();
   await confirmNewAccount(page);
-  await expect(page).toHaveURL(/\/setup\/name/, { timeout: 10_000 });
+  await expect(page).toHaveURL(/\/setup\/address/, { timeout: 10_000 });
   await expect(page.getByRole('button', { name: 'Continue' })).toBeVisible();
 });
 
@@ -5308,27 +6519,27 @@ test('Function: LanguagePreferenceSwitcher — /profile lists English Deutsch Es
 
 test('Function: LocaleProvider — landing heading is English by default', async ({ page }) => {
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: /Direct human-to-human gifts/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Help people with Bitcoin/ })).toBeVisible();
 });
 
 test('Function: useTranslations — landing heading is English by default', async ({ page }) => {
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: /Direct human-to-human gifts/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Help people with Bitcoin/ })).toBeVisible();
 });
 
 test('Function: translate — landing heading is English by default', async ({ page }) => {
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: /Direct human-to-human gifts/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Help people with Bitcoin/ })).toBeVisible();
 });
 
 test('Function: getCatalog — landing heading is English by default', async ({ page }) => {
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: /Direct human-to-human gifts/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Help people with Bitcoin/ })).toBeVisible();
 });
 
 test('Function: getRequestLocale — landing heading is English by default', async ({ page }) => {
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: /Direct human-to-human gifts/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Help people with Bitcoin/ })).toBeVisible();
 });
 
 test('Function: parseSupportedLocale — Español cookie localizes the landing heading', async ({
@@ -5338,7 +6549,7 @@ test('Function: parseSupportedLocale — Español cookie localizes the landing h
   await page.getByLabel('Language').click();
   await page.getByRole('option', { name: 'Español' }).click();
   await expect(
-    page.getByRole('heading', { name: /Regalos directos de persona a persona/ }),
+    page.getByRole('heading', { name: /Ayuda a otras personas con Bitcoin/ }),
   ).toBeVisible();
 });
 
@@ -5352,9 +6563,7 @@ test.describe('Function: parseAcceptLanguage', () => {
     page,
   }) => {
     await page.goto('/');
-    await expect(
-      page.getByRole('heading', { name: /Direkte Geschenke von Mensch zu Mensch/ }),
-    ).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Hilf Menschen mit Bitcoin/ })).toBeVisible();
   });
 });
 
@@ -5487,7 +6696,7 @@ test('Function: UsernameSetup — username screen heading is visible', async ({ 
 });
 
 test('Function: setUsername — signed-in form saves a username', async ({ page, request }) => {
-  await signInViaStub(page, request);
+  await signInUnnamed(page, request);
   await page.getByRole('button', { name: 'Skip' }).click();
   await saveOnboardingUsername(page);
 });
@@ -5622,6 +6831,13 @@ test('Function: ShopStickerOverlay — Shop sticker opens the preview and Escape
     dialog.getByRole('img', { name: 'Shop sticker preview for carol@21.gifts' }),
   ).toBeVisible();
   await expect(dialog.getByRole('button', { name: 'PDF' })).toHaveAttribute('aria-pressed', 'true');
+  const language = dialog.getByRole('combobox', { name: 'Second language' });
+  await expect(language).toContainText('None (English only)');
+  await language.click();
+  await expect(dialog.getByRole('option', { name: 'Spanish' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole('listbox')).toHaveCount(0);
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog', { name: 'Shop sticker' })).toHaveCount(0);
   await expect(page.getByRole('img', { name: 'Open CryptoPay QR code' })).toBeVisible();
@@ -5632,7 +6848,7 @@ test('Function: buildShopStickerSvg — preview and SVG download are the member 
   request,
 }) => {
   const dialog = await openShopSticker(page, request);
-  const expected = buildShopStickerSvg(openCryptoPayQrValue('carol') as string);
+  const expected = buildShopStickerSvg(openCryptoPayQrValue('carol') as string, 'english');
   const src = await dialog
     .getByRole('img', { name: 'Shop sticker preview for carol@21.gifts' })
     .getAttribute('src');
@@ -5650,7 +6866,9 @@ test('Function: buildShopStickerPdf — PDF download is the one-page vector stic
   const dialog = await openShopSticker(page, request);
   const pdf = await downloadShopSticker(page, dialog, 'pdf');
   expect(
-    pdf.bytes.equals(Buffer.from(buildShopStickerPdf(openCryptoPayQrValue('carol') as string))),
+    pdf.bytes.equals(
+      Buffer.from(buildShopStickerPdf(openCryptoPayQrValue('carol') as string, 'english')),
+    ),
   ).toBe(true);
   expect(pdf.bytes.subarray(0, 8).toString('latin1')).toBe('%PDF-1.4');
 });
@@ -5681,8 +6899,93 @@ test('Function: shopStickerFileName — downloads are named after the username',
   const dialog = await openShopSticker(page, request);
   for (const format of ['pdf', 'png', 'jpg', 'svg'] as const) {
     const file = await downloadShopSticker(page, dialog, format);
-    expect(file.name).toBe(`21gifts-shop-sticker-carol.${format}`);
+    expect(file.name).toBe(`21gifts-shop-sticker-carol-english.${format}`);
   }
+});
+
+test('Function: shopStickerLangFromQuery — Kikamba and unknown values', () => {
+  expect(shopStickerLangFromQuery('Kikamba')).toBe('kikamba');
+  expect(shopStickerLangFromQuery('kam')).toBe('kikamba');
+  expect(shopStickerLangFromQuery('es')).toBe('spanish');
+  expect(shopStickerLangFromQuery('de')).toBe('german');
+  expect(shopStickerLangFromQuery('fr')).toBe('french');
+  expect(shopStickerLangFromQuery('en')).toBe('english');
+  expect(shopStickerLangFromQuery('keine')).toBe('english');
+  expect(shopStickerLangFromQuery(null)).toBe('filipino');
+  expect(shopStickerLangFromQuery('')).toBe('filipino');
+  expect(shopStickerLangFromQuery('Swahili')).toBe('filipino');
+});
+
+test('Function: shopStickerLangFromLocation — ?lang=Kikamba opens the English/Kikamba sticker', async ({
+  page,
+  request,
+}) => {
+  await reachWelcome(page, request);
+  await page.goto(`${CAROL_MEMBER}?lang=Kikamba`);
+  await expect(page.getByText('carol@21.gifts', { exact: true })).toBeVisible();
+  const dialog = page.getByRole('dialog', { name: 'Shop sticker' });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole('combobox', { name: 'Second language' })).toContainText('Kikamba');
+  const expected = buildShopStickerSvg(openCryptoPayQrValue('carol') as string, 'kikamba');
+  const src = await dialog
+    .getByRole('img', { name: 'Shop sticker preview for carol@21.gifts' })
+    .getAttribute('src');
+  expect(decodeURIComponent((src as string).slice((src as string).indexOf(',') + 1))).toBe(
+    expected,
+  );
+  const svg = await downloadShopSticker(page, dialog, 'svg');
+  expect(svg.name).toBe('21gifts-shop-sticker-carol-kikamba.svg');
+});
+
+test('Function: shopStickerLangInitial — UI language is the sticker default', () => {
+  expect(shopStickerLangInitial('en')).toBe('english');
+  expect(shopStickerLangInitial('de')).toBe('german');
+  expect(shopStickerLangInitial('es')).toBe('spanish');
+  expect(shopStickerLangInitial('fil')).toBe('filipino');
+});
+
+test('Function: shopStickerLangInitial — unknown lang follows the English UI', async ({
+  page,
+  request,
+}) => {
+  await reachWelcome(page, request);
+  await page.goto(`${CAROL_MEMBER}?lang=Swahili`);
+  await expect(page.getByText('carol@21.gifts')).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Shop sticker' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Shop sticker' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Shop sticker' });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole('combobox', { name: 'Second language' })).toContainText(
+    'None (English only)',
+  );
+  const expected = buildShopStickerSvg(openCryptoPayQrValue('carol') as string, 'english');
+  const src = await dialog
+    .getByRole('img', { name: 'Shop sticker preview for carol@21.gifts' })
+    .getAttribute('src');
+  expect(decodeURIComponent((src as string).slice((src as string).indexOf(',') + 1))).toBe(
+    expected,
+  );
+});
+
+test('Function: shopStickerLangInitial — ?lang=fil still selects Filipino', async ({
+  page,
+  request,
+}) => {
+  await reachWelcome(page, request);
+  await page.goto(`${CAROL_MEMBER}?lang=fil`);
+  await expect(page.getByText('carol@21.gifts')).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Shop sticker' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Shop sticker' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Shop sticker' });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole('combobox', { name: 'Second language' })).toContainText('Filipino');
+  const expected = buildShopStickerSvg(openCryptoPayQrValue('carol') as string, 'filipino');
+  const src = await dialog
+    .getByRole('img', { name: 'Shop sticker preview for carol@21.gifts' })
+    .getAttribute('src');
+  expect(decodeURIComponent((src as string).slice((src as string).indexOf(',') + 1))).toBe(
+    expected,
+  );
 });
 
 test('Function: NameSetup — name screen heading is visible', async ({ page }) => {
@@ -5940,6 +7243,7 @@ test('Function: noteKinds — a credit, a donation, and a shop each get their ta
     });
   });
   await page.goto('/welcome');
+  await chooseForumView(page, 'All');
   await expect(page.getByRole('button', { name: 'Loan' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Donation', expanded: false })).toBeVisible();
   await expect(page.getByRole('link', { name: '#Shop' })).toBeVisible();
@@ -5998,6 +7302,7 @@ test('Function: MessageKindTags — pressing Loan explains the credit', async ({
     });
   });
   await page.goto('/welcome');
+  await chooseForumView(page, 'All');
   const loan = page.getByRole('button', { name: 'Loan' });
   await loan.click();
   await expect(page.getByRole('status')).toContainText('paid back');
@@ -7166,12 +8471,12 @@ test('Function: saveUnpaidSeenAt — opening No gifts yet clears the unpaid coun
   );
 });
 
-test('Function: OnboardingGate — login sends a new account to the name screen', async ({
+test('Function: OnboardingGate — login sends a new account to the address screen', async ({
   page,
   request,
 }) => {
   await signInViaStub(page, request);
-  await expect(page).toHaveURL(/\/setup\/name/);
+  await expect(page).toHaveURL(/\/setup\/address/);
 });
 
 test('Function: OnboardingGate — name and address without agreement go to rules', async ({
@@ -7206,20 +8511,20 @@ test('Function: OnboardingGate — name and address without agreement go to rule
   await expect(page).toHaveURL(/\/setup\/rules/);
 });
 
-test('Function: nextOnboardingPath — login sends a new account to the name screen', async ({
+test('Function: nextOnboardingPath — login sends a new account to the address screen', async ({
   page,
   request,
 }) => {
   await signInViaStub(page, request);
-  await expect(page).toHaveURL(/\/setup\/name/);
+  await expect(page).toHaveURL(/\/setup\/address/);
 });
 
-test('Function: hasDisplayName — login sends a new account to the name screen', async ({
+test('Function: hasDisplayName — login sends a new account to the address screen', async ({
   page,
   request,
 }) => {
   await signInViaStub(page, request);
-  await expect(page).toHaveURL(/\/setup\/name/);
+  await expect(page).toHaveURL(/\/setup\/address/);
 });
 
 test('Function: hasLightningAddress — named account without address stays on address screen', async ({
@@ -7254,10 +8559,10 @@ test('Function: hasLightningAddress — named account without address stays on a
   await expect(page).toHaveURL(/\/setup\/address/);
 });
 
-test('Function: useHydrateSession — reload keeps the name screen', async ({ page, request }) => {
+test('Function: useHydrateSession — reload keeps the address screen', async ({ page, request }) => {
   await signInViaStub(page, request);
   await page.reload();
-  await expect(page).toHaveURL(/\/setup\/name/);
+  await expect(page).toHaveURL(/\/setup\/address/);
 });
 
 test('Function: LogoutButton — log out returns to login', async ({ page, request }) => {
@@ -7363,9 +8668,17 @@ test('Function: resyncPushSubscription — signed-in chrome still shows Menu', a
   await expect(page.getByRole('button', { name: 'Menu' })).toBeVisible();
 });
 
+test('Function: WelcomeTopRight — signed-out welcome offers the log-in link', async ({ page }) => {
+  await page.goto('/welcome');
+  const login = page.getByRole('link', { name: 'Log in' });
+  await expect(login).toBeVisible();
+  await expect(login).toHaveAttribute('href', '/login');
+  await expect(page.getByRole('button', { name: 'Menu' })).toHaveCount(0);
+});
+
 test('Function: SignedInChrome — Menu reveals Profile and log out', async ({ page, request }) => {
   await signInViaStub(page, request);
-  await expect(page).toHaveURL(/\/setup\/name/);
+  await expect(page).toHaveURL(/\/setup\/address/);
   await expect(page.getByRole('button', { name: 'Menu' })).toBeVisible();
   await expect(page.locator('#signed-in-menu')).toBeHidden();
   await openSignedInMenu(page);
@@ -7854,7 +9167,7 @@ test('Function: Button — login shows the Log in button', async ({ page }) => {
 
 test('Function: ButtonLink — landing Ask for help is a link', async ({ page }) => {
   await page.goto('/');
-  await expect(page.getByRole('link', { name: 'Ask for help' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Ask for help' }).first()).toBeVisible();
 });
 
 test('Function: Wordmark — landing shows the 21.gifts wordmark', async ({ page }) => {
@@ -7864,7 +9177,7 @@ test('Function: Wordmark — landing shows the 21.gifts wordmark', async ({ page
 
 test('Function: HomeWordmark — unsigned donate wordmark goes home', async ({ page }) => {
   await page.goto('/donate');
-  await expect(page.getByRole('link', { name: '21.gifts' })).toHaveAttribute('href', '/');
+  await expect(page.getByRole('link', { name: '21.gifts' })).toHaveAttribute('href', '/en');
   await expect(page.getByRole('link', { name: 'Back to the forum' })).toHaveAttribute(
     'href',
     '/welcome',
@@ -9488,10 +10801,9 @@ test('Function: push service worker — GET /sw.js is the push worker', async ({
   expect(body).toContain('showNotification');
   expect(body).toContain('isDeviceSunday');
   expect(body).toContain('21gifts-push-open');
-  expect(body.indexOf("payload.type !== 'conversation'")).toBeGreaterThan(-1);
-  expect(body.indexOf("payload.type !== 'conversation'")).toBeLessThan(
-    body.indexOf('showNotification'),
-  );
+  const guardAt = body.indexOf("payload.type !== 'conversation'");
+  expect(guardAt).toBeGreaterThan(-1);
+  expect(body.indexOf('showNotification', guardAt)).toBeGreaterThan(guardAt);
 });
 
 test('Function: PushOpenListener — welcome heading is visible', async ({ page }) => {
@@ -9919,6 +11231,27 @@ test('Function: proxyMessagesShopAccountPatch — unauthenticated shop-account p
   expect(response.status()).toBe(401);
 });
 
+test('Function: proxyMessagesTextPatch — unauthenticated text patch is forwarded and denied', async ({
+  request,
+}) => {
+  const response = await request.patch('/forum/messages/[id]/text');
+  expect(response.status()).toBe(401);
+});
+
+test('Function: proxyMessagesPhotosPatch — unauthenticated photo patch is forwarded and denied', async ({
+  request,
+}) => {
+  const response = await request.patch('/forum/messages/[id]/photos');
+  expect(response.status()).toBe(401);
+});
+
+test('Function: proxyMessagesEditsGet — unauthenticated edit history is forwarded and denied', async ({
+  request,
+}) => {
+  const response = await request.get('/forum/messages/[id]/edits');
+  expect(response.status()).toBe(401);
+});
+
 test('Function: PATCH — PATCH /forum/messages/[id]/place without bearer is 401', async ({
   request,
 }) => {
@@ -10202,13 +11535,112 @@ test('Function: StaffFunctions — moderator actions stay closed until opened', 
   });
   await page.goto(`/members/${memberId}`);
   await expect(page.getByText('Moderator functions')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Verify' })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'Verify' })).toHaveCount(0);
   await page.getByText('Moderator functions').click();
-  await expect(page.getByRole('button', { name: 'Verify' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Verify' })).toBeVisible();
   await seedAdaSession(page);
   await page.goto(`/members/${memberId}`);
   await expect(page.getByText('Moderator functions')).toHaveCount(0);
   await expect(page.getByTestId('state-members-staff-verify')).toHaveCount(0);
+});
+
+test('Function: MemberVerifyPage — moderator sees the stored-name check', async ({ page }) => {
+  await seedAdaSession(page, 'moderator');
+  const memberId = '22222222-2222-4222-8222-222222222222';
+  await page.route(`**/forum/members/${memberId}`, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        id: memberId,
+        name: 'Ada',
+        location: null,
+        role: 'basis',
+        lightningAddress: 'alice@walletofsatoshi.com',
+        createdAt: '2026-01-15T12:00:00.000Z',
+        profileMessage: null,
+        postCount: 0,
+        replyCount: 0,
+        aboutMe: null,
+        trust: {
+          verifiedBy: null,
+          proposedBy: null,
+          confirmedBy: null,
+          appointedBy: null,
+        },
+      }),
+    });
+  });
+  await page.goto(`/members/${memberId}/verify`);
+  await expect(page.getByRole('heading', { name: 'Verify' })).toBeVisible();
+  await expect(
+    page.getByText('Does this stored name match the name that uniquely identifies this person?'),
+  ).toBeVisible();
+  const ada = page.getByRole('link', { name: 'Ada', exact: true });
+  await expect(ada).toBeVisible();
+  await expect(ada).toHaveAttribute('href', `/members/${memberId}`);
+  await expect(page.getByRole('button', { name: 'Yes', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'No', exact: true })).toBeVisible();
+});
+
+test('Function: MemberVerifyScreen — confirm posts and opens the member card', async ({ page }) => {
+  const memberId = '22222222-2222-4222-8222-222222222222';
+  await page.route(`**/forum/members/${memberId}`, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        id: memberId,
+        name: 'Ada',
+        location: null,
+        role: 'basis',
+        lightningAddress: 'alice@walletofsatoshi.com',
+        createdAt: '2026-01-15T12:00:00.000Z',
+        profileMessage: null,
+        postCount: 0,
+        replyCount: 0,
+        aboutMe: null,
+        trust: {
+          verifiedBy: null,
+          proposedBy: null,
+          confirmedBy: null,
+          appointedBy: null,
+        },
+      }),
+    });
+  });
+  await page.route(`**/forum/members/${memberId}/activity`, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        receivedOverTime: [],
+        donatedOverTime: [],
+      }),
+    });
+  });
+  await seedAdaSession(page);
+  await page.goto(`/members/${memberId}/verify`);
+  await expect(page.getByText('You cannot verify this member.')).toBeVisible();
+  await expect(
+    page.getByText('Does this stored name match the name that uniquely identifies this person?'),
+  ).toHaveCount(0);
+  await seedAdaSession(page, 'moderator');
+  await page.route('**/trust/verify', async (route) => {
+    if (route.request().method() !== 'POST') {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ id: memberId, name: 'Ada', role: 'verified' }),
+    });
+  });
+  await page.goto(`/members/${memberId}/verify`);
+  await expect(page.getByRole('button', { name: 'No', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Yes', exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/members/${memberId}(?:\\?.*)?$`));
 });
 
 test('Function: DeletePostControl — ordinary members have no delete action', async ({ page }) => {
@@ -11268,6 +12700,69 @@ test('Function: CreditLedger — a credit note lists who gave and who is paid ba
   await expect(page.getByLabel('Paid back')).toBeVisible();
   await expect(page.getByText(/Each share is one bitcoin payment/)).toBeVisible();
   await expect(page.getByRole('img', { name: /Sep 27/ })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Repayment list' })).toBeVisible();
+  await expect(page.getByText('Due', { exact: true })).toHaveCount(0);
+  await page.goto(`/messages/${id}/repayment-list`);
+  await expect(page.getByText('Due', { exact: true })).toBeVisible();
+});
+
+test('Function: RepaymentListPage — day rows render on the repayment list', async ({ page }) => {
+  const id = '11111111-1111-4111-8111-111111111111';
+  await page.route('**/gifts/stats**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        totalSats: 0,
+        totalBtc: '0',
+        totalUsd: '0.00',
+        totalChf: '0.00',
+        totalEur: '0.00',
+        totalPhp: '0.00',
+        spendOverTime: [{ day: '2026-09-01', sats: 100000000, usd: '100000.00' }],
+      }),
+    });
+  });
+  await page.route(`**/messages/${id}/repayment`, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        currency: 'BTC',
+        fundedAt: '2026-09-26T12:00:00.000Z',
+        termDays: 1,
+        daysDue: 1,
+        daysPaid: 0,
+        unassignedSats: 0,
+        givers: [
+          {
+            accountId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+            name: 'Bea',
+            username: 'bea',
+            givenSats: 21,
+            givenAmount: null,
+          },
+        ],
+        repayments: [
+          {
+            dayIndex: 0,
+            dueOn: '2026-09-27',
+            accountId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+            name: 'Bea',
+            username: 'bea',
+            amount: null,
+            sats: 21,
+            status: 'due',
+            via: 'lightning',
+          },
+        ],
+        next: null,
+      }),
+    });
+  });
+  await page.goto(`/messages/${id}/repayment-list`);
+  await expect(page.getByLabel('Given').getByText('Bea @bea')).toBeVisible();
+  await expect(page.getByText('Due', { exact: true })).toBeVisible();
 });
 
 test('Function: RepaymentPlanChart — dates run from the first day to the last', async ({
@@ -11536,4 +13031,96 @@ test('Function: remapClosedMentionStarts — earlier text keeps that @ closed', 
   await box.press('End');
   await expect(people).toHaveCount(0);
   await expect(box).toHaveValue('xhi @');
+});
+
+test('Function: fitBoxInFrame — a wide panel is pulled inside the frame', async ({ page }) => {
+  await page.goto('/login');
+  const box = await page.evaluate(fitBoxInFrame, {
+    frameLeft: 24,
+    frameRight: 351,
+    frameTop: 0,
+    frameBottom: 800,
+    anchorLeft: 56,
+    anchorTop: 160,
+    anchorBottom: 200,
+    gap: 8,
+    preferredWidth: 384,
+    inset: 16,
+    viewportHeight: 800,
+  });
+  expect(box).not.toBeNull();
+  if (box === null) {
+    return;
+  }
+  expect(box.left).toBeGreaterThanOrEqual(24 + 16);
+  expect(box.left + box.width).toBeLessThanOrEqual(351 - 16);
+  expect(box.width).toBeLessThanOrEqual(384);
+});
+
+test('Function: pageFrameProblems — login at phone width stays inside the window', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto('/login');
+  const problems = await page.evaluate(pageFrameProblems);
+  expect(problems).toEqual([]);
+});
+
+test('Function: ReplyDirectionAmounts — sent and received stay apart', async ({ page }) => {
+  await seedAdaSession(page);
+  const id = '11111111-1111-4111-8111-111111111111';
+  await page.route(/\/messages(?:\?|$)/, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        messages: [
+          {
+            id,
+            name: 'Ada',
+            text: 'The note that was paid',
+            createdAt: '2026-08-28T12:00:00.000Z',
+            sats: 21000,
+            payable: true,
+            hasPhoto: false,
+            hasVideo: false,
+            videoContentType: null,
+            role: 'basis',
+            replyCount: 1,
+          },
+        ],
+      }),
+    });
+  });
+  await page.route(`**/forum/messages/${id}/replies`, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        messages: [
+          {
+            id: '22222222-2222-4222-8222-222222222222',
+            name: 'Ada',
+            text: 'A written reply',
+            createdAt: '2026-08-28T12:30:00.000Z',
+            sats: 21000,
+            receivedSats: 100,
+            payable: false,
+            hasPhoto: false,
+            hasVideo: false,
+            videoContentType: null,
+            role: 'basis',
+            replyCount: 0,
+          },
+        ],
+      }),
+    });
+  });
+  await page.goto('/welcome');
+  await chooseForumView(page, 'All');
+  await page.getByRole('button', { name: 'Show reactions' }).click();
+  await expect(page.getByText('A written reply')).toBeVisible();
+  await expect(page.getByText("sent \u20BF21'000")).toBeVisible();
+  await expect(page.getByText('received \u20BF100')).toBeVisible();
+  await expect(page.getByText("\u20BF21'100")).toHaveCount(0);
 });

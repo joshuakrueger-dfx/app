@@ -15,16 +15,17 @@ import {
   fetchMessagePhoto,
   fetchPublicMessage,
   fetchReplies,
+  markNotificationsReadForMessage,
   NoteDeletedError,
   postMessage,
   postMessageInvoice,
 } from '@/lib/api';
 import { FORUM_MESSAGE_MAX_LENGTH, type AmountUnit, type ForumMessage } from '@/lib/api-types';
 import { MissingRequirementsError, nextPostRequirement } from '@/lib/missing-requirements';
-import { isReplyPaymentExempt } from '@/lib/roles';
+import { isReplyPaymentExempt, roleAtLeast } from '@/lib/roles';
 import { useFiatPreference } from '@/components/FiatPreferenceProvider';
 import {
-  latestRateDay,
+  latestRateDayFor,
   paySatsFromDraft,
   replySatsFromDraft,
   shownFiatForSats,
@@ -209,12 +210,14 @@ export function PublicMessageThread(props: {
   >(null);
   const pendingPostRef = useRef<(() => Promise<void>) | null>(null);
   const pendingComposeTextRef = useRef<string | null>(null);
-  const [rateDay, setRateDay] = useState<FiatRateDay | null>(null);
+  const [rateSeries, setRateSeries] = useState<readonly FiatRateDay[] | null>(null);
+  const rateDay = rateSeries === null ? null : latestRateDayFor(rateSeries, fiat);
   const rateDayRef = useRef(rateDay);
   rateDayRef.current = rateDay;
   const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({});
   const photoUrlsRef = useRef(photoUrls);
   photoUrlsRef.current = photoUrls;
+  const [photoEpoch, setPhotoEpoch] = useState(0);
 
   const photoSource: ForumMessage[] = [note];
   if (replies !== null) {
@@ -237,12 +240,12 @@ export function PublicMessageThread(props: {
     void fetchGiftStats()
       .then((stats) => {
         if (!cancelled) {
-          setRateDay(latestRateDay(stats.spendOverTime));
+          setRateSeries(stats.spendOverTime);
         }
       })
       .catch(() => {
         if (!cancelled) {
-          setRateDay(null);
+          setRateSeries([]);
         }
       });
     return () => {
@@ -317,7 +320,7 @@ export function PublicMessageThread(props: {
     return () => {
       cancelled = true;
     };
-  }, [photoIdsKey, session]);
+  }, [photoEpoch, photoIdsKey, session]);
 
   useEffect(() => {
     return () => {
@@ -378,6 +381,7 @@ export function PublicMessageThread(props: {
     messageId: string,
     baselineSats: number,
     replyParentId: string | null = null,
+    baselineReceivedSats?: number,
   ): void => {
     const generation = bumpPayPollGeneration();
     const controller = payPollAbortRef.current;
@@ -412,16 +416,23 @@ export function PublicMessageThread(props: {
       }
       for (;;) {
         try {
-          const next = await fetchPublicMessage(messageId, {
-            sinceSats: baselineSats,
-            signal,
-          });
+          const next = await fetchPublicMessage(
+            messageId,
+            typeof baselineReceivedSats === 'number'
+              ? { sinceReceivedSats: baselineReceivedSats, signal }
+              : { sinceSats: baselineSats, signal },
+          );
           /* v8 ignore start -- poll aborted or superseded before the body is applied */
           if (generation !== payPollGeneration.current || signal.aborted) {
             return;
           }
           /* v8 ignore stop */
-          if (next !== null && next.sats > baselineSats) {
+          if (
+            next !== null &&
+            (typeof baselineReceivedSats === 'number'
+              ? (next.receivedSats ?? 0) > baselineReceivedSats
+              : next.sats > baselineSats)
+          ) {
             let ownContent = !composePay;
             if (composePay) {
               try {
@@ -829,7 +840,11 @@ export function PublicMessageThread(props: {
           };
           setPayInvoice(minted);
           setPayBusy(false);
-          startPayPoll(messageId, baselineSats);
+          if (listed.parentId) {
+            startPayPoll(messageId, baselineSats, null, listed.receivedSats ?? 0);
+          } else {
+            startPayPoll(messageId, baselineSats);
+          }
         } catch (err) {
           /* v8 ignore next 3 -- pay sheet closed while the invoice request failed */
           if (generation !== payPollGeneration.current) {
@@ -922,6 +937,7 @@ export function PublicMessageThread(props: {
       return;
     }
     /* v8 ignore stop */
+    void markNotificationsReadForMessage(session, messageId).catch(() => undefined);
     void (async () => {
       try {
         const next = await fetchReplies(session, messageId);
@@ -1052,6 +1068,52 @@ export function PublicMessageThread(props: {
         {...IDLE_BOARD}
         messages={[note]}
         truncate={false}
+        {...(account !== null && roleAtLeast(account.role, 'moderator')
+          ? {
+              shopNoteEdit: true as const,
+              onShopNoteUpdated: (updated: ForumMessage) => {
+                setPhotoUrls((prev) => {
+                  const prefix = `${updated.id}:`;
+                  let changed = false;
+                  const next = { ...prev };
+                  for (const [key, url] of Object.entries(next)) {
+                    if (!key.startsWith(prefix)) {
+                      continue;
+                    }
+                    URL.revokeObjectURL(url);
+                    delete next[key];
+                    changed = true;
+                  }
+                  return changed ? next : prev;
+                });
+                setPhotoEpoch((n) => n + 1);
+                setNote((prev) => {
+                  /* v8 ignore next 3 -- the thread pencil edits only the note on screen */
+                  if (prev.id !== updated.id) {
+                    return prev;
+                  }
+                  const next = {
+                    ...prev,
+                    text: updated.text,
+                    hasPhoto: updated.hasPhoto,
+                    photoCount: updated.photoCount,
+                    hasVideo: updated.hasVideo,
+                  };
+                  if (updated.place === undefined) {
+                    delete next.place;
+                  } else {
+                    next.place = updated.place;
+                  }
+                  if (updated.shopAccount === undefined) {
+                    delete next.shopAccount;
+                  } else {
+                    next.shopAccount = updated.shopAccount;
+                  }
+                  return next;
+                });
+              },
+            }
+          : {})}
         photoUrls={photoUrls}
         rateDay={rateDay}
         payMessageId={payMessageId}
