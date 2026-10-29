@@ -9,6 +9,44 @@ async function chooseForumView(page: Page, name: string): Promise<void> {
   await page.getByRole('option', { name, exact: true }).click();
 }
 
+async function offerIosInstall(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'userAgent', {
+      configurable: true,
+      get: () =>
+        'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+    });
+    Object.defineProperty(navigator, 'standalone', {
+      configurable: true,
+      get: () => false,
+    });
+  });
+}
+
+async function openInstallDialog(
+  page: Page,
+  menu: 'marketing' | 'signed-in' | 'none',
+): Promise<void> {
+  if (menu === 'signed-in') {
+    await page.getByRole('button', { name: 'Menu' }).click();
+  }
+  if (menu === 'marketing') {
+    const installInNav = page.locator('header nav').getByRole('button', { name: 'Install app' });
+    if (!(await installInNav.isVisible())) {
+      await page.getByRole('button', { name: 'Menu' }).click();
+    }
+  }
+  const install =
+    menu === 'none'
+      ? page.locator('main').getByRole('button', { name: 'Install app' })
+      : page.getByRole('button', { name: 'Install app' });
+  await expect(install).toBeVisible();
+  await install.click();
+  await expect(
+    page.getByRole('heading', { name: 'Add 21.gifts to your Home Screen' }),
+  ).toBeVisible();
+}
+
 /**
  * Stable map for visual baselines. Live Google tiles are not a baseline:
  * they depend on a key, billing, and the network. The stub paints a fixed
@@ -2201,28 +2239,13 @@ test.describe('screen baselines', () => {
   });
 
   test('state / install-open', async ({ page }) => {
-    await page.addInitScript(() => {
-      Object.defineProperty(navigator, 'userAgent', {
-        configurable: true,
-        get: () =>
-          'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
-      });
-      Object.defineProperty(navigator, 'standalone', {
-        configurable: true,
-        get: () => false,
-      });
-    });
     await stubHomeMap(page);
+    await offerIosInstall(page);
     await page.goto('/');
     await expect(page.locator('#shop-places-map .shop-place-marker')).toBeVisible({
       timeout: 20_000,
     });
-    const install = page.locator('main').getByRole('button', { name: 'Install app' });
-    await expect(install).toBeVisible();
-    await install.click();
-    await expect(
-      page.getByRole('heading', { name: 'Add 21.gifts to your Home Screen' }),
-    ).toBeVisible();
+    await openInstallDialog(page, 'none');
     // The sheet is position:fixed. A full-page stitch would paint it into every chunk.
     await shotScreen(page, 'state-root-install-open', false, page.locator('#shop-places-map'));
   });
@@ -2233,10 +2256,26 @@ test.describe('screen baselines', () => {
     await shotScreen(page, 'screen-legal');
   });
 
+  test('/legal install-open', async ({ page }) => {
+    await offerIosInstall(page);
+    await page.goto('/legal');
+    await expect(page.getByRole('heading', { name: 'Legal Notice' })).toBeVisible();
+    await openInstallDialog(page, 'marketing');
+    await shotScreen(page, 'state-legal-install-open', false);
+  });
+
   test('screen /about', async ({ page }) => {
     await page.goto('/about');
     await expect(page.getByRole('heading', { name: 'What 21.gifts stands for' })).toBeVisible();
     await shotScreen(page, 'screen-about');
+  });
+
+  test('/about install-open', async ({ page }) => {
+    await offerIosInstall(page);
+    await page.goto('/about');
+    await expect(page.getByRole('heading', { name: 'What 21.gifts stands for' })).toBeVisible();
+    await openInstallDialog(page, 'marketing');
+    await shotScreen(page, 'state-about-install-open', false);
   });
 
   test('screen /login', async ({ page }) => {
@@ -2523,7 +2562,8 @@ test.describe('screen baselines', () => {
     await shotScreen(page, 'state-pl-charge-failed');
   });
 
-  test('screen /wallet', async ({ page }) => {
+  /** Opens the signed-in wallet screen for visual baselines. */
+  async function openWalletScreen(page: Page, iosInstall = false): Promise<void> {
     await page.addInitScript(() => {
       localStorage.setItem('21gifts.session', 'sess-e2e');
     });
@@ -2549,14 +2589,26 @@ test.describe('screen baselines', () => {
         body: JSON.stringify({ charge: null, history: [] }),
       });
     });
+    if (iosInstall) await offerIosInstall(page);
     await page.goto('/wallet');
     await expect(page.getByRole('heading', { name: 'Wallet' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Add recovery phrase' })).toBeVisible();
     await page.getByRole('link', { name: 'Set an amount' }).scrollIntoViewIfNeeded();
+  }
+
+  test('screen /wallet', async ({ page }) => {
+    await openWalletScreen(page);
     await shotScreen(page, 'screen-wallet');
   });
 
-  test('screen /wallet/phrase', async ({ page }) => {
+  test('/wallet install-open', async ({ page }) => {
+    await openWalletScreen(page, true);
+    await openInstallDialog(page, 'signed-in');
+    await shotScreen(page, 'state-wallet-install-open', false);
+  });
+
+  /** Opens the wallet recovery phrase screen for visual baselines. */
+  async function openWalletPhraseScreen(page: Page, iosInstall = false): Promise<void> {
     await page.addInitScript(() => {
       localStorage.setItem('21gifts.session', 'sess-e2e');
     });
@@ -2575,12 +2627,23 @@ test.describe('screen baselines', () => {
         }),
       });
     });
+    if (iosInstall) await offerIosInstall(page);
     await page.goto('/wallet/phrase');
     await expect(page.getByRole('heading', { name: 'Wallet' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Add recovery phrase' })).toBeVisible();
     await expect(page.getByText('ada@21.gifts')).toHaveCount(0);
     await expect(page.getByRole('link', { name: 'Set an amount' })).toHaveCount(0);
+  }
+
+  test('screen /wallet/phrase', async ({ page }) => {
+    await openWalletPhraseScreen(page);
     await shotScreen(page, 'screen-wallet-phrase');
+  });
+
+  test('/wallet/phrase install-open', async ({ page }) => {
+    await openWalletPhraseScreen(page, true);
+    await openInstallDialog(page, 'signed-in');
+    await shotScreen(page, 'state-wallet-phrase-install-open', false);
   });
 
   test('wallet phrase', async ({ page }) => {
@@ -2824,7 +2887,8 @@ test.describe('screen baselines', () => {
     await shotScreen(page, 'state-wallet-prf-unsupported');
   });
 
-  test('screen /stats', async ({ page }) => {
+  /** Opens the stats screen with stable response fixtures. */
+  async function openStatsScreen(page: Page, iosInstall = false): Promise<void> {
     await stubPostStats(page);
     await page.route('**/gifts/stats', async (route) => {
       await route.fulfill({
@@ -2833,9 +2897,20 @@ test.describe('screen baselines', () => {
         body: JSON.stringify(STATS_DEFAULT),
       });
     });
+    if (iosInstall) await offerIosInstall(page);
     await page.goto('/stats');
     await expect(page.getByRole('heading', { name: 'Total spend over time' })).toBeVisible();
+  }
+
+  test('screen /stats', async ({ page }) => {
+    await openStatsScreen(page);
     await shotScreen(page, 'screen-stats');
+  });
+
+  test('/stats install-open', async ({ page }) => {
+    await openStatsScreen(page, true);
+    await openInstallDialog(page, 'marketing');
+    await shotScreen(page, 'state-stats-install-open', false);
   });
 
   test('screen /stats/[day]', async ({ page }) => {
@@ -2844,13 +2919,21 @@ test.describe('screen baselines', () => {
     await shotScreen(page, 'screen-stats-day');
   });
 
+  test('/stats/[day] install-open', async ({ page }) => {
+    await offerIosInstall(page);
+    await page.goto('/stats/2026-06-01');
+    await expect(page.getByText('alice')).toBeVisible();
+    await openInstallDialog(page, 'marketing');
+    await shotScreen(page, 'state-stats-day-install-open', false);
+  });
+
   test('screen /rules', async ({ page }) => {
     await page.goto('/rules');
     await expect(page.getByText('Only free donations')).toBeVisible();
     await shotScreen(page, 'screen-rules');
   });
 
-  test('rules signed-in', async ({ page }) => {
+  async function openRulesScreen(page: Page, iosInstall = false): Promise<void> {
     await page.addInitScript(() => {
       localStorage.setItem('21gifts.session', 'sess-e2e');
     });
@@ -2872,15 +2955,34 @@ test.describe('screen baselines', () => {
         }),
       });
     });
+    if (iosInstall) await offerIosInstall(page);
     await page.goto('/rules');
     await expect(page.getByRole('button', { name: 'Menu' })).toBeVisible();
+  }
+
+  test('rules signed-in', async ({ page }) => {
+    await openRulesScreen(page);
     await shotScreen(page, 'state-rules-signed-in');
+  });
+
+  test('/rules install-open', async ({ page }) => {
+    await openRulesScreen(page, true);
+    await openInstallDialog(page, 'signed-in');
+    await shotScreen(page, 'state-rules-install-open', false);
   });
 
   test('screen /404', async ({ page }) => {
     await page.goto('/404');
     await expect(page.getByRole('heading', { name: '404' })).toBeVisible();
     await shotScreen(page, 'screen-404');
+  });
+
+  test('/404 install-open', async ({ page }) => {
+    await offerIosInstall(page);
+    await page.goto('/404');
+    await expect(page.getByRole('heading', { name: '404' })).toBeVisible();
+    await openInstallDialog(page, 'marketing');
+    await shotScreen(page, 'state-404-install-open', false);
   });
 });
 
@@ -3461,7 +3563,8 @@ test.describe('login variant baselines', () => {
 });
 
 test.describe('onboarding screens', () => {
-  test('screen /setup/name', async ({ page }) => {
+  /** Opens the name setup screen with its signed-in account fixture. */
+  async function openSetupNameScreen(page: Page, iosInstall = false): Promise<void> {
     await page.addInitScript(() => {
       localStorage.setItem('21gifts.session', 'sess-e2e');
     });
@@ -3472,12 +3575,24 @@ test.describe('onboarding screens', () => {
         body: JSON.stringify(E2E_ACCOUNT),
       });
     });
+    if (iosInstall) await offerIosInstall(page);
     await page.goto('/setup/name');
     await expect(page.getByRole('heading', { name: 'Your name' })).toBeVisible();
+  }
+
+  test('screen /setup/name', async ({ page }) => {
+    await openSetupNameScreen(page);
     await shotScreen(page, 'screen-setup-name');
   });
 
-  test('screen /setup/username', async ({ page }) => {
+  test('/setup/name install-open', async ({ page }) => {
+    await openSetupNameScreen(page, true);
+    await openInstallDialog(page, 'signed-in');
+    await shotScreen(page, 'state-setup-name-install-open', false);
+  });
+
+  /** Opens the username setup screen with its signed-in account fixture. */
+  async function openSetupUsernameScreen(page: Page, iosInstall = false): Promise<void> {
     await page.addInitScript(() => {
       localStorage.setItem('21gifts.session', 'sess-e2e');
     });
@@ -3494,12 +3609,24 @@ test.describe('onboarding screens', () => {
         }),
       });
     });
+    if (iosInstall) await offerIosInstall(page);
     await page.goto('/setup/username');
     await expect(page.getByRole('heading', { name: 'Your 21.gifts name' })).toBeVisible();
+  }
+
+  test('screen /setup/username', async ({ page }) => {
+    await openSetupUsernameScreen(page);
     await shotScreen(page, 'screen-setup-username');
   });
 
-  test('screen /setup/address', async ({ page }) => {
+  test('/setup/username install-open', async ({ page }) => {
+    await openSetupUsernameScreen(page, true);
+    await openInstallDialog(page, 'signed-in');
+    await shotScreen(page, 'state-setup-username-install-open', false);
+  });
+
+  /** Opens the address setup screen with its signed-in account fixture. */
+  async function openSetupAddressScreen(page: Page, iosInstall = false): Promise<void> {
     await page.addInitScript(() => {
       localStorage.setItem('21gifts.session', 'sess-e2e');
     });
@@ -3515,11 +3642,22 @@ test.describe('onboarding screens', () => {
         }),
       });
     });
+    if (iosInstall) await offerIosInstall(page);
     await page.goto('/setup/address');
     await expect(
       page.getByRole('heading', { name: 'Your Wallet of Satoshi address' }),
     ).toBeVisible();
+  }
+
+  test('screen /setup/address', async ({ page }) => {
+    await openSetupAddressScreen(page);
     await shotScreen(page, 'screen-setup-address');
+  });
+
+  test('/setup/address install-open', async ({ page }) => {
+    await openSetupAddressScreen(page, true);
+    await openInstallDialog(page, 'signed-in');
+    await shotScreen(page, 'state-setup-address-install-open', false);
   });
 
   test.describe('field validation screens', () => {
@@ -4010,12 +4148,24 @@ test.describe('onboarding screens', () => {
     });
   });
 
-  test('screen /setup/rules', async ({ page }) => {
+  /** Opens the first living-room rules chapter for visual baselines. */
+  async function openSetupRulesScreen(page: Page, iosInstall = false): Promise<void> {
     await openRulesSetup(page);
+    if (iosInstall) await offerIosInstall(page);
     await page.goto('/setup/rules');
     await expect(page.getByText('You are a guest in a living room')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Continue' })).toBeVisible();
+  }
+
+  test('screen /setup/rules', async ({ page }) => {
+    await openSetupRulesScreen(page);
     await shotScreen(page, 'screen-setup-rules');
+  });
+
+  test('/setup/rules install-open', async ({ page }) => {
+    await openSetupRulesScreen(page, true);
+    await openInstallDialog(page, 'signed-in');
+    await shotScreen(page, 'state-setup-rules-install-open', false);
   });
 
   test('setup-rules law1', async ({ page }) => {
@@ -6947,34 +7097,7 @@ test.describe('onboarding screens', () => {
   });
 
   test('screen /profile', async ({ page }) => {
-    await page.addInitScript(() => {
-      localStorage.setItem('21gifts.session', 'sess-e2e');
-    });
-    await page.route(/\/me$/, async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          ...E2E_ACCOUNT,
-          name: 'Ada',
-          location: null,
-          username: 'alice',
-          lightningAddress: 'alice@walletofsatoshi.com',
-          rulesAgreedAt: 1_700_000_001,
-          viewKey: 'a'.repeat(64),
-          aboutMe: null,
-          setup: null,
-          missing: [],
-        }),
-      });
-    });
-    await page.route(/\/me\/activity(?:\?|$)/, async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify(EMPTY_ACTIVITY),
-      });
-    });
+    await seedProfilePage(page);
     await stubOwnMember(page);
     await openProfile(page);
     await expect(page.getByRole('heading', { name: 'Profile' })).toBeVisible();
@@ -6984,6 +7107,15 @@ test.describe('onboarding screens', () => {
     await expect(page.getByRole('button', { name: 'Add a wide image' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Add a profile photo' })).toBeVisible();
     await shotScreen(page, 'screen-profile');
+  });
+
+  test('/profile install-open', async ({ page }) => {
+    await seedProfilePage(page);
+    await offerIosInstall(page);
+    await openProfile(page);
+    await expect(page.getByRole('button', { name: 'Shop sticker' })).toBeVisible();
+    await openInstallDialog(page, 'signed-in');
+    await shotScreen(page, 'state-profile-install-open', false);
   });
 
   test('state /profile sunday', async ({ page }) => {
@@ -7251,7 +7383,7 @@ test.describe('onboarding screens', () => {
     await shotScreen(page, 'state-profile-replies-open');
   });
 
-  test('screen /pos', async ({ page }) => {
+  async function openPosScreen(page: Page, iosInstall = false): Promise<void> {
     await page.addInitScript(() => {
       localStorage.setItem('21gifts.session', 'sess-e2e');
     });
@@ -7280,15 +7412,26 @@ test.describe('onboarding screens', () => {
         body: JSON.stringify({ charge: null, history: [] }),
       });
     });
+    if (iosInstall) await offerIosInstall(page);
     await page.goto('/pos');
     await expect(page.getByRole('heading', { name: 'Point of sale' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Set an amount' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Create payment' })).toHaveCount(0);
     await page.getByRole('link', { name: 'Set an amount' }).scrollIntoViewIfNeeded();
+  }
+
+  test('screen /pos', async ({ page }) => {
+    await openPosScreen(page);
     await shotScreen(page, 'screen-pos');
   });
 
-  test('screen /pos/amount', async ({ page }) => {
+  test('/pos install-open', async ({ page }) => {
+    await openPosScreen(page, true);
+    await openInstallDialog(page, 'signed-in');
+    await shotScreen(page, 'state-pos-install-open', false);
+  });
+
+  async function openPosAmountScreen(page: Page, iosInstall = false): Promise<void> {
     await page.addInitScript(() => {
       localStorage.setItem('21gifts.session', 'sess-e2e');
     });
@@ -7317,12 +7460,23 @@ test.describe('onboarding screens', () => {
         body: JSON.stringify({ charge: null, history: [] }),
       });
     });
+    if (iosInstall) await offerIosInstall(page);
     await page.goto('/pos/amount');
     await expect(page.getByRole('heading', { name: 'Amount' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Create payment' })).toBeVisible();
     await expect(page.getByRole('img', { name: 'Open CryptoPay QR code' })).toHaveCount(0);
     await page.getByRole('button', { name: 'Create payment' }).scrollIntoViewIfNeeded();
+  }
+
+  test('screen /pos/amount', async ({ page }) => {
+    await openPosAmountScreen(page);
     await shotScreen(page, 'screen-pos-amount');
+  });
+
+  test('/pos/amount install-open', async ({ page }) => {
+    await openPosAmountScreen(page, true);
+    await openInstallDialog(page, 'signed-in');
+    await shotScreen(page, 'state-pos-amount-install-open', false);
   });
 
   test('pos open', async ({ page }) => {
@@ -8031,7 +8185,7 @@ test.describe('onboarding screens', () => {
     await shotScreen(page, 'state-profile-fiat', false);
   });
 
-  test('screen /members/[accountId]', async ({ page }) => {
+  async function openMemberScreen(page: Page, iosInstall = false): Promise<void> {
     const memberId = '22222222-2222-4222-8222-222222222222';
     await page.addInitScript(() => {
       localStorage.setItem('21gifts.session', 'sess-e2e');
@@ -8089,13 +8243,24 @@ test.describe('onboarding screens', () => {
         body: JSON.stringify(EMPTY_ACTIVITY),
       });
     });
+    if (iosInstall) await offerIosInstall(page);
     await page.goto(`/members/${memberId}`);
     await expect(page.getByRole('heading', { name: 'Profile' })).toBeVisible();
     await expect(page.getByText('About me')).toBeVisible();
     await expect(page.getByText('Hello from Carol.')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Copy link to this profile' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Message' })).toBeVisible();
+  }
+
+  test('screen /members/[accountId]', async ({ page }) => {
+    await openMemberScreen(page);
     await shotScreen(page, 'screen-members-accountId');
+  });
+
+  test('/members/[accountId] install-open', async ({ page }) => {
+    await openMemberScreen(page, true);
+    await openInstallDialog(page, 'signed-in');
+    await shotScreen(page, 'state-members-accountId-install-open', false);
   });
 
   test('state /members software-developer', async ({ page }) => {
@@ -11174,7 +11339,7 @@ test.describe('onboarding screens', () => {
     await shotScreen(page, 'state-members-staff-verify-open', false);
   });
 
-  test('state /members/[accountId]/verify default', async ({ page }) => {
+  async function openMemberVerifyScreen(page: Page, iosInstall = false): Promise<void> {
     const staffId = '11111111-1111-4111-8111-111111111111';
     const memberId = '22222222-2222-4222-8222-222222222222';
     await page.addInitScript(() => {
@@ -11221,6 +11386,7 @@ test.describe('onboarding screens', () => {
         }),
       });
     });
+    if (iosInstall) await offerIosInstall(page);
     await page.goto(`/members/${memberId}/verify`);
     await expect(page.getByRole('heading', { name: 'Verify' })).toBeVisible();
     await expect(
@@ -11231,7 +11397,17 @@ test.describe('onboarding screens', () => {
     await expect(ada).toHaveAttribute('href', `/members/${memberId}`);
     await expect(page.getByRole('button', { name: 'Yes', exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'No', exact: true })).toBeVisible();
+  }
+
+  test('state /members/[accountId]/verify default', async ({ page }) => {
+    await openMemberVerifyScreen(page);
     await shotScreen(page, 'screen-members-accountId-verify');
+  });
+
+  test('/members/[accountId]/verify install-open', async ({ page }) => {
+    await openMemberVerifyScreen(page, true);
+    await openInstallDialog(page, 'signed-in');
+    await shotScreen(page, 'state-members-verify-install-open', false);
   });
 
   test('state /members/[accountId]/verify unnamed', async ({ page }) => {
@@ -13197,6 +13373,15 @@ test.describe('onboarding screens', () => {
   });
 
   test('state /messages/[id]/repayment-list signed-in', async ({ page }) => {
+    await openMessageRepaymentListScreen(page);
+    await expect(page.getByRole('button', { name: 'Menu' })).toBeVisible();
+    await expect(page.getByText('Due', { exact: true })).toHaveCount(1);
+    await expect(page.getByRole('link', { name: 'Repayment list' })).toHaveCount(0);
+    await shotScreen(page, 'state-messages-id-repayment-list-signed-in');
+  });
+
+  /** Opens the signed-in repayment list for visual baselines. */
+  async function openMessageRepaymentListScreen(page: Page, iosInstall = false): Promise<void> {
     const id = '11111111-1111-4111-8111-111111111111';
     await page.addInitScript(() => {
       localStorage.setItem('21gifts.session', 'sess-e2e');
@@ -13285,11 +13470,15 @@ test.describe('onboarding screens', () => {
         }),
       });
     });
+    if (iosInstall) await offerIosInstall(page);
     await page.goto(`/messages/${id}/repayment-list`);
-    await expect(page.getByRole('button', { name: 'Menu' })).toBeVisible();
     await expect(page.getByText('Due', { exact: true })).toHaveCount(1);
-    await expect(page.getByRole('link', { name: 'Repayment list' })).toHaveCount(0);
-    await shotScreen(page, 'state-messages-id-repayment-list-signed-in');
+  }
+
+  test('/messages/[id]/repayment-list install-open', async ({ page }) => {
+    await openMessageRepaymentListScreen(page, true);
+    await openInstallDialog(page, 'signed-in');
+    await shotScreen(page, 'state-messages-id-repayment-list-install-open', false);
   });
 
   test('state /messages/[id]/repayment-list loading', async ({ page }) => {
@@ -13456,6 +13645,15 @@ test.describe('onboarding screens', () => {
   });
 
   test('state /messages/[id] signed-in', async ({ page }) => {
+    await openSignedMessageScreen(page);
+    await expect(page.getByRole('button', { name: 'Menu' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Copy link to this note' })).toBeVisible();
+    await expect(page.getByPlaceholder('Write a reaction')).toBeVisible();
+    await shotScreen(page, 'state-messages-id-signed-in');
+  });
+
+  /** Opens Ada's signed-in public message for visual baselines. */
+  async function openSignedMessageScreen(page: Page, iosInstall = false): Promise<void> {
     const id = '11111111-1111-4111-8111-111111111111';
     await page.addInitScript(() => {
       localStorage.setItem('21gifts.session', 'sess-e2e');
@@ -13513,11 +13711,15 @@ test.describe('onboarding screens', () => {
         });
       },
     );
+    if (iosInstall) await offerIosInstall(page);
     await page.goto(`/messages/${id}`);
-    await expect(page.getByRole('button', { name: 'Menu' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Copy link to this note' })).toBeVisible();
-    await expect(page.getByPlaceholder('Write a reaction')).toBeVisible();
-    await shotScreen(page, 'state-messages-id-signed-in');
+  }
+
+  test('/messages/[id] install-open', async ({ page }) => {
+    await openSignedMessageScreen(page, true);
+    await openInstallDialog(page, 'signed-in');
+    await shotScreen(page, 'state-messages-id-install-open', false);
   });
 
   test('state /messages/[id] pay-rate-loading', async ({ page }) => {
@@ -14541,6 +14743,14 @@ test.describe('onboarding screens', () => {
   });
 
   test('state /messages/[id]/author signed-in', async ({ page }) => {
+    await openMessageAuthorScreen(page);
+    await expect(page.getByRole('button', { name: 'Menu' })).toBeVisible();
+    await expect(page.getByText('robin@nostr.example', { exact: true })).toBeVisible();
+    await shotScreen(page, 'state-messages-id-author-signed-in');
+  });
+
+  /** Opens Robin's signed-in external author profile for visual baselines. */
+  async function openMessageAuthorScreen(page: Page, iosInstall = false): Promise<void> {
     const id = '11111111-1111-4111-8111-111111111111';
     await page.addInitScript(() => {
       localStorage.setItem('21gifts.session', 'sess-e2e');
@@ -14575,10 +14785,15 @@ test.describe('onboarding screens', () => {
         }),
       });
     });
+    if (iosInstall) await offerIosInstall(page);
     await page.goto(`/messages/${id}/author?name=Robin`);
-    await expect(page.getByRole('button', { name: 'Menu' })).toBeVisible();
     await expect(page.getByText('robin@nostr.example', { exact: true })).toBeVisible();
-    await shotScreen(page, 'state-messages-id-author-signed-in');
+  }
+
+  test('/messages/[id]/author install-open', async ({ page }) => {
+    await openMessageAuthorScreen(page, true);
+    await openInstallDialog(page, 'signed-in');
+    await shotScreen(page, 'state-messages-id-author-install-open', false);
   });
 
   test('state /messages/[id]/author loading', async ({ page }) => {
@@ -16617,6 +16832,19 @@ test.describe('profile funding states', () => {
     await shotScreen(page, 'screen-grants');
   });
 
+  test('/grants install-open', async ({ page }) => {
+    await seedFundingProfile(page);
+    await offerIosInstall(page);
+    await page.goto('/grants');
+    await expect(
+      page.getByText(
+        'Applications are currently paused. You can apply again when shop transactions have increased.',
+      ),
+    ).toBeVisible();
+    await openInstallDialog(page, 'signed-in');
+    await shotScreen(page, 'state-grants-install-open', false);
+  });
+
   test('state /grants funding-apply', async ({ page }) => {
     await seedFundingProfile(page, { username: 'joey-rosima' });
     await page.goto('/grants');
@@ -16861,10 +17089,16 @@ test.describe('profile funding states', () => {
     });
   }
 
-  test('screen /grants/goals', async ({ page }) => {
+  /** Opens the loaded grant goals screen for visual baselines. */
+  async function openGrantGoalsScreen(page: Page, iosInstall = false): Promise<void> {
     await seedFundingProfile(page);
     await stubGrantGoal(page, 'ok');
+    if (iosInstall) await offerIosInstall(page);
     await page.goto('/grants/goals');
+  }
+
+  test('screen /grants/goals', async ({ page }) => {
+    await openGrantGoalsScreen(page);
     await expect(page.getByRole('heading', { name: 'Goals' })).toBeVisible();
     await expect(
       page.getByText('The grant program continues when we reach 10 active shops.'),
@@ -16872,6 +17106,12 @@ test.describe('profile funding states', () => {
     await expect(page.getByText('2 shops meet this')).toBeVisible();
     await expect(page.getByRole('img', { name: 'Shops per UTC day' })).toBeVisible();
     await shotScreen(page, 'screen-grants-goals');
+  });
+
+  test('/grants/goals install-open', async ({ page }) => {
+    await openGrantGoalsScreen(page, true);
+    await openInstallDialog(page, 'signed-in');
+    await shotScreen(page, 'state-grants-goals-install-open', false);
   });
 
   test('state /grants/goals loading', async ({ page }) => {
@@ -16981,15 +17221,27 @@ test.describe('profile apply screens', () => {
     });
   }
 
-  test('screen /grants/apply', async ({ page }) => {
+  /** Opens the grants application screen for visual baselines. */
+  async function openGrantApplyScreen(page: Page, iosInstall = false): Promise<void> {
     await seedApply(page);
+    if (iosInstall) await offerIosInstall(page);
     await page.goto('/grants/apply');
+  }
+
+  test('screen /grants/apply', async ({ page }) => {
+    await openGrantApplyScreen(page);
     await expect(
       page.getByText(
         'Applications are currently paused. You can apply again when shop transactions have increased.',
       ),
     ).toBeVisible();
     await shotScreen(page, 'screen-grants-apply');
+  });
+
+  test('/grants/apply install-open', async ({ page }) => {
+    await openGrantApplyScreen(page, true);
+    await openInstallDialog(page, 'signed-in');
+    await shotScreen(page, 'state-grants-apply-install-open', false);
   });
 
   test('screen /profile/apply redirects', async ({ page }) => {
@@ -20516,27 +20768,11 @@ test.describe('welcome forum variants', () => {
   });
 
   test('welcome install-open', async ({ page }) => {
-    await page.addInitScript(() => {
-      Object.defineProperty(navigator, 'userAgent', {
-        configurable: true,
-        get: () =>
-          'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
-      });
-      Object.defineProperty(navigator, 'standalone', {
-        configurable: true,
-        get: () => false,
-      });
-    });
     await seedAda(page);
     await emptyForum(page);
+    await offerIosInstall(page);
     await page.goto('/welcome');
-    await page.getByRole('button', { name: 'Menu' }).click();
-    const install = page.getByRole('button', { name: 'Install app' });
-    await expect(install).toBeVisible();
-    await install.click();
-    await expect(
-      page.getByRole('heading', { name: 'Add 21.gifts to your Home Screen' }),
-    ).toBeVisible();
+    await openInstallDialog(page, 'signed-in');
     await shotScreen(page, 'state-welcome-install-open', false);
   });
 
@@ -21323,6 +21559,16 @@ test.describe('public shop screen', () => {
   });
 
   test('public shop signed-in', async ({ page }) => {
+    await openSignedInNpubScreen(page);
+    await expect(page.getByRole('button', { name: 'Menu' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Cafe Luna' })).toBeVisible();
+    await expect(page.getByRole('img', { name: 'Open CryptoPay QR code' })).toBeVisible();
+    await photoLoaded(page);
+    await shotScreen(page, 'state-npub-signed-in');
+  });
+
+  /** Opens the signed-in Cafe Luna shop for visual baselines. */
+  async function openSignedInNpubScreen(page: Page, iosInstall = false): Promise<void> {
     await page.addInitScript(() => {
       localStorage.setItem('21gifts.session', 'sess-e2e');
     });
@@ -21342,12 +21588,18 @@ test.describe('public shop screen', () => {
         }),
       });
     });
+    if (iosInstall) await offerIosInstall(page);
     await page.goto(`/${listedNpub}`);
-    await expect(page.getByRole('button', { name: 'Menu' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Cafe Luna' })).toBeVisible();
+    await photoLoaded(page);
+  }
+
+  test('/[npub] install-open', async ({ page }) => {
+    await openSignedInNpubScreen(page, true);
     await expect(page.getByRole('img', { name: 'Open CryptoPay QR code' })).toBeVisible();
     await photoLoaded(page);
-    await shotScreen(page, 'state-npub-signed-in');
+    await openInstallDialog(page, 'signed-in');
+    await shotScreen(page, 'state-npub-install-open', false);
   });
 
   test('public shop map', async ({ page }) => {
@@ -21705,6 +21957,25 @@ test.describe('shops screens', () => {
   }
 
   test('shops default', async ({ page }) => {
+    await openShopsScreen(page);
+    await expect(page.getByRole('heading', { name: 'Shops' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'List', pressed: true })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Cafe Luna' })).toHaveAttribute(
+      'href',
+      `/npub1${'2'.repeat(58)}`,
+    );
+    await expect(
+      page.getByText('Cafe Luna · Bahnhofstrasse 12, 8001 Zürich, Switzerland', { exact: true }),
+    ).toBeVisible();
+    await expect(page.getByText('Happyland')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Add a shop' })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: '#Shop' })).toHaveCount(0);
+    await expect(page.getByText('#21GiftsShop')).toHaveCount(0);
+    await shotScreen(page, 'screen-shops');
+  });
+
+  /** Opens the default Cafe Luna shop list for visual baselines. */
+  async function openShopsScreen(page: Page, iosInstall = false): Promise<void> {
     await seedAda(page);
     await page.route(
       (url) => new URL(url).pathname.endsWith('/shops/list'),
@@ -21735,21 +22006,15 @@ test.describe('shops screens', () => {
         });
       },
     );
+    if (iosInstall) await offerIosInstall(page);
     await page.goto('/shops');
-    await expect(page.getByRole('heading', { name: 'Shops' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'List', pressed: true })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Cafe Luna' })).toHaveAttribute(
-      'href',
-      `/npub1${'2'.repeat(58)}`,
-    );
-    await expect(
-      page.getByText('Cafe Luna · Bahnhofstrasse 12, 8001 Zürich, Switzerland', { exact: true }),
-    ).toBeVisible();
-    await expect(page.getByText('Happyland')).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Add a shop' })).toHaveCount(0);
-    await expect(page.getByRole('link', { name: '#Shop' })).toHaveCount(0);
-    await expect(page.getByText('#21GiftsShop')).toHaveCount(0);
-    await shotScreen(page, 'screen-shops');
+    await expect(page.getByRole('link', { name: 'Cafe Luna' })).toBeVisible();
+  }
+
+  test('/shops install-open', async ({ page }) => {
+    await openShopsScreen(page, true);
+    await openInstallDialog(page, 'signed-in');
+    await shotScreen(page, 'state-shops-install-open', false);
   });
 
   test('shops list no pin', async ({ page }) => {
@@ -25465,6 +25730,19 @@ test.describe('contact screens', () => {
     await shotScreen(page, 'screen-contact');
   });
 
+  test('/contact install-open', async ({ page }) => {
+    await seedAda(page);
+    await offerIosInstall(page);
+    await page.goto('/contact');
+    await expect(
+      page.getByText(
+        'Write to 21.gifts here — there is no email address. This is the only way to reach us.',
+      ),
+    ).toBeVisible();
+    await openInstallDialog(page, 'signed-in');
+    await shotScreen(page, 'state-contact-install-open', false);
+  });
+
   test('contact validation-error', async ({ page }) => {
     await seedAda(page);
     await page.goto('/contact');
@@ -25607,10 +25885,16 @@ test.describe('inbox screens', () => {
     });
   }
 
-  test('screen /messages', async ({ page }) => {
+  /** Opens the default messages inbox for visual baselines. */
+  async function openMessagesScreen(page: Page, iosInstall = false): Promise<void> {
     await seedAda(page);
     await mockThreeConversations(page);
+    if (iosInstall) await offerIosInstall(page);
     await page.goto('/messages');
+  }
+
+  test('screen /messages', async ({ page }) => {
+    await openMessagesScreen(page);
     await expect(page.getByRole('heading', { name: 'Messages' })).toBeVisible();
     await expect(page.getByRole('group', { name: 'Conversation type' })).toHaveCount(0);
     const list = page.getByRole('list', { name: 'Conversations' });
@@ -25618,6 +25902,12 @@ test.describe('inbox screens', () => {
     await expect(list.getByText('21.gifts')).toBeVisible();
     await expect(list.getByText('npub1abc…xyz')).toBeVisible();
     await shotScreen(page, 'screen-messages');
+  });
+
+  test('/messages install-open', async ({ page }) => {
+    await openMessagesScreen(page, true);
+    await openInstallDialog(page, 'signed-in');
+    await shotScreen(page, 'state-messages-install-open', false);
   });
 
   test('messages unread', async ({ page }) => {
@@ -26930,7 +27220,8 @@ test.describe('notifications screens', () => {
     });
   }
 
-  test('screen /notifications', async ({ page }) => {
+  /** Opens the default notifications screen for visual baselines. */
+  async function openNotificationsScreen(page: Page, iosInstall = false): Promise<void> {
     await seedAda(page);
     await page.route('**/forum/notifications', async (route) => {
       await route.fulfill({
@@ -26953,10 +27244,21 @@ test.describe('notifications screens', () => {
         }),
       });
     });
+    if (iosInstall) await offerIosInstall(page);
     await page.goto('/notifications');
+  }
+
+  test('screen /notifications', async ({ page }) => {
+    await openNotificationsScreen(page);
     await expect(page.getByRole('heading', { name: 'Notifications' })).toBeVisible();
     await expect(page.getByText('Bob replied')).toBeVisible();
     await shotScreen(page, 'screen-notifications');
+  });
+
+  test('/notifications install-open', async ({ page }) => {
+    await openNotificationsScreen(page, true);
+    await openInstallDialog(page, 'signed-in');
+    await shotScreen(page, 'state-notifications-install-open', false);
   });
 
   test('notifications empty', async ({ page }) => {
@@ -27179,11 +27481,17 @@ test.describe('statistics screens', () => {
     });
   }
 
-  test('statistics default', async ({ page }) => {
+  /** Opens the loaded statistics screen for visual baselines. */
+  async function openStatisticsScreen(page: Page, iosInstall = false): Promise<void> {
     await seedAda(page, 'founder');
     await stubPayoutGoal(page);
     await stubShopActivity(page);
+    if (iosInstall) await offerIosInstall(page);
     await page.goto('/statistics');
+  }
+
+  test('statistics default', async ({ page }) => {
+    await openStatisticsScreen(page);
     await expect(page.getByRole('heading', { name: 'Statistics' })).toBeVisible();
     await expect(page.getByText('People by UTC day')).toBeVisible();
     await expect(page.getByText('Shops by UTC day')).toBeVisible();
@@ -27191,6 +27499,12 @@ test.describe('statistics screens', () => {
     await expect(page.getByRole('link', { name: 'Show payout per person' })).toHaveCount(0);
     await shotStatistics(page);
     await shotScreen(page, 'screen-statistics');
+  });
+
+  test('statistics install-open', async ({ page }) => {
+    await openStatisticsScreen(page, true);
+    await openInstallDialog(page, 'signed-in');
+    await shotScreen(page, 'state-statistics-install-open', false);
   });
 
   test('statistics loading', async ({ page }) => {
@@ -27368,6 +27682,14 @@ test.describe('moderate screens', () => {
     await shotScreen(page, 'screen-moderate');
   });
 
+  test('moderate install-open', async ({ page }) => {
+    await seedAda(page, 'founder');
+    await offerIosInstall(page);
+    await page.goto('/moderate');
+    await openInstallDialog(page, 'signed-in');
+    await shotScreen(page, 'state-moderate-install-open', false);
+  });
+
   test('moderate group-unread', async ({ page }) => {
     await seedAda(page, 'founder');
     await page.route('**/conversations/moderator-group', async (route) => {
@@ -27426,7 +27748,8 @@ test.describe('moderate screens', () => {
     await shotScreen(page, 'state-moderate-forbidden');
   });
 
-  test('moderate payouts', async ({ page }) => {
+  /** Opens the loaded per-person payout screen for visual baselines. */
+  async function openModeratePayoutsScreen(page: Page, iosInstall = false): Promise<void> {
     await seedAda(page, 'founder');
     await page.route('**/funding/payout-days', async (route) => {
       await route.fulfill({
@@ -27453,10 +27776,21 @@ test.describe('moderate screens', () => {
         }),
       });
     });
+    if (iosInstall) await offerIosInstall(page);
     await page.goto('/moderate/payouts');
+  }
+
+  test('moderate payouts', async ({ page }) => {
+    await openModeratePayoutsScreen(page);
     await expect(page.getByRole('heading', { name: 'Payout per person' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Ada' })).toBeVisible();
     await shotScreen(page, 'screen-moderate-payouts');
+  });
+
+  test('moderate payouts install-open', async ({ page }) => {
+    await openModeratePayoutsScreen(page, true);
+    await openInstallDialog(page, 'signed-in');
+    await shotScreen(page, 'state-moderate-payouts-install-open', false);
   });
 
   test('moderate payouts empty', async ({ page }) => {
@@ -27556,6 +27890,14 @@ test.describe('moderate hidden screens', () => {
   };
 
   test('screen /moderate/hidden', async ({ page }) => {
+    await openModerateHiddenScreen(page);
+    await expect(page.getByText('Hidden note', { exact: true })).toBeVisible();
+    await expect(page.getByText('Hidden by Ada')).toBeVisible();
+    await shotScreen(page, 'screen-moderate-hidden');
+  });
+
+  /** Opens the default hidden notes screen for visual baselines. */
+  async function openModerateHiddenScreen(page: Page, iosInstall = false): Promise<void> {
     await seedAda(page, 'founder');
     await page.route('**/forum/messages/hidden', async (route) => {
       await route.fulfill({
@@ -27564,10 +27906,15 @@ test.describe('moderate hidden screens', () => {
         body: JSON.stringify({ messages: [HIDDEN] }),
       });
     });
+    if (iosInstall) await offerIosInstall(page);
     await page.goto('/moderate/hidden');
     await expect(page.getByText('Hidden note', { exact: true })).toBeVisible();
-    await expect(page.getByText('Hidden by Ada')).toBeVisible();
-    await shotScreen(page, 'screen-moderate-hidden');
+  }
+
+  test('/moderate/hidden install-open', async ({ page }) => {
+    await openModerateHiddenScreen(page, true);
+    await openInstallDialog(page, 'signed-in');
+    await shotScreen(page, 'state-moderate-hidden-install-open', false);
   });
 
   test('state /moderate/hidden external', async ({ page }) => {
@@ -27804,6 +28151,16 @@ test.describe('moderate proposals screens', () => {
     await expect(page.getByText('Rose')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Confirm as moderator' })).toBeVisible();
     await shotScreen(page, 'screen-moderate-proposals');
+  });
+
+  test('/moderate/proposals install-open', async ({ page }) => {
+    await seedAda(page, 'founder');
+    await stubProposals(page, [PROPOSAL]);
+    await offerIosInstall(page);
+    await page.goto('/moderate/proposals');
+    await expect(page.getByText('Rose')).toBeVisible();
+    await openInstallDialog(page, 'signed-in');
+    await shotScreen(page, 'state-moderate-proposals-install-open', false);
   });
 
   test('state /moderate/proposals sunday', async ({ page }) => {
@@ -28053,6 +28410,16 @@ test.describe('moderate applications screens', () => {
     await shotScreen(page, 'screen-grants-applications');
   });
 
+  test('/grants/applications install-open', async ({ page }) => {
+    await seedAda(page, 'founder');
+    await stubApplications(page, [APPLICATION]);
+    await offerIosInstall(page);
+    await page.goto('/grants/applications');
+    await expect(page.getByText('Rose')).toBeVisible();
+    await openInstallDialog(page, 'signed-in');
+    await shotScreen(page, 'state-grants-applications-install-open', false);
+  });
+
   test('moderate applications forbidden', async ({ page }) => {
     await seedAda(page, 'basis');
     await stubApplications(page);
@@ -28099,15 +28466,7 @@ test.describe('moderate applications screens', () => {
   });
 
   test('screen /grants/applications/[accountId]', async ({ page }) => {
-    await seedAda(page, 'founder');
-    await page.route('**/funding/applications/acc_rose', async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify(DETAIL),
-      });
-    });
-    await page.goto('/grants/applications/acc_rose');
+    await openGrantApplicationDetailScreen(page);
     await expect(page.getByRole('heading', { name: 'Grant application' })).toBeVisible();
     await expect(page.getByText('Living-room note.')).toBeVisible();
     await expect(
@@ -28119,6 +28478,27 @@ test.describe('moderate applications screens', () => {
     );
     await expect(page.getByRole('button', { name: 'Yes' })).toBeVisible();
     await shotScreen(page, 'screen-grants-applications-accountId');
+  });
+
+  /** Opens Rose's default grant application for visual baselines. */
+  async function openGrantApplicationDetailScreen(page: Page, iosInstall = false): Promise<void> {
+    await seedAda(page, 'founder');
+    await page.route('**/funding/applications/acc_rose', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(DETAIL),
+      });
+    });
+    if (iosInstall) await offerIosInstall(page);
+    await page.goto('/grants/applications/acc_rose');
+    await expect(page.getByText('Living-room note.')).toBeVisible();
+  }
+
+  test('/grants/applications/[accountId] install-open', async ({ page }) => {
+    await openGrantApplicationDetailScreen(page, true);
+    await openInstallDialog(page, 'signed-in');
+    await shotScreen(page, 'state-grants-applications-accountId-install-open', false);
   });
 
   test('state /grants/applications sunday', async ({ page }) => {
@@ -28485,6 +28865,13 @@ test.describe('moderate group screens', () => {
   }
 
   test('screen /moderate/group', async ({ page }) => {
+    await openModerateGroupScreen(page);
+    await expect(page.getByText('Hello mods')).toBeVisible();
+    await shotScreen(page, 'screen-moderate-group');
+  });
+
+  /** Opens the default moderator group thread for visual baselines. */
+  async function openModerateGroupScreen(page: Page, iosInstall = false): Promise<void> {
     await seedAda(page, 'moderator');
     await mockGroup(page);
     await mockThread(page, [
@@ -28497,9 +28884,15 @@ test.describe('moderate group screens', () => {
         sats: 0,
       },
     ]);
+    if (iosInstall) await offerIosInstall(page);
     await page.goto('/moderate/group');
     await expect(page.getByText('Hello mods')).toBeVisible();
-    await shotScreen(page, 'screen-moderate-group');
+  }
+
+  test('/moderate/group install-open', async ({ page }) => {
+    await openModerateGroupScreen(page, true);
+    await openInstallDialog(page, 'signed-in');
+    await shotScreen(page, 'state-moderate-group-install-open', false);
   });
 
   test('state /moderate/group mention-suggest', async ({ page }) => {
@@ -28965,6 +29358,15 @@ test.describe('moderate handbook screens', () => {
     await shotScreen(page, 'screen-moderate-handbook');
   });
 
+  test('/moderate/handbook install-open', async ({ page }) => {
+    await seedAda(page, 'founder');
+    await offerIosInstall(page);
+    await page.goto('/moderate/handbook');
+    await expect(page.getByRole('heading', { name: 'Handbook' })).toBeVisible();
+    await openInstallDialog(page, 'signed-in');
+    await shotScreen(page, 'state-moderate-handbook-install-open', false);
+  });
+
   test('moderate handbook forbidden', async ({ page }) => {
     await seedAda(page, 'basis');
     await page.goto('/moderate/handbook');
@@ -29001,7 +29403,8 @@ test.describe('trust-chain screens', () => {
     });
   }
 
-  test('screen /trust-chain', async ({ page }) => {
+  /** Opens the default Trust Chain screen for visual baselines. */
+  async function openTrustChainScreen(page: Page, iosInstall = false): Promise<void> {
     await seedAda(page);
     await page.route('**/trust/graph**', async (route) => {
       await route.fulfill({
@@ -29010,10 +29413,21 @@ test.describe('trust-chain screens', () => {
         body: JSON.stringify(TRUST_CHAIN_SEED),
       });
     });
+    if (iosInstall) await offerIosInstall(page);
     await page.goto('/trust-chain');
+  }
+
+  test('screen /trust-chain', async ({ page }) => {
+    await openTrustChainScreen(page);
     await expect(page.getByRole('heading', { name: 'Trust Chain' })).toBeVisible();
     await expect(page.getByTestId('trust-node-f1')).toBeVisible();
     await shotScreen(page, 'screen-trust-chain');
+  });
+
+  test('/trust-chain install-open', async ({ page }) => {
+    await openTrustChainScreen(page, true);
+    await openInstallDialog(page, 'signed-in');
+    await shotScreen(page, 'state-trust-chain-install-open', false);
   });
 
   test('state /trust-chain expanded', async ({ page }) => {
@@ -29229,9 +29643,15 @@ test.describe('daily payments', () => {
     });
   }
 
-  test('screen /grants/payments/comment', async ({ page }) => {
+  /** Opens the daily payment comment screen for visual baselines. */
+  async function openGrantPaymentCommentScreen(page: Page, iosInstall = false): Promise<void> {
     await stubRoster(page);
+    if (iosInstall) await offerIosInstall(page);
     await page.goto('/grants/payments/comment');
+  }
+
+  test('screen /grants/payments/comment', async ({ page }) => {
+    await openGrantPaymentCommentScreen(page);
     await expect(page.getByRole('heading', { name: 'Daily payment text' })).toBeVisible();
     await expect(page.getByText('Daily gift')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Edit comment' })).toBeVisible();
@@ -29242,6 +29662,12 @@ test.describe('daily payments', () => {
     await expect(page.getByText('ada@walletofsatoshi.com')).toHaveCount(0);
     await expect(page.getByText('bob@example.com')).toHaveCount(0);
     await shotScreen(page, 'screen-grants-payments-comment');
+  });
+
+  test('/grants/payments/comment install-open', async ({ page }) => {
+    await openGrantPaymentCommentScreen(page, true);
+    await openInstallDialog(page, 'signed-in');
+    await shotScreen(page, 'state-grants-payments-comment-install-open', false);
   });
 
   test('state /grants/payments/comment empty', async ({ page }) => {
@@ -29331,9 +29757,15 @@ test.describe('daily payments', () => {
     await shotScreen(page, 'state-grants-payments-comment-editing');
   });
 
-  test('screen /grants/payments/amounts', async ({ page }) => {
+  /** Opens the daily payment amounts screen for visual baselines. */
+  async function openGrantPaymentAmountsScreen(page: Page, iosInstall = false): Promise<void> {
     await stubRoster(page);
+    if (iosInstall) await offerIosInstall(page);
     await page.goto('/grants/payments/amounts');
+  }
+
+  test('screen /grants/payments/amounts', async ({ page }) => {
+    await openGrantPaymentAmountsScreen(page);
     await expect(page.getByRole('heading', { name: 'Daily payment amounts' })).toBeVisible();
     await expect(page.getByText('Everyone in the grant program receives')).toBeVisible();
     await expect(page.getByRole('link', { name: 'Ada' })).toHaveAttribute(
@@ -29347,6 +29779,12 @@ test.describe('daily payments', () => {
     await expect(page.getByText('Daily gift')).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Edit comment' })).toHaveCount(0);
     await shotScreen(page, 'screen-grants-payments-amounts');
+  });
+
+  test('/grants/payments/amounts install-open', async ({ page }) => {
+    await openGrantPaymentAmountsScreen(page, true);
+    await openInstallDialog(page, 'signed-in');
+    await shotScreen(page, 'state-grants-payments-amounts-install-open', false);
   });
 
   test('state /grants/payments/amounts empty', async ({ page }) => {
@@ -29821,16 +30259,28 @@ test.describe('habit tracker baselines', () => {
     await shotScreen(page, 'state-habit-tracker-signed-in');
   });
 
-  test('screen /habit-tracker menu-open', async ({ page }) => {
+  /** Opens the signed-in habit tracker with a stable private note. */
+  async function openHabitTrackerMenuScreen(page: Page, iosInstall = false): Promise<void> {
     await seedHabitAda(page);
     await stubHabitList(page, {
       reviewWeek: HABIT_PUBLIC.reviewWeek,
       habits: [{ ...HABIT_ROW, accountId: 'acc_e2e', notes: 'secret' }],
     });
+    if (iosInstall) await offerIosInstall(page);
     await page.goto('/habit-tracker');
+  }
+
+  test('screen /habit-tracker menu-open', async ({ page }) => {
+    await openHabitTrackerMenuScreen(page);
     await page.getByRole('button', { name: 'Menu' }).click();
     await expect(page.getByRole('link', { name: 'Habit-Tracker' })).toBeVisible();
     await shotScreen(page, 'state-habit-tracker-menu-open');
+  });
+
+  test('/habit-tracker install-open', async ({ page }) => {
+    await openHabitTrackerMenuScreen(page, true);
+    await openInstallDialog(page, 'signed-in');
+    await shotScreen(page, 'state-habit-tracker-install-open', false);
   });
 
   test('screen /habit-tracker add-weekly', async ({ page }) => {

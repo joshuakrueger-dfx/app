@@ -282,11 +282,25 @@ export const SCREEN_VARIANTS = [
     needle: 'Legal Notice',
   },
   {
+    route: '/legal',
+    id: 'install-open',
+    image: 'legal-install-open.png',
+    visual: 'state-legal-install-open',
+    needle: "shotScreen(page, 'state-legal-install-open', false)",
+  },
+  {
     route: '/about',
     id: 'default',
     image: 'about.png',
     visual: 'screen-about',
     needle: 'What 21.gifts stands for',
+  },
+  {
+    route: '/about',
+    id: 'install-open',
+    image: 'about-install-open.png',
+    visual: 'state-about-install-open',
+    needle: "shotScreen(page, 'state-about-install-open', false)",
   },
   {
     route: '/login',
@@ -459,6 +473,20 @@ export const SCREEN_VARIANTS = [
   },
   {
     route: '/wallet',
+    id: 'install-open',
+    image: 'wallet-install-open.png',
+    visual: 'state-wallet-install-open',
+    needle: "shotScreen(page, 'state-wallet-install-open', false)",
+  },
+  {
+    route: '/members/[accountId]',
+    id: 'install-open',
+    image: 'members-accountId-install-open.png',
+    visual: 'state-members-accountId-install-open',
+    needle: "shotScreen(page, 'state-members-accountId-install-open', false)",
+  },
+  {
+    route: '/wallet',
     id: 'reveal',
     image: 'wallet-reveal.png',
     visual: 'state-wallet-reveal',
@@ -477,6 +505,13 @@ export const SCREEN_VARIANTS = [
     image: 'wallet-phrase-add.png',
     visual: 'screen-wallet-phrase',
     needle: 'Add recovery phrase',
+  },
+  {
+    route: '/wallet/phrase',
+    id: 'install-open',
+    image: 'wallet-phrase-install-open.png',
+    visual: 'state-wallet-phrase-install-open',
+    needle: "shotScreen(page, 'state-wallet-phrase-install-open', false)",
   },
   {
     route: '/wallet/phrase',
@@ -522,6 +557,13 @@ export const SCREEN_VARIANTS = [
   },
   {
     route: '/setup/name',
+    id: 'install-open',
+    image: 'setup-name-install-open.png',
+    visual: 'state-setup-name-install-open',
+    needle: "shotScreen(page, 'state-setup-name-install-open', false)",
+  },
+  {
+    route: '/setup/name',
     id: 'empty',
     image: 'setup-name-empty.png',
     visual: 'state-setup-name-empty',
@@ -554,6 +596,13 @@ export const SCREEN_VARIANTS = [
     image: 'setup-username.png',
     visual: 'screen-setup-username',
     needle: "getByRole('heading', { name: 'Your 21.gifts name' })",
+  },
+  {
+    route: '/setup/username',
+    id: 'install-open',
+    image: 'setup-username-install-open.png',
+    visual: 'state-setup-username-install-open',
+    needle: "shotScreen(page, 'state-setup-username-install-open', false)",
   },
   {
     route: '/setup/username',
@@ -590,6 +639,13 @@ export const SCREEN_VARIANTS = [
     image: 'setup-address.png',
     visual: 'screen-setup-address',
     needle: "getByRole('heading', { name: 'Your Wallet of Satoshi address' })",
+  },
+  {
+    route: '/setup/address',
+    id: 'install-open',
+    image: 'setup-address-install-open.png',
+    visual: 'state-setup-address-install-open',
+    needle: "shotScreen(page, 'state-setup-address-install-open', false)",
   },
   {
     route: '/setup/address',
@@ -716,6 +772,13 @@ export const SCREEN_VARIANTS = [
     image: 'setup-rules-busy.png',
     visual: 'state-setup-rules-busy',
     needle: "getByRole('button', { name: 'I agree to these rules' })).toBeDisabled()",
+  },
+  {
+    route: '/setup/rules',
+    id: 'install-open',
+    image: 'setup-rules-install-open.png',
+    visual: 'state-setup-rules-install-open',
+    needle: "shotScreen(page, 'state-setup-rules-install-open', false)",
   },
   {
     route: '/welcome',
@@ -1950,6 +2013,13 @@ export const SCREEN_VARIANTS = [
     needle: "getByRole('button', { name: 'Menu' })",
   },
   {
+    route: '/rules',
+    id: 'install-open',
+    image: 'rules-install-open.png',
+    visual: 'state-rules-install-open',
+    needle: "shotScreen(page, 'state-rules-install-open', false)",
+  },
+  {
     route: '/habit-tracker',
     id: 'default',
     image: 'habit-tracker.png',
@@ -2223,6 +2293,13 @@ export const SCREEN_VARIANTS = [
     needle: 'screen /habit-tracker comment-deleted',
   },
   {
+    route: '/habit-tracker',
+    id: 'install-open',
+    image: 'habit-tracker-install-open.png',
+    visual: 'state-habit-tracker-install-open',
+    needle: "shotScreen(page, 'state-habit-tracker-install-open', false)",
+  },
+  {
     route: '/contact',
     id: 'default',
     image: 'contact.png',
@@ -2242,6 +2319,13 @@ export const SCREEN_VARIANTS = [
     image: 'contact-success.png',
     visual: 'state-contact-success',
     needle: 'Hello team',
+  },
+  {
+    route: '/contact',
+    id: 'install-open',
+    image: 'contact-install-open.png',
+    visual: 'state-contact-install-open',
+    needle: "shotScreen(page, 'state-contact-install-open', false)",
   },
   {
     route: '/profile',
@@ -2293,6 +2377,13 @@ export const SCREEN_VARIANTS = [
     needle: 'Point of sale is unavailable.',
   },
   {
+    route: '/pos',
+    id: 'install-open',
+    image: 'pos-install-open.png',
+    visual: 'state-pos-install-open',
+    needle: "shotScreen(page, 'state-pos-install-open', false)",
+  },
+  {
     route: '/pos/amount',
     id: 'default',
     image: 'pos-amount.png',
@@ -2319,6 +2410,13 @@ export const SCREEN_VARIANTS = [
     image: 'pos-bad-amount.png',
     visual: 'state-pos-bad-amount',
     needle: 'Enter a whole number.',
+  },
+  {
+    route: '/pos/amount',
+    id: 'install-open',
+    image: 'pos-amount-install-open.png',
+    visual: 'state-pos-amount-install-open',
+    needle: "shotScreen(page, 'state-pos-amount-install-open', false)",
   },
   {
     route: '/pos/amount',
@@ -3091,6 +3189,13 @@ export const SCREEN_VARIANTS = [
     needle: "getByRole('button', { name: 'Yes', exact: true })).toBeDisabled()",
   },
   {
+    route: '/members/[accountId]/verify',
+    id: 'install-open',
+    image: 'members-verify-install-open.png',
+    visual: 'state-members-verify-install-open',
+    needle: "shotScreen(page, 'state-members-verify-install-open', false)",
+  },
+  {
     route: '/profile',
     id: 'receive',
     image: 'profile-receive.png',
@@ -3386,6 +3491,13 @@ export const SCREEN_VARIANTS = [
   },
   {
     route: '/profile',
+    id: 'install-open',
+    image: 'profile-install-open.png',
+    visual: 'state-profile-install-open',
+    needle: "shotScreen(page, 'state-profile-install-open', false)",
+  },
+  {
+    route: '/profile',
     id: 'address-empty',
     image: 'profile-address-empty.png',
     visual: 'state-profile-address-empty',
@@ -3440,6 +3552,13 @@ export const SCREEN_VARIANTS = [
     visual: 'screen-grants',
     needle:
       'Applications are currently paused. You can apply again when shop transactions have increased.',
+  },
+  {
+    route: '/grants',
+    id: 'install-open',
+    image: 'grants-install-open.png',
+    visual: 'state-grants-install-open',
+    needle: "shotScreen(page, 'state-grants-install-open', false)",
   },
   {
     route: '/grants',
@@ -3539,6 +3658,14 @@ export const SCREEN_VARIANTS = [
     visual: 'state-grants-goals-error',
     needle: 'state-grants-goals-error',
   },
+
+  {
+    route: '/grants/goals',
+    id: 'install-open',
+    image: 'grants-goals-install-open.png',
+    visual: 'state-grants-goals-install-open',
+    needle: "shotScreen(page, 'state-grants-goals-install-open', false)",
+  },
   {
     route: '/grants/payments/comment',
     id: 'default',
@@ -3601,6 +3728,14 @@ export const SCREEN_VARIANTS = [
     image: 'grants-payments-comment-editing.png',
     visual: 'state-grants-payments-comment-editing',
     needle: "getByRole('textbox', { name: 'Comment' })",
+  },
+
+  {
+    route: '/grants/payments/comment',
+    id: 'install-open',
+    image: 'grants-payments-comment-install-open.png',
+    visual: 'state-grants-payments-comment-install-open',
+    needle: "shotScreen(page, 'state-grants-payments-comment-install-open', false)",
   },
   {
     route: '/grants/payments/amounts',
@@ -3735,6 +3870,14 @@ export const SCREEN_VARIANTS = [
     visual: 'state-grants-payments-amounts-no-lightning',
     needle: 'This person has no Wallet of Satoshi address.',
   },
+
+  {
+    route: '/grants/payments/amounts',
+    id: 'install-open',
+    image: 'grants-payments-amounts-install-open.png',
+    visual: 'state-grants-payments-amounts-install-open',
+    needle: "shotScreen(page, 'state-grants-payments-amounts-install-open', false)",
+  },
   {
     route: '/profile/apply',
     id: 'redirect',
@@ -3834,6 +3977,7 @@ export const SCREEN_VARIANTS = [
     visual: 'state-grants-apply-truth',
     needle: 'Do these posts, to your knowledge, correspond to the truth?',
   },
+
   {
     route: '/grants/apply',
     id: 'translate',
@@ -3940,6 +4084,13 @@ export const SCREEN_VARIANTS = [
     needle: 'When your posts match, you can apply again.',
   },
   {
+    route: '/grants/apply',
+    id: 'install-open',
+    image: 'grants-apply-install-open.png',
+    visual: 'state-grants-apply-install-open',
+    needle: "shotScreen(page, 'state-grants-apply-install-open', false)",
+  },
+  {
     route: '/view/[viewKey]',
     id: 'default',
     image: 'view-viewKey.png',
@@ -4039,6 +4190,13 @@ export const SCREEN_VARIANTS = [
   },
   {
     route: '/stats',
+    id: 'install-open',
+    image: 'stats-install-open.png',
+    visual: 'state-stats-install-open',
+    needle: "shotScreen(page, 'state-stats-install-open', false)",
+  },
+  {
+    route: '/stats',
     id: 'usd-scale',
     image: 'stats-usd-scale.png',
     visual: 'state-stats-usd-scale',
@@ -4107,12 +4265,27 @@ export const SCREEN_VARIANTS = [
     visual: 'state-trust-chain-hop-error',
     needle: 'state-trust-chain-hop-error',
   },
+
+  {
+    route: '/trust-chain',
+    id: 'install-open',
+    image: 'trust-chain-install-open.png',
+    visual: 'state-trust-chain-install-open',
+    needle: "shotScreen(page, 'state-trust-chain-install-open', false)",
+  },
   {
     route: '/stats/[day]',
     id: 'default',
     image: 'stats-day.png',
     visual: 'screen-stats-day',
     needle: 'alice',
+  },
+  {
+    route: '/stats/[day]',
+    id: 'install-open',
+    image: 'stats-day-install-open.png',
+    visual: 'state-stats-day-install-open',
+    needle: "shotScreen(page, 'state-stats-day-install-open', false)",
   },
   {
     route: '/stats/[day]',
@@ -4366,6 +4539,14 @@ export const SCREEN_VARIANTS = [
     visual: 'state-messages-thread-mention',
     needle: "shotScreen(page, 'state-messages-thread-mention')",
   },
+
+  {
+    route: '/messages',
+    id: 'install-open',
+    image: 'messages-install-open.png',
+    visual: 'state-messages-install-open',
+    needle: "shotScreen(page, 'state-messages-install-open', false)",
+  },
   {
     route: '/notifications',
     id: 'default',
@@ -4400,6 +4581,14 @@ export const SCREEN_VARIANTS = [
     image: 'notifications-moderator-proposal.png',
     visual: 'state-notifications-moderator-proposal',
     needle: 'Bob proposed a moderator',
+  },
+
+  {
+    route: '/notifications',
+    id: 'install-open',
+    image: 'notifications-install-open.png',
+    visual: 'state-notifications-install-open',
+    needle: "shotScreen(page, 'state-notifications-install-open', false)",
   },
   {
     route: '/statistics',
@@ -4457,6 +4646,14 @@ export const SCREEN_VARIANTS = [
     visual: 'state-statistics-both-error',
     needle: 'Could not load shop activity. Please try again.',
   },
+
+  {
+    route: '/statistics',
+    id: 'install-open',
+    image: 'statistics-install-open.png',
+    visual: 'state-statistics-install-open',
+    needle: "shotScreen(page, 'state-statistics-install-open', false)",
+  },
   {
     route: '/moderate',
     id: 'default',
@@ -4484,6 +4681,14 @@ export const SCREEN_VARIANTS = [
     image: 'moderate-forbidden.png',
     visual: 'state-moderate-forbidden',
     needle: 'This page is for moderators.',
+  },
+
+  {
+    route: '/moderate',
+    id: 'install-open',
+    image: 'moderate-install-open.png',
+    visual: 'state-moderate-install-open',
+    needle: "shotScreen(page, 'state-moderate-install-open', false)",
   },
   {
     route: '/moderate/payouts',
@@ -4519,6 +4724,14 @@ export const SCREEN_VARIANTS = [
     image: 'moderate-payouts-error.png',
     visual: 'state-moderate-payouts-error',
     needle: 'Could not load the payout table. Please try again.',
+  },
+
+  {
+    route: '/moderate/payouts',
+    id: 'install-open',
+    image: 'moderate-payouts-install-open.png',
+    visual: 'state-moderate-payouts-install-open',
+    needle: "shotScreen(page, 'state-moderate-payouts-install-open', false)",
   },
   {
     route: '/moderate/hidden',
@@ -4596,6 +4809,13 @@ export const SCREEN_VARIANTS = [
     image: 'moderate-hidden-error.png',
     visual: 'state-moderate-hidden-error',
     needle: 'Try again',
+  },
+  {
+    route: '/moderate/hidden',
+    id: 'install-open',
+    image: 'moderate-hidden-install-open.png',
+    visual: 'state-moderate-hidden-install-open',
+    needle: "shotScreen(page, 'state-moderate-hidden-install-open', false)",
   },
   {
     route: '/moderate/proposals',
@@ -4689,6 +4909,13 @@ export const SCREEN_VARIANTS = [
     needle: 'moderate proposals rejecting-self',
   },
   {
+    route: '/moderate/proposals',
+    id: 'install-open',
+    image: 'moderate-proposals-install-open.png',
+    visual: 'state-moderate-proposals-install-open',
+    needle: "shotScreen(page, 'state-moderate-proposals-install-open', false)",
+  },
+  {
     route: '/moderate/applications',
     id: 'redirect',
     image: 'moderate-applications.png',
@@ -4736,6 +4963,13 @@ export const SCREEN_VARIANTS = [
     image: 'moderate-applications-error.png',
     visual: 'state-moderate-applications-error',
     needle: 'Could not load open applications. Please try again.',
+  },
+  {
+    route: '/grants/applications',
+    id: 'install-open',
+    image: 'grants-applications-install-open.png',
+    visual: 'state-grants-applications-install-open',
+    needle: "shotScreen(page, 'state-grants-applications-install-open', false)",
   },
   {
     route: '/grants/applications/[accountId]',
@@ -4834,6 +5068,13 @@ export const SCREEN_VARIANTS = [
     image: 'moderate-applications-accountId-deciding.png',
     visual: 'state-moderate-applications-accountId-deciding',
     needle: "getByRole('button', { name: 'No' })).toBeDisabled()",
+  },
+  {
+    route: '/grants/applications/[accountId]',
+    id: 'install-open',
+    image: 'grants-applications-accountId-install-open.png',
+    visual: 'state-grants-applications-accountId-install-open',
+    needle: "shotScreen(page, 'state-grants-applications-accountId-install-open', false)",
   },
   {
     route: '/moderate/group',
@@ -5004,6 +5245,13 @@ export const SCREEN_VARIANTS = [
     needle: 'Could not translate this note. Please try again.',
   },
   {
+    route: '/moderate/group',
+    id: 'install-open',
+    image: 'moderate-group-install-open.png',
+    visual: 'state-moderate-group-install-open',
+    needle: "shotScreen(page, 'state-moderate-group-install-open', false)",
+  },
+  {
     route: '/moderate/handbook',
     id: 'default',
     image: 'moderate-handbook.png',
@@ -5018,11 +5266,25 @@ export const SCREEN_VARIANTS = [
     needle: 'This page is for moderators.',
   },
   {
+    route: '/moderate/handbook',
+    id: 'install-open',
+    image: 'moderate-handbook-install-open.png',
+    visual: 'state-moderate-handbook-install-open',
+    needle: "shotScreen(page, 'state-moderate-handbook-install-open', false)",
+  },
+  {
     route: '/404',
     id: 'default',
     image: 'not-found.png',
     visual: 'screen-404',
     needle: "getByRole('heading', { name: '404' })",
+  },
+  {
+    route: '/404',
+    id: 'install-open',
+    image: '404-install-open.png',
+    visual: 'state-404-install-open',
+    needle: "shotScreen(page, 'state-404-install-open', false)",
   },
   {
     route: '/messages/[id]',
@@ -5954,6 +6216,13 @@ export const SCREEN_VARIANTS = [
     image: 'npub-error.png',
     visual: 'state-npub-error',
     needle: "shotScreen(page, 'state-npub-error')",
+  },
+  {
+    route: '/[npub]',
+    id: 'install-open',
+    image: 'npub-install-open.png',
+    visual: 'state-npub-install-open',
+    needle: "shotScreen(page, 'state-npub-install-open', false)",
   },
   {
     route: '/shops',
@@ -7300,6 +7569,13 @@ export const SCREEN_VARIANTS = [
     needle: "shotScreen(page, 'state-shops-staff-place-error')",
   },
   {
+    route: '/shops',
+    id: 'install-open',
+    image: 'shops-install-open.png',
+    visual: 'state-shops-install-open',
+    needle: "shotScreen(page, 'state-shops-install-open', false)",
+  },
+  {
     route: '/messages/[id]',
     id: 'translate',
     image: 'messages-id-translate.png',
@@ -7370,6 +7646,13 @@ export const SCREEN_VARIANTS = [
     needle: 'received ₿100',
   },
   {
+    route: '/messages/[id]',
+    id: 'install-open',
+    image: 'messages-id-install-open.png',
+    visual: 'state-messages-id-install-open',
+    needle: "shotScreen(page, 'state-messages-id-install-open', false)",
+  },
+  {
     route: '/messages/[id]/repayment-list',
     id: 'default',
     image: 'messages-id-repayment-list.png',
@@ -7396,6 +7679,13 @@ export const SCREEN_VARIANTS = [
     image: 'messages-id-repayment-list-empty.png',
     visual: 'state-messages-id-repayment-list-empty',
     needle: 'state /messages/[id]/repayment-list empty',
+  },
+  {
+    route: '/messages/[id]/repayment-list',
+    id: 'install-open',
+    image: 'messages-id-repayment-list-install-open.png',
+    visual: 'state-messages-id-repayment-list-install-open',
+    needle: "shotScreen(page, 'state-messages-id-repayment-list-install-open', false)",
   },
   {
     route: '/messages/[id]/author',
@@ -7578,5 +7868,12 @@ export const SCREEN_VARIANTS = [
     image: 'messages-id-author-replies-translate-error.png',
     visual: 'state-messages-id-author-replies-translate-error',
     needle: 'state /messages/[id]/author replies-translate-error',
+  },
+  {
+    route: '/messages/[id]/author',
+    id: 'install-open',
+    image: 'messages-id-author-install-open.png',
+    visual: 'state-messages-id-author-install-open',
+    needle: "shotScreen(page, 'state-messages-id-author-install-open', false)",
   },
 ];

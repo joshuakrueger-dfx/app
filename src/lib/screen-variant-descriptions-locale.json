@@ -5358,5 +5358,210 @@
     "de": "Eine Moderatorsitzung mit einer Shop-Notiz Cafe Luna. Konto hinzufügen ist geöffnet. Der Benutzername wurde bearbeitet und geleert, das Feld ist wieder @. Geben Sie den 21.gifts-Benutzernamen ein oder wählen Sie ihn aus. ist der Feldfehler. Konto speichern ist deaktiviert. Es gibt keine Meldung. Die Personenliste zeigt weiterhin @ada Ada Lovelace und @adam Adam.",
     "es": "Una sesión de moderador con una nota de tienda Cafe Luna. Añadir una cuenta está abierto. El nombre de usuario se editó y se vació, así que el campo vuelve a ser @. Escribe o elige el usuario de 21.gifts para continuar. es el error del campo. Guardar la cuenta está deshabilitado. No hay alerta. La lista de Personas sigue mostrando @ada Ada Lovelace y @adam Adam.",
     "fil": "Sesyon ng moderator na may tala ng shop na Cafe Luna. Bukas ang Magdagdag ng account. Na-edit at nabura ang username, kaya @ na ulit ang field. Ang I-type o piliin ang username sa 21.gifts para magpatuloy. ang error ng field. Naka-disable ang I-save ang account. Walang alerto. Ipinapakita pa ng listahan ng Mga tao ang @ada Ada Lovelace at @adam Adam."
+  },
+  "/legal:install-open": {
+    "de": "Auf dem iPhone öffnest du über App installieren in der Kopfzeile den Dialog 21.gifts auf den Home-Bildschirm.",
+    "es": "En el iPhone, Instalar app en la cabecera abre el diálogo Añadir 21.gifts a la pantalla de inicio.",
+    "fil": "Sa iPhone, binubuksan ng I-install ang app sa header ang diyalogong Idagdag ang 21.gifts sa Home Screen."
+  },
+  "/about:install-open": {
+    "de": "Auf dem iPhone öffnest du über App installieren in der Kopfzeile den Dialog 21.gifts auf den Home-Bildschirm.",
+    "es": "En el iPhone, Instalar app en la cabecera abre el diálogo Añadir 21.gifts a la pantalla de inicio.",
+    "fil": "Sa iPhone, binubuksan ng I-install ang app sa header ang diyalogong Idagdag ang 21.gifts sa Home Screen."
+  },
+  "/stats:install-open": {
+    "de": "Auf dem iPhone öffnest du über App installieren in der Kopfzeile den Dialog 21.gifts auf den Home-Bildschirm.",
+    "es": "En el iPhone, Instalar app en la cabecera abre el diálogo Añadir 21.gifts a la pantalla de inicio.",
+    "fil": "Sa iPhone, binubuksan ng I-install ang app sa header ang diyalogong Idagdag ang 21.gifts sa Home Screen."
+  },
+  "/stats/[day]:install-open": {
+    "de": "Auf dem iPhone öffnest du über App installieren in der Kopfzeile den Dialog 21.gifts auf den Home-Bildschirm.",
+    "es": "En el iPhone, Instalar app en la cabecera abre el diálogo Añadir 21.gifts a la pantalla de inicio.",
+    "fil": "Sa iPhone, binubuksan ng I-install ang app sa header ang diyalogong Idagdag ang 21.gifts sa Home Screen."
+  },
+  "/404:install-open": {
+    "de": "Auf dem iPhone öffnest du über App installieren in der Kopfzeile den Dialog 21.gifts auf den Home-Bildschirm.",
+    "es": "En el iPhone, Instalar app en la cabecera abre el diálogo Añadir 21.gifts a la pantalla de inicio.",
+    "fil": "Sa iPhone, binubuksan ng I-install ang app sa header ang diyalogong Idagdag ang 21.gifts sa Home Screen."
+  },
+  "/wallet:install-open": {
+    "de": "Auf dem iPhone öffnest du über Menü und App installieren den Dialog 21.gifts auf den Home-Bildschirm.",
+    "es": "En el iPhone, Menú y luego Instalar app abre el diálogo Añadir 21.gifts a la pantalla de inicio.",
+    "fil": "Sa iPhone, binubuksan ng Menu at saka I-install ang app ang diyalogong Idagdag ang 21.gifts sa Home Screen."
+  },
+  "/wallet/phrase:install-open": {
+    "de": "Auf dem iPhone öffnest du über Menü und App installieren den Dialog 21.gifts auf den Home-Bildschirm.",
+    "es": "En el iPhone, Menú y luego Instalar app abre el diálogo Añadir 21.gifts a la pantalla de inicio.",
+    "fil": "Sa iPhone, binubuksan ng Menu at saka I-install ang app ang diyalogong Idagdag ang 21.gifts sa Home Screen."
+  },
+  "/setup/name:install-open": {
+    "de": "Auf dem iPhone öffnest du über Menü und App installieren den Dialog 21.gifts auf den Home-Bildschirm.",
+    "es": "En el iPhone, Menú y luego Instalar app abre el diálogo Añadir 21.gifts a la pantalla de inicio.",
+    "fil": "Sa iPhone, binubuksan ng Menu at saka I-install ang app ang diyalogong Idagdag ang 21.gifts sa Home Screen."
+  },
+  "/setup/username:install-open": {
+    "de": "Auf dem iPhone öffnest du über Menü und App installieren den Dialog 21.gifts auf den Home-Bildschirm.",
+    "es": "En el iPhone, Menú y luego Instalar app abre el diálogo Añadir 21.gifts a la pantalla de inicio.",
+    "fil": "Sa iPhone, binubuksan ng Menu at saka I-install ang app ang diyalogong Idagdag ang 21.gifts sa Home Screen."
+  },
+  "/setup/address:install-open": {
+    "de": "Auf dem iPhone öffnest du über Menü und App installieren den Dialog 21.gifts auf den Home-Bildschirm.",
+    "es": "En el iPhone, Menú y luego Instalar app abre el diálogo Añadir 21.gifts a la pantalla de inicio.",
+    "fil": "Sa iPhone, binubuksan ng Menu at saka I-install ang app ang diyalogong Idagdag ang 21.gifts sa Home Screen."
+  },
+  "/setup/rules:install-open": {
+    "de": "Auf dem iPhone öffnest du über Menü und App installieren den Dialog 21.gifts auf den Home-Bildschirm.",
+    "es": "En el iPhone, Menú y luego Instalar app abre el diálogo Añadir 21.gifts a la pantalla de inicio.",
+    "fil": "Sa iPhone, binubuksan ng Menu at saka I-install ang app ang diyalogong Idagdag ang 21.gifts sa Home Screen."
+  },
+  "/rules:install-open": {
+    "de": "Auf dem iPhone öffnest du über Menü und App installieren den Dialog 21.gifts auf den Home-Bildschirm.",
+    "es": "En el iPhone, Menú y luego Instalar app abre el diálogo Añadir 21.gifts a la pantalla de inicio.",
+    "fil": "Sa iPhone, binubuksan ng Menu at saka I-install ang app ang diyalogong Idagdag ang 21.gifts sa Home Screen."
+  },
+  "/habit-tracker:install-open": {
+    "de": "Auf dem iPhone öffnest du über Menü und App installieren den Dialog 21.gifts auf den Home-Bildschirm.",
+    "es": "En el iPhone, Menú y luego Instalar app abre el diálogo Añadir 21.gifts a la pantalla de inicio.",
+    "fil": "Sa iPhone, binubuksan ng Menu at saka I-install ang app ang diyalogong Idagdag ang 21.gifts sa Home Screen."
+  },
+  "/contact:install-open": {
+    "de": "Auf dem iPhone öffnest du über Menü und App installieren den Dialog 21.gifts auf den Home-Bildschirm.",
+    "es": "En el iPhone, Menú y luego Instalar app abre el diálogo Añadir 21.gifts a la pantalla de inicio.",
+    "fil": "Sa iPhone, binubuksan ng Menu at saka I-install ang app ang diyalogong Idagdag ang 21.gifts sa Home Screen."
+  },
+  "/profile:install-open": {
+    "de": "Auf dem iPhone öffnest du über Menü und App installieren den Dialog 21.gifts auf den Home-Bildschirm.",
+    "es": "En el iPhone, Menú y luego Instalar app abre el diálogo Añadir 21.gifts a la pantalla de inicio.",
+    "fil": "Sa iPhone, binubuksan ng Menu at saka I-install ang app ang diyalogong Idagdag ang 21.gifts sa Home Screen."
+  },
+  "/pos:install-open": {
+    "de": "Auf dem iPhone öffnest du über Menü und App installieren den Dialog 21.gifts auf den Home-Bildschirm.",
+    "es": "En el iPhone, Menú y luego Instalar app abre el diálogo Añadir 21.gifts a la pantalla de inicio.",
+    "fil": "Sa iPhone, binubuksan ng Menu at saka I-install ang app ang diyalogong Idagdag ang 21.gifts sa Home Screen."
+  },
+  "/pos/amount:install-open": {
+    "de": "Auf dem iPhone öffnest du über Menü und App installieren den Dialog 21.gifts auf den Home-Bildschirm.",
+    "es": "En el iPhone, Menú y luego Instalar app abre el diálogo Añadir 21.gifts a la pantalla de inicio.",
+    "fil": "Sa iPhone, binubuksan ng Menu at saka I-install ang app ang diyalogong Idagdag ang 21.gifts sa Home Screen."
+  },
+  "/members/[accountId]:install-open": {
+    "de": "Auf dem iPhone öffnest du über Menü und App installieren den Dialog 21.gifts auf den Home-Bildschirm.",
+    "es": "En el iPhone, Menú y luego Instalar app abre el diálogo Añadir 21.gifts a la pantalla de inicio.",
+    "fil": "Sa iPhone, binubuksan ng Menu at saka I-install ang app ang diyalogong Idagdag ang 21.gifts sa Home Screen."
+  },
+  "/members/[accountId]/verify:install-open": {
+    "de": "Auf dem iPhone öffnest du über Menü und App installieren den Dialog 21.gifts auf den Home-Bildschirm.",
+    "es": "En el iPhone, Menú y luego Instalar app abre el diálogo Añadir 21.gifts a la pantalla de inicio.",
+    "fil": "Sa iPhone, binubuksan ng Menu at saka I-install ang app ang diyalogong Idagdag ang 21.gifts sa Home Screen."
+  },
+  "/grants:install-open": {
+    "de": "Auf dem iPhone öffnest du über Menü und App installieren den Dialog 21.gifts auf den Home-Bildschirm.",
+    "es": "En el iPhone, Menú y luego Instalar app abre el diálogo Añadir 21.gifts a la pantalla de inicio.",
+    "fil": "Sa iPhone, binubuksan ng Menu at saka I-install ang app ang diyalogong Idagdag ang 21.gifts sa Home Screen."
+  },
+  "/grants/goals:install-open": {
+    "de": "Auf dem iPhone öffnest du über Menü und App installieren den Dialog 21.gifts auf den Home-Bildschirm.",
+    "es": "En el iPhone, Menú y luego Instalar app abre el diálogo Añadir 21.gifts a la pantalla de inicio.",
+    "fil": "Sa iPhone, binubuksan ng Menu at saka I-install ang app ang diyalogong Idagdag ang 21.gifts sa Home Screen."
+  },
+  "/grants/payments/comment:install-open": {
+    "de": "Auf dem iPhone öffnest du über Menü und App installieren den Dialog 21.gifts auf den Home-Bildschirm.",
+    "es": "En el iPhone, Menú y luego Instalar app abre el diálogo Añadir 21.gifts a la pantalla de inicio.",
+    "fil": "Sa iPhone, binubuksan ng Menu at saka I-install ang app ang diyalogong Idagdag ang 21.gifts sa Home Screen."
+  },
+  "/grants/payments/amounts:install-open": {
+    "de": "Auf dem iPhone öffnest du über Menü und App installieren den Dialog 21.gifts auf den Home-Bildschirm.",
+    "es": "En el iPhone, Menú y luego Instalar app abre el diálogo Añadir 21.gifts a la pantalla de inicio.",
+    "fil": "Sa iPhone, binubuksan ng Menu at saka I-install ang app ang diyalogong Idagdag ang 21.gifts sa Home Screen."
+  },
+  "/grants/apply:install-open": {
+    "de": "Auf dem iPhone öffnest du über Menü und App installieren den Dialog 21.gifts auf den Home-Bildschirm.",
+    "es": "En el iPhone, Menú y luego Instalar app abre el diálogo Añadir 21.gifts a la pantalla de inicio.",
+    "fil": "Sa iPhone, binubuksan ng Menu at saka I-install ang app ang diyalogong Idagdag ang 21.gifts sa Home Screen."
+  },
+  "/trust-chain:install-open": {
+    "de": "Auf dem iPhone öffnest du über Menü und App installieren den Dialog 21.gifts auf den Home-Bildschirm.",
+    "es": "En el iPhone, Menú y luego Instalar app abre el diálogo Añadir 21.gifts a la pantalla de inicio.",
+    "fil": "Sa iPhone, binubuksan ng Menu at saka I-install ang app ang diyalogong Idagdag ang 21.gifts sa Home Screen."
+  },
+  "/messages:install-open": {
+    "de": "Auf dem iPhone öffnest du über Menü und App installieren den Dialog 21.gifts auf den Home-Bildschirm.",
+    "es": "En el iPhone, Menú y luego Instalar app abre el diálogo Añadir 21.gifts a la pantalla de inicio.",
+    "fil": "Sa iPhone, binubuksan ng Menu at saka I-install ang app ang diyalogong Idagdag ang 21.gifts sa Home Screen."
+  },
+  "/notifications:install-open": {
+    "de": "Auf dem iPhone öffnest du über Menü und App installieren den Dialog 21.gifts auf den Home-Bildschirm.",
+    "es": "En el iPhone, Menú y luego Instalar app abre el diálogo Añadir 21.gifts a la pantalla de inicio.",
+    "fil": "Sa iPhone, binubuksan ng Menu at saka I-install ang app ang diyalogong Idagdag ang 21.gifts sa Home Screen."
+  },
+  "/statistics:install-open": {
+    "de": "Auf dem iPhone öffnest du über Menü und App installieren den Dialog 21.gifts auf den Home-Bildschirm.",
+    "es": "En el iPhone, Menú y luego Instalar app abre el diálogo Añadir 21.gifts a la pantalla de inicio.",
+    "fil": "Sa iPhone, binubuksan ng Menu at saka I-install ang app ang diyalogong Idagdag ang 21.gifts sa Home Screen."
+  },
+  "/moderate:install-open": {
+    "de": "Auf dem iPhone öffnest du über Menü und App installieren den Dialog 21.gifts auf den Home-Bildschirm.",
+    "es": "En el iPhone, Menú y luego Instalar app abre el diálogo Añadir 21.gifts a la pantalla de inicio.",
+    "fil": "Sa iPhone, binubuksan ng Menu at saka I-install ang app ang diyalogong Idagdag ang 21.gifts sa Home Screen."
+  },
+  "/moderate/payouts:install-open": {
+    "de": "Auf dem iPhone öffnest du über Menü und App installieren den Dialog 21.gifts auf den Home-Bildschirm.",
+    "es": "En el iPhone, Menú y luego Instalar app abre el diálogo Añadir 21.gifts a la pantalla de inicio.",
+    "fil": "Sa iPhone, binubuksan ng Menu at saka I-install ang app ang diyalogong Idagdag ang 21.gifts sa Home Screen."
+  },
+  "/moderate/hidden:install-open": {
+    "de": "Auf dem iPhone öffnest du über Menü und App installieren den Dialog 21.gifts auf den Home-Bildschirm.",
+    "es": "En el iPhone, Menú y luego Instalar app abre el diálogo Añadir 21.gifts a la pantalla de inicio.",
+    "fil": "Sa iPhone, binubuksan ng Menu at saka I-install ang app ang diyalogong Idagdag ang 21.gifts sa Home Screen."
+  },
+  "/moderate/proposals:install-open": {
+    "de": "Auf dem iPhone öffnest du über Menü und App installieren den Dialog 21.gifts auf den Home-Bildschirm.",
+    "es": "En el iPhone, Menú y luego Instalar app abre el diálogo Añadir 21.gifts a la pantalla de inicio.",
+    "fil": "Sa iPhone, binubuksan ng Menu at saka I-install ang app ang diyalogong Idagdag ang 21.gifts sa Home Screen."
+  },
+  "/grants/applications:install-open": {
+    "de": "Auf dem iPhone öffnest du über Menü und App installieren den Dialog 21.gifts auf den Home-Bildschirm.",
+    "es": "En el iPhone, Menú y luego Instalar app abre el diálogo Añadir 21.gifts a la pantalla de inicio.",
+    "fil": "Sa iPhone, binubuksan ng Menu at saka I-install ang app ang diyalogong Idagdag ang 21.gifts sa Home Screen."
+  },
+  "/grants/applications/[accountId]:install-open": {
+    "de": "Auf dem iPhone öffnest du über Menü und App installieren den Dialog 21.gifts auf den Home-Bildschirm.",
+    "es": "En el iPhone, Menú y luego Instalar app abre el diálogo Añadir 21.gifts a la pantalla de inicio.",
+    "fil": "Sa iPhone, binubuksan ng Menu at saka I-install ang app ang diyalogong Idagdag ang 21.gifts sa Home Screen."
+  },
+  "/moderate/group:install-open": {
+    "de": "Auf dem iPhone öffnest du über Menü und App installieren den Dialog 21.gifts auf den Home-Bildschirm.",
+    "es": "En el iPhone, Menú y luego Instalar app abre el diálogo Añadir 21.gifts a la pantalla de inicio.",
+    "fil": "Sa iPhone, binubuksan ng Menu at saka I-install ang app ang diyalogong Idagdag ang 21.gifts sa Home Screen."
+  },
+  "/moderate/handbook:install-open": {
+    "de": "Auf dem iPhone öffnest du über Menü und App installieren den Dialog 21.gifts auf den Home-Bildschirm.",
+    "es": "En el iPhone, Menú y luego Instalar app abre el diálogo Añadir 21.gifts a la pantalla de inicio.",
+    "fil": "Sa iPhone, binubuksan ng Menu at saka I-install ang app ang diyalogong Idagdag ang 21.gifts sa Home Screen."
+  },
+  "/messages/[id]:install-open": {
+    "de": "Auf dem iPhone öffnest du über Menü und App installieren den Dialog 21.gifts auf den Home-Bildschirm.",
+    "es": "En el iPhone, Menú y luego Instalar app abre el diálogo Añadir 21.gifts a la pantalla de inicio.",
+    "fil": "Sa iPhone, binubuksan ng Menu at saka I-install ang app ang diyalogong Idagdag ang 21.gifts sa Home Screen."
+  },
+  "/messages/[id]/repayment-list:install-open": {
+    "de": "Auf dem iPhone öffnest du über Menü und App installieren den Dialog 21.gifts auf den Home-Bildschirm.",
+    "es": "En el iPhone, Menú y luego Instalar app abre el diálogo Añadir 21.gifts a la pantalla de inicio.",
+    "fil": "Sa iPhone, binubuksan ng Menu at saka I-install ang app ang diyalogong Idagdag ang 21.gifts sa Home Screen."
+  },
+  "/messages/[id]/author:install-open": {
+    "de": "Auf dem iPhone öffnest du über Menü und App installieren den Dialog 21.gifts auf den Home-Bildschirm.",
+    "es": "En el iPhone, Menú y luego Instalar app abre el diálogo Añadir 21.gifts a la pantalla de inicio.",
+    "fil": "Sa iPhone, binubuksan ng Menu at saka I-install ang app ang diyalogong Idagdag ang 21.gifts sa Home Screen."
+  },
+  "/[npub]:install-open": {
+    "de": "Auf dem iPhone öffnest du über Menü und App installieren den Dialog 21.gifts auf den Home-Bildschirm.",
+    "es": "En el iPhone, Menú y luego Instalar app abre el diálogo Añadir 21.gifts a la pantalla de inicio.",
+    "fil": "Sa iPhone, binubuksan ng Menu at saka I-install ang app ang diyalogong Idagdag ang 21.gifts sa Home Screen."
+  },
+  "/shops:install-open": {
+    "de": "Auf dem iPhone öffnest du über Menü und App installieren den Dialog 21.gifts auf den Home-Bildschirm.",
+    "es": "En el iPhone, Menú y luego Instalar app abre el diálogo Añadir 21.gifts a la pantalla de inicio.",
+    "fil": "Sa iPhone, binubuksan ng Menu at saka I-install ang app ang diyalogong Idagdag ang 21.gifts sa Home Screen."
   }
 }

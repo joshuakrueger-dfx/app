@@ -198,6 +198,12 @@ The only state: imprint plus privacy, marketing chrome.
 
 ![21.gifts legal](images/legal.png)
 
+### Variant: install-open
+
+On iPhone, **Install app** in the header opens the dialog **Add 21.gifts to your Home Screen**. On narrow screens it sits behind **Menu**.
+
+![21.gifts legal install dialog](images/legal-install-open.png)
+
 ## Screen: /about
 
 - **Purpose:** Public foundation of the house — three convictions and Matthew 10:8.
@@ -212,6 +218,12 @@ The only state: three convictions, verse, and forum CTA, marketing chrome.
 
 ![21.gifts about](images/about.png)
 
+### Variant: install-open
+
+On iPhone, **Install app** in the header opens the dialog **Add 21.gifts to your Home Screen**. On narrow screens it sits behind **Menu**.
+
+![21.gifts about install dialog](images/about-install-open.png)
+
 ## Screen: /stats/[day]
 
 - **URL:** `/stats/YYYY-MM-DD` — public list of outbound donations that UTC day. Invalid dates 404.
@@ -225,6 +237,12 @@ The only state: three convictions, verse, and forum CTA, marketing chrome.
 Loaded day with at least one donation row (recipient **alice**).
 
 ![21.gifts donations on a day](images/stats-day.png)
+
+### Variant: install-open
+
+On iPhone, **Install app** in the header opens the dialog **Add 21.gifts to your Home Screen**. On narrow screens it sits behind **Menu**.
+
+![21.gifts day stats install dialog](images/stats-day-install-open.png)
 
 ### Variant: empty
 
@@ -256,6 +274,12 @@ Fetch failed. Button **Try again**.
 Loaded stats. **Posts** shows notes and replies as one total, with a bar on days that have posts and a gap on days that have none. One cumulative over-time chart is visible. Scale defaults to ₿.
 
 ![21.gifts stats](images/stats.png)
+
+### Variant: install-open
+
+On iPhone, **Install app** in the header opens the dialog **Add 21.gifts to your Home Screen**. On narrow screens it sits behind **Menu**.
+
+![21.gifts stats install dialog](images/stats-install-open.png)
 
 ### Variant: usd-scale
 
@@ -325,6 +349,12 @@ Founder seed is on screen. Clicking that person fails the hop fetch. The diagram
 
 ![21.gifts Trust Chain hop error](images/trust-chain-hop-error.png)
 
+### Variant: install-open
+
+On iPhone, **Menu** then **Install app** opens the dialog **Add 21.gifts to your Home Screen**.
+
+![21.gifts trust-chain install dialog](images/trust-chain-install-open.png)
+
 ## Screen: /wallet
 
 - **URL:** `/wallet` — signed-in receive address. The recovery phrase is a separate page.
@@ -337,6 +367,12 @@ Founder seed is on screen. Clicking that person fails the hop fetch. The diagram
 Existing member, no phrase yet. Receive address and QR above **Add recovery phrase**.
 
 ![21.gifts wallet add recovery phrase](images/wallet.png)
+
+### Variant: install-open
+
+On iPhone, **Menu** then **Install app** opens the dialog **Add 21.gifts to your Home Screen**.
+
+![21.gifts wallet install dialog](images/wallet-install-open.png)
 
 ### Variant: reveal
 
@@ -362,6 +398,12 @@ Account that can already show a phrase. Open **Advanced functions** shows **Show
 No phrase yet. **Add recovery phrase** on its own page. No receive QR.
 
 ![21.gifts wallet phrase add](images/wallet-phrase-add.png)
+
+### Variant: install-open
+
+On iPhone, **Menu** then **Install app** opens the dialog **Add 21.gifts to your Home Screen**.
+
+![21.gifts wallet phrase install dialog](images/wallet-phrase-install-open.png)
 
 ### Variant: reveal
 
@@ -564,6 +606,12 @@ Open till, mint failed. The shop sticker, time left, the sat amount, the viewer'
 Signed in, no name yet. **Your name** and the name field at the top, **Continue** and labeled **Skip** pinned at the bottom of the screen. One **Menu** top-right; open it for **Home**, **Shops**, **Point of sale**, Profile, **Grants**, **Wallet**, **Living room rules**, **Habit-Tracker**, **Trust Chain**, **Statistics**, **Notifications**, **Messages**, **Contact**, optional **Install app**, and **Log out**.
 ![21.gifts name setup](images/setup-name.png)
 
+### Variant: install-open
+
+On iPhone, **Menu** then **Install app** opens the dialog **Add 21.gifts to your Home Screen**.
+
+![21.gifts name setup install dialog](images/setup-name-install-open.png)
+
 ### Variant: empty
 
 Blur or Continue on an empty name shows **Enter your name** (`name.errorEmpty`). **Continue** stays disabled until the draft changes. **Skip** stays available.
@@ -600,6 +648,12 @@ When POST /me/name answers 500, the form shows **Could not save your name** (`na
 Signed in with a display name (or a skipped name) and no username. **Your 21.gifts name**, the username field, and **Continue**. One **Menu** top-right.
 ![21.gifts username setup](images/setup-username.png)
 
+### Variant: install-open
+
+On iPhone, **Menu** then **Install app** opens the dialog **Add 21.gifts to your Home Screen**.
+
+![21.gifts username setup install dialog](images/setup-username-install-open.png)
+
 ### Variant: invalid
 
 Entering **!** shows **Use 1–32 characters: a–z, 0–9, hyphen, underscore, or dot, starting with a letter or digit** under the field, and **Continue** stays disabled.
@@ -635,6 +689,12 @@ When POST /me/username answers 500, the form shows **Could not save your usernam
 
 Signed in with a name (or a skipped name) and no address. **Your Wallet of Satoshi address** and the address field at the top, **Continue** and labeled **Skip** pinned at the bottom of the screen. One **Menu** top-right; open it for **Home**, **Shops**, **Point of sale**, Profile, **Grants**, **Wallet**, **Living room rules**, **Habit-Tracker**, **Trust Chain**, **Statistics**, **Notifications**, **Messages**, **Contact**, optional **Install app**, and **Log out**.
 ![21.gifts address setup](images/setup-address.png)
+
+### Variant: install-open
+
+On iPhone, **Menu** then **Install app** opens the dialog **Add 21.gifts to your Home Screen**.
+
+![21.gifts address setup install dialog](images/setup-address-install-open.png)
 
 ### Variant: empty
 
@@ -750,6 +810,12 @@ Last-chapter POST failed. Alert **Could not save your agreement**.
 Last-chapter POST in flight. Agree disabled with a spinner; **Our house** still visible.
 
 ![21.gifts rules setup busy](images/setup-rules-busy.png)
+
+### Variant: install-open
+
+On iPhone, **Menu** then **Install app** opens the dialog **Add 21.gifts to your Home Screen**.
+
+![21.gifts setup-rules install dialog](images/setup-rules-install-open.png)
 
 ## Screen: /welcome
 
@@ -2326,6 +2392,12 @@ API 503. Alert **Could not load this shop. Please try again.** and labeled **Try
 
 ![21.gifts shop unavailable](images/npub-error.png)
 
+### Variant: install-open
+
+On iPhone, **Menu** then **Install app** opens the dialog **Add 21.gifts to your Home Screen**.
+
+![21.gifts npub install dialog](images/npub-install-open.png)
+
 ## Screen: /shops
 
 - **URL:** `/shops` — signed-in shop listings. Same onboarding gate as `/welcome` (`OnboardingGate screen="welcome"`). There is no `route.ts` beside this page.
@@ -3689,6 +3761,12 @@ A moderator session. **Add an account** is open on the Cafe Luna note. The live 
 
 ![21.gifts shops staff account error](images/shops-staff-account-error.png)
 
+### Variant: install-open
+
+On iPhone, **Menu** then **Install app** opens the dialog **Add 21.gifts to your Home Screen**.
+
+![21.gifts shops install dialog](images/shops-install-open.png)
+
 ## Screen: /rules
 
 - **URL:** `/rules` — public living-room rules. App chrome (semantic tokens; not the dark marketing shell). No auth gate to view; chrome depends on hydrated session.
@@ -3708,6 +3786,12 @@ Full rules body with rule card **Only free donations** visible.
 Hydrated Ada session: one top-left arrow (previous in-app view, or `/welcome` when this tab has none) + wordmark → `/welcome`. The wordmark is not that control. **Menu** top-right (**Home** first). Rule card **Only free donations** still visible.
 
 ![21.gifts living room rules signed in](images/rules-signed-in.png)
+
+### Variant: install-open
+
+On iPhone, **Menu** then **Install app** opens the dialog **Add 21.gifts to your Home Screen**.
+
+![21.gifts rules install dialog](images/rules-install-open.png)
 
 ## Screen: /habit-tracker
 
@@ -3951,6 +4035,12 @@ Ada's session, at least an initiator, after **Confirm deletion**. The comment is
 
 ![21.gifts habit tracker comment deleted](images/habit-tracker-comment-deleted.png)
 
+### Variant: install-open
+
+On iPhone, **Menu** then **Install app** opens the dialog **Add 21.gifts to your Home Screen**.
+
+![21.gifts habit-tracker install dialog](images/habit-tracker-install-open.png)
+
 ## Screen: /contact
 
 - **URL:** `/contact` — signed-in in-app contact (the only way to reach 21.gifts). Same onboarding gate as `/welcome` (`account.setup` null; name and address may be skipped; living-room rules agreement required).
@@ -3976,6 +4066,12 @@ Click **Send** with an empty composer → **Enter a message**. **Send** stays of
 After a successful send the app navigates to `/messages?c=` and shows the official **21.gifts** thread (the message body, not a dead-end thank-you sentence). Composer with ImagePlus attach visible. The message and send share one row; the amount sits under the message.
 
 ![21.gifts contact success](images/contact-success.png)
+
+### Variant: install-open
+
+On iPhone, **Menu** then **Install app** opens the dialog **Add 21.gifts to your Home Screen**.
+
+![21.gifts contact install dialog](images/contact-install-open.png)
 
 ## Screen: /members/[accountId]
 
@@ -4519,6 +4615,12 @@ A moderator viewing another member opened **Edit shop note** on Cafe Luna in Car
 
 ![21.gifts member shop edit place map loading](images/members-shop-edit-place-map-loading.png)
 
+### Variant: install-open
+
+On iPhone, **Menu** then **Install app** opens the dialog **Add 21.gifts to your Home Screen**.
+
+![21.gifts members-accountId install dialog](images/members-accountId-install-open.png)
+
 ## Screen: /members/[accountId]/verify
 
 - **Purpose:** The stored-name check only. Heading **Verify**. A moderator who is not the subject, and a basis member with a stored name that is not only whitespace, sees that name as an underlined link to the member card, the question under it, then **Yes** and **No**. A blank name shows the missing sentence and neither button. A signed-in viewer who cannot verify sees **You cannot verify this member.** Loading is **Loading…**. A failed load is the profile error plus **Try again**. An unknown id or a missing member is **This profile could not be found.** A failed verify stays on the page with **Could not update this member. Please try again.** **Yes** and **No** remain. On the device-local Sunday the question and the name stay, **Writing is paused on Sunday.** is shown, and neither button is visible. No in-card back. No Cancel. Chrome back does not post. No route.ts beside the page.
@@ -4579,6 +4681,12 @@ Verify POST in flight. **Yes** disabled with a spinner; **No** disabled. The nam
 
 ![21.gifts member verify deciding](images/members-verify-deciding.png)
 
+### Variant: install-open
+
+On iPhone, **Menu** then **Install app** opens the dialog **Add 21.gifts to your Home Screen**.
+
+![21.gifts members-verify install dialog](images/members-verify-install-open.png)
+
 ## Screen: /pos
 
 - **Purpose:** Signed-in point of sale. With no charge, this page is only the Open CryptoPay QR and **Set an amount**. The keypad is `/pos/amount`. Confirming there returns here. The button is then **Cancel**, with the countdown and the amount in bitcoin and fiat. The saved unit is `account.amountUnit`. What is charged is still whole sats. For five minutes `GET /.well-known/lnurlp/:username` pins min and max to that amount. Cancel or expiry clears the pin. The page keeps the open charge and Cancel until the server returns none. No paid status, because Wallet of Satoshi settles the invoice. Missing username or lightning address links to `/profile`.
@@ -4634,6 +4742,12 @@ Setup is finished and the username is empty. Link **Set a username first.** No a
 Username set, no Wallet of Satoshi address. Link **Set a Wallet of Satoshi address first.** No amount form.
 
 ![21.gifts point of sale need address](images/pos-need-address.png)
+
+### Variant: install-open
+
+On iPhone, **Menu** then **Install app** opens the dialog **Add 21.gifts to your Home Screen**.
+
+![21.gifts pos install dialog](images/pos-install-open.png)
 
 ## Screen: /pos/amount
 
@@ -4696,6 +4810,12 @@ PHP is pressed and the amount is 100. The gift-day request has settled and no da
 **Create payment** with `21`. The till does not answer. Alert **Point of sale is unavailable.** The keypad stays. No QR.
 
 ![21.gifts point of sale create failed](images/pos-create-failed.png)
+
+### Variant: install-open
+
+On iPhone, **Menu** then **Install app** opens the dialog **Add 21.gifts to your Home Screen**.
+
+![21.gifts pos-amount install dialog](images/pos-amount-install-open.png)
 
 ## Screen: /profile
 
@@ -5063,6 +5183,12 @@ The address editor is open. When POST /me/lightning-address answers 500, the for
 
 ![21.gifts profile address request](images/profile-address-request.png)
 
+### Variant: install-open
+
+On iPhone, **Menu** then **Install app** opens the dialog **Add 21.gifts to your Home Screen**.
+
+![21.gifts profile install dialog](images/profile-install-open.png)
+
 ## Screen: /grants
 
 - **Purpose:** Signed-in grants page. `GrantsScreen` shows `FundingStatusCard`. The only title is the page `h1` **21 gifts grant**. A signed-in account also sees a secondary large **Goals** link to `/grants/goals`, under the grant card and above the staff queue. A missing account shows no link. An initiator or founder also sees two secondary large links, **Daily payment text** to `/grants/payments/comment` and **Daily payment amounts** to `/grants/payments/amounts`. Those links do not load the roster. A moderator does not see them. An account at least moderator (`roleAtLeast(role, 'moderator')`), including an initiator and a founder, with at least one open application sees a secondary large **Open application (1)** link when the count is one and **Open applications (N)** otherwise (`funding.applications.openCount`) to `/grants/applications`. When none are open, the sentence **No open applications.** is plain text, not a link. While the count is loading, the sentence is **Loading…**. When the load fails, the error sentence and **Try again** are shown, not the applications link. The profile no longer shows this card.
@@ -5141,6 +5267,12 @@ Founder on `/grants` sees a secondary **Goals** link, secondary **Daily payment 
 
 ![21.gifts grants daily payments](images/grants-daily-payments.png)
 
+### Variant: install-open
+
+On iPhone, **Menu** then **Install app** opens the dialog **Add 21.gifts to your Home Screen**.
+
+![21.gifts grants install dialog](images/grants-install-open.png)
+
 ## Screen: /grants/goals
 
 - **Purpose:** Signed-in grant goal. States that the program continues at 10 active shops, that a shop is active with at least one transaction on 5 of the last 7 days, and what a transaction is. Shows how many shops meet that rule and a 7-day shop chart. The chart is not the public statistics series.
@@ -5165,6 +5297,12 @@ Signed-in page while `GET /funding/goal` has not returned. Heading, the 10-shop 
 Signed-in page when `GET /funding/goal` fails. Heading and the three sentences stay. Copy **Could not load the shop goal. Please try again.** and button **Try again**. No chart. Needle `state-grants-goals-error`.
 
 ![21.gifts grant goals error](images/grants-goals-error.png)
+
+### Variant: install-open
+
+On iPhone, **Menu** then **Install app** opens the dialog **Add 21.gifts to your Home Screen**.
+
+![21.gifts grants-goals install dialog](images/grants-goals-install-open.png)
 
 ## Screen: /grants/payments/comment
 
@@ -5226,6 +5364,12 @@ Founder opened the comment with the pencil and pressed the check. The roster cal
 Founder presses the pencil **Edit comment**. The stored comment **Daily gift** is in the open field **Comment**. The check (**Save**) is enabled. **Cancel** is enabled. There is no alert, no spinner, and no **Edit comment** pencil. Needle `getByRole('textbox', { name: 'Comment' })`.
 
 ![21.gifts daily payment text editing](images/grants-payments-comment-editing.png)
+
+### Variant: install-open
+
+On iPhone, **Menu** then **Install app** opens the dialog **Add 21.gifts to your Home Screen**.
+
+![21.gifts grants-payments-comment install dialog](images/grants-payments-comment-install-open.png)
 
 ## Screen: /grants/payments/amounts
 
@@ -5347,6 +5491,12 @@ Founder types `@`, picks **@cara**, and spend answers that the person was not fo
 Founder types `@`, picks **@cara**, and spend answers that the person has no Lightning address. Alert **This person has no Wallet of Satoshi address.** Needle `This person has no Wallet of Satoshi address.`
 
 ![21.gifts daily payment amounts no lightning](images/grants-payments-amounts-no-lightning.png)
+
+### Variant: install-open
+
+On iPhone, **Menu** then **Install app** opens the dialog **Add 21.gifts to your Home Screen**.
+
+![21.gifts grants-payments-amounts install dialog](images/grants-payments-amounts-install-open.png)
 
 ## Screen: /profile/apply
 
@@ -5535,6 +5685,12 @@ A failed POST says Could not submit your application. Please try again.
 No on the first question says When your posts match, you can apply again.
 
 ![21.gifts apply unmet](images/profile-apply-unmet.png)
+
+### Variant: install-open
+
+On iPhone, **Menu** then **Install app** opens the dialog **Add 21.gifts to your Home Screen**.
+
+![21.gifts grants-apply install dialog](images/grants-apply-install-open.png)
 
 ## Screen: /messages
 
@@ -5742,6 +5898,12 @@ Open thread. The incoming message **Hello @ada** stores a profile mark. **View p
 
 ![21.gifts inbox thread mention](images/messages-thread-mention.png)
 
+### Variant: install-open
+
+On iPhone, **Menu** then **Install app** opens the dialog **Add 21.gifts to your Home Screen**.
+
+![21.gifts messages install dialog](images/messages-install-open.png)
+
 ## Screen: /notifications
 
 - **URL:** `/notifications` — signed-in notifications for living-room posts, replies, payments, moderator appointment, and moderator proposal. Same onboarding gate as `/welcome`. Public notes stay at `/messages/[id]`. JSON is `/forum/notifications` (Next.js forbids `route.ts` beside this page).
@@ -5779,6 +5941,12 @@ List fetch failed. Button **Try again**. Copy **Could not load notifications. Pl
 Unread `moderator_proposal` row (actor **Bob**, copy **Bob proposed a moderator**).
 
 ![21.gifts notifications moderator proposal](images/notifications-moderator-proposal.png)
+
+### Variant: install-open
+
+On iPhone, **Menu** then **Install app** opens the dialog **Add 21.gifts to your Home Screen**.
+
+![21.gifts notifications install dialog](images/notifications-install-open.png)
 
 ## Screen: /statistics
 
@@ -5836,6 +6004,12 @@ Staff (moderator) page. The people panel shows **Could not load payouts. Please 
 
 ![21.gifts statistics both error](images/statistics-both-error.png)
 
+### Variant: install-open
+
+On iPhone, **Menu** then **Install app** opens the dialog **Add 21.gifts to your Home Screen**.
+
+![21.gifts statistics install dialog](images/statistics-install-open.png)
+
 ## Screen: /moderate
 
 - **URL:** `/moderate` — signed-in moderation hub for moderators. Same onboarding gate as `/welcome` (`OnboardingGate screen="welcome"`). HTML `/moderate` is the hub, not a GET proxy; this page does not fetch hidden notes, proposals, applications, or gift stats. The Open proposals count comes from `useUnreadCount` (`GET /trust/proposals`); the queue itself is `/moderate/proposals`. JSON for hidden notes lives under `/forum/messages/hidden`; JSON for open proposals lives under `/trust/proposals`; JSON for grant applications lives under `/funding/applications` (Next.js forbids `route.ts` beside this page).
@@ -5867,6 +6041,12 @@ Staff hub with one open proposal. **Open proposals** control shows **1** and acc
 Signed-in basis account. Copy **This page is for moderators.** No tools list.
 
 ![21.gifts moderation forbidden](images/moderate-forbidden.png)
+
+### Variant: install-open
+
+On iPhone, **Menu** then **Install app** opens the dialog **Add 21.gifts to your Home Screen**.
+
+![21.gifts moderate install dialog](images/moderate-install-open.png)
 
 ## Screen: /moderate/payouts
 
@@ -5905,6 +6085,12 @@ Staff page while the table is loading. Copy **Loading…**.
 Staff page when the load fails. Copy **Could not load the payout table. Please try again.** and button **Try again**.
 
 ![21.gifts payout per person error](images/moderate-payouts-error.png)
+
+### Variant: install-open
+
+On iPhone, **Menu** then **Install app** opens the dialog **Add 21.gifts to your Home Screen**.
+
+![21.gifts moderate-payouts install dialog](images/moderate-payouts-install-open.png)
 
 ## Screen: /moderate/hidden
 
@@ -5980,6 +6166,12 @@ Staff (moderator) waiting on `GET /forum/messages/hidden`. Copy **Loading…**
 Staff (moderator) list fetch failed. Button **Try again**.
 
 ![21.gifts hidden notes error](images/moderate-hidden-error.png)
+
+### Variant: install-open
+
+On iPhone, **Menu** then **Install app** opens the dialog **Add 21.gifts to your Home Screen**.
+
+![21.gifts moderate-hidden install dialog](images/moderate-hidden-install-open.png)
 
 ## Screen: /moderate/proposals
 
@@ -6067,6 +6259,12 @@ Staff (moderator) Reject POST in flight on a row they proposed themselves. Copy 
 
 ![21.gifts open proposals rejecting self](images/moderate-proposals-rejecting-self.png)
 
+### Variant: install-open
+
+On iPhone, **Menu** then **Install app** opens the dialog **Add 21.gifts to your Home Screen**.
+
+![21.gifts moderate-proposals install dialog](images/moderate-proposals-install-open.png)
+
 ## Screen: /moderate/applications
 
 - **Purpose:** Permanent redirect to `/grants/applications`. This path renders no queue UI.
@@ -6130,6 +6328,12 @@ Staff (founder) waiting on `GET /funding/applications`. Copy **Loading…**
 Staff (founder) list fetch failed. Copy **Could not load open applications. Please try again.** Button **Try again**.
 
 ![21.gifts open applications error](images/moderate-applications-error.png)
+
+### Variant: install-open
+
+On iPhone, **Menu** then **Install app** opens the dialog **Add 21.gifts to your Home Screen**.
+
+![21.gifts grants-applications install dialog](images/grants-applications-install-open.png)
 
 ## Screen: /grants/applications/[accountId]
 
@@ -6222,6 +6426,12 @@ Staff (founder) Reject POST failed after **No**. Copy **Could not update this me
 Staff (founder) Reject POST in flight. **No** disabled with a spinner; application still visible.
 
 ![21.gifts grant application deciding](images/moderate-applications-accountId-deciding.png)
+
+### Variant: install-open
+
+On iPhone, **Menu** then **Install app** opens the dialog **Add 21.gifts to your Home Screen**.
+
+![21.gifts grants-applications-accountId install dialog](images/grants-applications-accountId-install-open.png)
 
 ## Screen: /moderate/group
 
@@ -6377,6 +6587,12 @@ Moderator. Translation failed. The alert says the note could not be translated, 
 
 ![21.gifts moderator group translate error](images/moderate-group-translate-error.png)
 
+### Variant: install-open
+
+On iPhone, **Menu** then **Install app** opens the dialog **Add 21.gifts to your Home Screen**.
+
+![21.gifts moderate-group install dialog](images/moderate-group-install-open.png)
+
 ## Screen: /moderate/handbook
 
 - **URL:** `/moderate/handbook` — signed-in staff handbook of how 21.gifts works. Same onboarding gate as `/welcome` (`OnboardingGate screen="welcome"`). HTML `/moderate/handbook` is the handbook page, not a GET proxy. Hub is `/moderate`.
@@ -6396,6 +6612,12 @@ Staff (moderator) handbook with heading **Handbook**, TOC **Chapters**, and chap
 Signed-in basis account. Copy **This page is for moderators.** No chapters.
 
 ![21.gifts moderation handbook forbidden](images/moderate-handbook-forbidden.png)
+
+### Variant: install-open
+
+On iPhone, **Menu** then **Install app** opens the dialog **Add 21.gifts to your Home Screen**.
+
+![21.gifts moderate-handbook install dialog](images/moderate-handbook-install-open.png)
 
 ## Screen: /messages/[id]
 
@@ -6828,6 +7050,12 @@ Unsigned permalink of Cyrill's reply **You got it right.** The parent **Hello fr
 
 ![21.gifts public message reply received](images/messages-id-reply-received.png)
 
+### Variant: install-open
+
+On iPhone, **Menu** then **Install app** opens the dialog **Add 21.gifts to your Home Screen**.
+
+![21.gifts messages-id install dialog](images/messages-id-install-open.png)
+
 ## Screen: /messages/[id]/repayment-list
 
 - **Purpose:** The repayment list for one credit note: who gave, the chart, and every day's shares. The day rows render only here. The note, the forum, and a profile show a link instead of those rows. Nothing renders until the public ledger loads. A failed read stays blank. Chrome is PublicMessageChrome. There is no second back control.
@@ -6859,6 +7087,12 @@ Unsigned chrome only. The repayment request has not returned, so **Given**, the 
 Unsigned. The ledger loaded with no givers and no repayment rows. **Given** shows **No one has given yet.** **Paid back** shows **Each share is one bitcoin payment to that person.** and **The days are fixed once the credit is fully given. Repayment starts the day after that, but never before November 1, 2026. Until then this is the plan for what has been given.** No chart and no day rows.
 
 ![21.gifts repayment list empty](images/messages-id-repayment-list-empty.png)
+
+### Variant: install-open
+
+On iPhone, **Menu** then **Install app** opens the dialog **Add 21.gifts to your Home Screen**.
+
+![21.gifts messages-id-repayment-list install dialog](images/messages-id-repayment-list-install-open.png)
 
 ## Screen: /messages/[id]/author
 
@@ -7024,6 +7258,12 @@ After a failed translation of that reaction. The feed shows `Could not translate
 
 ![21.gifts external author replies translate error](images/messages-id-author-replies-translate-error.png)
 
+### Variant: install-open
+
+On iPhone, **Menu** then **Install app** opens the dialog **Add 21.gifts to your Home Screen**.
+
+![21.gifts messages-id-author install dialog](images/messages-id-author-install-open.png)
+
 ## Screen: /view/[viewKey]
 
 - **Purpose:** Public read-only copy of the signed-in profile card (heading Profile, AccountActivityChart Given/Received with FiatPicker only while `useHydrateSession().ready && session === null`, CHF|EUR|USD|PHP, `shell="app"`; unsigned empty = picker + `profile.chartEmpty` with no SVG / no ₿|fiat scale; signed-in empty = `profile.chartEmpty` alone; a failed activity load is `profile.chartError`; populated ₿ | selected fiat; About me inside the identity card — not a forum post; Languages **Translate** when `aboutMessageId` is set; with the photo when `aboutMeHasPhoto` — name + location + public `username@21.gifts` (`view.noGiftsAddress` when unset)) without edit/Message/back/menu/logout. Copy-profile-link on the card. Capability URL `/view/<64-hex>`; key/URL not shown as visible text. No `OnboardingGate` on this route. When a username is set, a centered `QrCode` (label `profile.giftsQr`) under the address encodes `openCryptoPayQrValue` (`https://<domain>/pl/?lightning=` plus the uppercase LNURL of `https://<domain>/.well-known/lnurlp/<local>`), including on a smartphone. A missing username shows no QR.
@@ -7153,3 +7393,9 @@ Telegram or another in-app WebView detected on an unclaimed profile. Escape card
 The only state.
 
 ![21.gifts not found](images/not-found.png)
+
+### Variant: install-open
+
+On iPhone, **Install app** in the header opens the dialog **Add 21.gifts to your Home Screen**. On narrow screens it sits behind **Menu**.
+
+![21.gifts not found install dialog](images/404-install-open.png)

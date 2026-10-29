@@ -180,9 +180,21 @@
     "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
   },
   {
+    "id": "/legal:install-open",
+    "label": "/legal install-open",
+    "visual": "state-legal-install-open",
+    "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
+  },
+  {
     "id": "/about:default",
     "label": "/about default",
     "visual": "screen-about",
+    "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
+  },
+  {
+    "id": "/about:install-open",
+    "label": "/about install-open",
+    "visual": "state-about-install-open",
     "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
   },
   {
@@ -330,6 +342,18 @@
     "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
   },
   {
+    "id": "/wallet:install-open",
+    "label": "/wallet install-open",
+    "visual": "state-wallet-install-open",
+    "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
+  },
+  {
+    "id": "/members/[accountId]:install-open",
+    "label": "/members/[accountId] install-open",
+    "visual": "state-members-accountId-install-open",
+    "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
+  },
+  {
     "id": "/wallet:reveal",
     "label": "/wallet reveal",
     "visual": "state-wallet-reveal",
@@ -345,6 +369,12 @@
     "id": "/wallet/phrase:default",
     "label": "/wallet/phrase default",
     "visual": "screen-wallet-phrase",
+    "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
+  },
+  {
+    "id": "/wallet/phrase:install-open",
+    "label": "/wallet/phrase install-open",
+    "visual": "state-wallet-phrase-install-open",
     "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
   },
   {
@@ -384,6 +414,12 @@
     "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
   },
   {
+    "id": "/setup/name:install-open",
+    "label": "/setup/name install-open",
+    "visual": "state-setup-name-install-open",
+    "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
+  },
+  {
     "id": "/setup/name:empty",
     "label": "/setup/name empty",
     "visual": "state-setup-name-empty",
@@ -414,6 +450,12 @@
     "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
   },
   {
+    "id": "/setup/username:install-open",
+    "label": "/setup/username install-open",
+    "visual": "state-setup-username-install-open",
+    "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
+  },
+  {
     "id": "/setup/username:empty",
     "label": "/setup/username empty",
     "visual": "state-setup-username-empty",
@@ -441,6 +483,12 @@
     "id": "/setup/address:default",
     "label": "/setup/address default",
     "visual": "screen-setup-address",
+    "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
+  },
+  {
+    "id": "/setup/address:install-open",
+    "label": "/setup/address install-open",
+    "visual": "state-setup-address-install-open",
     "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
   },
   {
@@ -549,6 +597,12 @@
     "id": "/setup/rules:busy",
     "label": "/setup/rules busy",
     "visual": "state-setup-rules-busy",
+    "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
+  },
+  {
+    "id": "/setup/rules:install-open",
+    "label": "/setup/rules install-open",
+    "visual": "state-setup-rules-install-open",
     "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
   },
   {
@@ -1608,6 +1662,12 @@
     "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
   },
   {
+    "id": "/rules:install-open",
+    "label": "/rules install-open",
+    "visual": "state-rules-install-open",
+    "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
+  },
+  {
     "id": "/habit-tracker:default",
     "label": "/habit-tracker default",
     "visual": "screen-habit-tracker",
@@ -1842,6 +1902,12 @@
     "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
   },
   {
+    "id": "/habit-tracker:install-open",
+    "label": "/habit-tracker install-open",
+    "visual": "state-habit-tracker-install-open",
+    "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
+  },
+  {
     "id": "/contact:default",
     "label": "/contact default",
     "visual": "screen-contact",
@@ -1857,6 +1923,12 @@
     "id": "/contact:success",
     "label": "/contact success",
     "visual": "state-contact-success",
+    "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
+  },
+  {
+    "id": "/contact:install-open",
+    "label": "/contact install-open",
+    "visual": "state-contact-install-open",
     "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
   },
   {
@@ -1902,6 +1974,12 @@
     "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
   },
   {
+    "id": "/pos:install-open",
+    "label": "/pos install-open",
+    "visual": "state-pos-install-open",
+    "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
+  },
+  {
     "id": "/pos/amount:default",
     "label": "/pos/amount default",
     "visual": "screen-pos-amount",
@@ -1923,6 +2001,12 @@
     "id": "/pos/amount:bad-amount",
     "label": "/pos/amount bad-amount",
     "visual": "state-pos-bad-amount",
+    "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
+  },
+  {
+    "id": "/pos/amount:install-open",
+    "label": "/pos/amount install-open",
+    "visual": "state-pos-amount-install-open",
     "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
   },
   {
@@ -2586,6 +2670,12 @@
     "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
   },
   {
+    "id": "/members/[accountId]/verify:install-open",
+    "label": "/members/[accountId]/verify install-open",
+    "visual": "state-members-verify-install-open",
+    "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
+  },
+  {
     "id": "/profile:receive",
     "label": "/profile receive",
     "visual": "state-profile-receive",
@@ -2838,6 +2928,12 @@
     "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
   },
   {
+    "id": "/profile:install-open",
+    "label": "/profile install-open",
+    "visual": "state-profile-install-open",
+    "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
+  },
+  {
     "id": "/profile:address-empty",
     "label": "/profile address-empty",
     "visual": "state-profile-address-empty",
@@ -2883,6 +2979,12 @@
     "id": "/grants:default",
     "label": "/grants default",
     "visual": "screen-grants",
+    "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
+  },
+  {
+    "id": "/grants:install-open",
+    "label": "/grants install-open",
+    "visual": "state-grants-install-open",
     "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
   },
   {
@@ -2970,6 +3072,12 @@
     "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
   },
   {
+    "id": "/grants/goals:install-open",
+    "label": "/grants/goals install-open",
+    "visual": "state-grants-goals-install-open",
+    "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
+  },
+  {
     "id": "/grants/payments/comment:default",
     "label": "/grants/payments/comment default",
     "visual": "screen-grants-payments-comment",
@@ -3021,6 +3129,12 @@
     "id": "/grants/payments/comment:editing",
     "label": "/grants/payments/comment editing",
     "visual": "state-grants-payments-comment-editing",
+    "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
+  },
+  {
+    "id": "/grants/payments/comment:install-open",
+    "label": "/grants/payments/comment install-open",
+    "visual": "state-grants-payments-comment-install-open",
     "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
   },
   {
@@ -3135,6 +3249,12 @@
     "id": "/grants/payments/amounts:no-lightning",
     "label": "/grants/payments/amounts no-lightning",
     "visual": "state-grants-payments-amounts-no-lightning",
+    "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
+  },
+  {
+    "id": "/grants/payments/amounts:install-open",
+    "label": "/grants/payments/amounts install-open",
+    "visual": "state-grants-payments-amounts-install-open",
     "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
   },
   {
@@ -3312,6 +3432,12 @@
     "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
   },
   {
+    "id": "/grants/apply:install-open",
+    "label": "/grants/apply install-open",
+    "visual": "state-grants-apply-install-open",
+    "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
+  },
+  {
     "id": "/view/[viewKey]:default",
     "label": "/view/[viewKey] default",
     "visual": "screen-view-viewKey",
@@ -3396,6 +3522,12 @@
     "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
   },
   {
+    "id": "/stats:install-open",
+    "label": "/stats install-open",
+    "visual": "state-stats-install-open",
+    "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
+  },
+  {
     "id": "/stats:usd-scale",
     "label": "/stats usd-scale",
     "visual": "state-stats-usd-scale",
@@ -3456,9 +3588,21 @@
     "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
   },
   {
+    "id": "/trust-chain:install-open",
+    "label": "/trust-chain install-open",
+    "visual": "state-trust-chain-install-open",
+    "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
+  },
+  {
     "id": "/stats/[day]:default",
     "label": "/stats/[day] default",
     "visual": "screen-stats-day",
+    "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
+  },
+  {
+    "id": "/stats/[day]:install-open",
+    "label": "/stats/[day] install-open",
+    "visual": "state-stats-day-install-open",
     "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
   },
   {
@@ -3678,6 +3822,12 @@
     "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
   },
   {
+    "id": "/messages:install-open",
+    "label": "/messages install-open",
+    "visual": "state-messages-install-open",
+    "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
+  },
+  {
     "id": "/notifications:default",
     "label": "/notifications default",
     "visual": "screen-notifications",
@@ -3705,6 +3855,12 @@
     "id": "/notifications:moderator-proposal",
     "label": "/notifications moderator-proposal",
     "visual": "state-notifications-moderator-proposal",
+    "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
+  },
+  {
+    "id": "/notifications:install-open",
+    "label": "/notifications install-open",
+    "visual": "state-notifications-install-open",
     "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
   },
   {
@@ -3756,6 +3912,12 @@
     "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
   },
   {
+    "id": "/statistics:install-open",
+    "label": "/statistics install-open",
+    "visual": "state-statistics-install-open",
+    "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
+  },
+  {
     "id": "/moderate:default",
     "label": "/moderate default",
     "visual": "screen-moderate",
@@ -3777,6 +3939,12 @@
     "id": "/moderate:forbidden",
     "label": "/moderate forbidden",
     "visual": "state-moderate-forbidden",
+    "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
+  },
+  {
+    "id": "/moderate:install-open",
+    "label": "/moderate install-open",
+    "visual": "state-moderate-install-open",
     "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
   },
   {
@@ -3807,6 +3975,12 @@
     "id": "/moderate/payouts:error",
     "label": "/moderate/payouts error",
     "visual": "state-moderate-payouts-error",
+    "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
+  },
+  {
+    "id": "/moderate/payouts:install-open",
+    "label": "/moderate/payouts install-open",
+    "visual": "state-moderate-payouts-install-open",
     "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
   },
   {
@@ -3873,6 +4047,12 @@
     "id": "/moderate/hidden:error",
     "label": "/moderate/hidden error",
     "visual": "state-moderate-hidden-error",
+    "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
+  },
+  {
+    "id": "/moderate/hidden:install-open",
+    "label": "/moderate/hidden install-open",
+    "visual": "state-moderate-hidden-install-open",
     "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
   },
   {
@@ -3954,6 +4134,12 @@
     "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
   },
   {
+    "id": "/moderate/proposals:install-open",
+    "label": "/moderate/proposals install-open",
+    "visual": "state-moderate-proposals-install-open",
+    "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
+  },
+  {
     "id": "/moderate/applications:redirect",
     "label": "/moderate/applications redirect",
     "visual": "screen-moderate-applications",
@@ -3993,6 +4179,12 @@
     "id": "/grants/applications:error",
     "label": "/grants/applications error",
     "visual": "state-moderate-applications-error",
+    "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
+  },
+  {
+    "id": "/grants/applications:install-open",
+    "label": "/grants/applications install-open",
+    "visual": "state-grants-applications-install-open",
     "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
   },
   {
@@ -4077,6 +4269,12 @@
     "id": "/grants/applications/[accountId]:deciding",
     "label": "/grants/applications/[accountId] deciding",
     "visual": "state-moderate-applications-accountId-deciding",
+    "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
+  },
+  {
+    "id": "/grants/applications/[accountId]:install-open",
+    "label": "/grants/applications/[accountId] install-open",
+    "visual": "state-grants-applications-accountId-install-open",
     "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
   },
   {
@@ -4224,6 +4422,12 @@
     "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
   },
   {
+    "id": "/moderate/group:install-open",
+    "label": "/moderate/group install-open",
+    "visual": "state-moderate-group-install-open",
+    "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
+  },
+  {
     "id": "/moderate/handbook:default",
     "label": "/moderate/handbook default",
     "visual": "screen-moderate-handbook",
@@ -4236,9 +4440,21 @@
     "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
   },
   {
+    "id": "/moderate/handbook:install-open",
+    "label": "/moderate/handbook install-open",
+    "visual": "state-moderate-handbook-install-open",
+    "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
+  },
+  {
     "id": "/404:default",
     "label": "/404 default",
     "visual": "screen-404",
+    "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
+  },
+  {
+    "id": "/404:install-open",
+    "label": "/404 install-open",
+    "visual": "state-404-install-open",
     "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
   },
   {
@@ -5037,6 +5253,12 @@
     "id": "/[npub]:error",
     "label": "/[npub] error",
     "visual": "state-npub-error",
+    "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
+  },
+  {
+    "id": "/[npub]:install-open",
+    "label": "/[npub] install-open",
+    "visual": "state-npub-install-open",
     "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
   },
   {
@@ -6192,6 +6414,12 @@
     "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
   },
   {
+    "id": "/shops:install-open",
+    "label": "/shops install-open",
+    "visual": "state-shops-install-open",
+    "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
+  },
+  {
     "id": "/messages/[id]:translate",
     "label": "/messages/[id] translate",
     "visual": "state-messages-id-translate",
@@ -6252,6 +6480,12 @@
     "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
   },
   {
+    "id": "/messages/[id]:install-open",
+    "label": "/messages/[id] install-open",
+    "visual": "state-messages-id-install-open",
+    "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
+  },
+  {
     "id": "/messages/[id]/repayment-list:default",
     "label": "/messages/[id]/repayment-list default",
     "visual": "screen-messages-id-repayment-list",
@@ -6273,6 +6507,12 @@
     "id": "/messages/[id]/repayment-list:empty",
     "label": "/messages/[id]/repayment-list empty",
     "visual": "state-messages-id-repayment-list-empty",
+    "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
+  },
+  {
+    "id": "/messages/[id]/repayment-list:install-open",
+    "label": "/messages/[id]/repayment-list install-open",
+    "visual": "state-messages-id-repayment-list-install-open",
     "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
   },
   {
@@ -6429,6 +6669,12 @@
     "id": "/messages/[id]/author:replies-translate-error",
     "label": "/messages/[id]/author replies-translate-error",
     "visual": "state-messages-id-author-replies-translate-error",
+    "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
+  },
+  {
+    "id": "/messages/[id]/author:install-open",
+    "label": "/messages/[id]/author install-open",
+    "visual": "state-messages-id-author-install-open",
     "combos": ["desktop-light", "desktop-dark", "mobile-light", "mobile-dark"]
   }
 ]
